@@ -1,0 +1,72 @@
+name: codeclarity
+
+services:
+  rabbitmq:
+    restart: always
+    image: rabbitmq:management
+    env_file:
+      - ../env/.env.dev
+    ports:
+      - target: 5672
+        published: ${AMQP_PORT:-5672}
+        protocol: tcp
+        mode: host
+      - target: 15672
+        published: ${AMQP_PORT_2:-15672}
+        protocol: tcp
+        mode: host
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 500M
+
+  db:
+    image: postgres
+    restart: always
+    # set shared memory limit when using docker-compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    volumes:
+      - ./docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
+      - ../../dump:/dump
+      - db_data_container:/var/lib/postgresql/data/pgdata
+    ports:
+      - 5432:5432
+    env_file:
+      - ../env/.env.dev
+
+  pg_bouncer:
+    image: bitnami/pgbouncer
+    restart: always
+    env_file:
+      - ../env/.env.dev
+    depends_on:
+      - db
+    ports:
+      - 6432:6432
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
+
+volumes:
+  results_db_data_container:
+  results_db_apps_data_container:
+  db_data_container:

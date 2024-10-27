@@ -1,0 +1,20 @@
+go 1.23.0
+
+use (
+	backend/plugins/codeql
+	backend/plugins/js-license
+	backend/plugins/js-patching
+	backend/plugins/js-sbom
+	backend/plugins/js-vuln-finder
+
+	backend/services/dispatcher
+	backend/services/downloader
+	backend/services/knowledge
+	backend/services/notifier
+	backend/services/packageFollower
+
+	backend/utilities/amqp-helper
+	backend/utilities/db-helper
+	backend/utilities/node-semver
+	backend/utilities/types
+)

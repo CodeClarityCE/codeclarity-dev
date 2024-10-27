@@ -1,0 +1,6 @@
+PG_DB_USER="postgres"
+PG_DB_PASSWORD="!ChangeMe!"
+PG_DB_HOST="127.0.0.1"
+PG_DB_NAME="codeclarity"
+NVD_API_KEY="!ChangeMe!"
+NPM_URL="https://registry.npmjs.org/"

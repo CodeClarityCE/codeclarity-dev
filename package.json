@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "api"
+  ],
+  "devDependencies": {
+    "@rushstack/eslint-patch": "1.10.4",
+    "@yarnpkg/pnpify": "4.1.2",
+    "eslint": "8.57.0",
+    "prettier": "3.3.3",
+    "typescript": "5.6.2"
+  },
+  "packageManager": "yarn@4.5.0"
+}

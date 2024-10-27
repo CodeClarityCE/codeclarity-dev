@@ -1,0 +1,12 @@
+[submodule "backend"]
+	path = backend
+	url = git@github.com:CodeClarityCE/backend.git
+[submodule "api"]
+	path = api
+	url = git@github.com:CodeClarityCE/api.git
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:CodeClarityCE/frontend.git
+[submodule "deployment"]
+	path = deployment
+	url = git@github.com:CodeClarityCE/deployment.git

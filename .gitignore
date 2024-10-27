@@ -1,0 +1,16 @@
+.DS_Store
+codeclarity.io
+.build/
+.cloud/docker/config/.netrc
+.cloud/docker/config/id_rsa
+.cloud/docker/config/id_rsa.pub
+.cloud/docker/config/known_hosts
+node_modules
+.yarn/cache
+dump/*
+!dump/README.md
+dump.zip
+*.couch
+*.view
+package-lock.json
+.env

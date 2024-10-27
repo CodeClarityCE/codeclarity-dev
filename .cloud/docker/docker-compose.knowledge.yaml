@@ -1,0 +1,6 @@
+services:
+  knowledge:
+    image: ceherzog/service-knowledge
+    restart: always
+    env_file:
+      - ../env/.env.dev
