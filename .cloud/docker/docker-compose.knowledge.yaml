@@ -1,6 +1,6 @@
 services:
   knowledge:
-    image: ceherzog/service-knowledge
+    image: codeclarityce/service-knowledge
     restart: always
     env_file:
       - ../env/.env.dev
