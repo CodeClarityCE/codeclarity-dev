@@ -14,3 +14,4 @@ dump.zip
 *.view
 package-lock.json
 .env
+private
