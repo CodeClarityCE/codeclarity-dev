@@ -3784,7 +3784,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:^29.5.14":
+"@types/jest@npm:29.5.14":
   version: 29.5.14
   resolution: "@types/jest@npm:29.5.14"
   dependencies:
@@ -5624,7 +5624,7 @@ __metadata:
     "@types/bcrypt": "npm:5.0.2"
     "@types/cvss-parser": "file:cvss-parser-js/"
     "@types/express": "npm:5.0.0"
-    "@types/jest": "npm:^29.5.14"
+    "@types/jest": "npm:29.5.14"
     "@types/jsonwebtoken": "npm:9.0.9"
     "@types/lodash": "npm:4.17.16"
     "@types/ms": "npm:2.1.0"
@@ -9637,6 +9637,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "frontend@workspace:frontend"
   dependencies:
+    "@eslint/js": "npm:9.22.0"
     "@formkit/auto-animate": "npm:0.8.2"
     "@iconify/vue": "npm:4.3.0"
     "@internationalized/date": "npm:3.7.0"
@@ -9699,6 +9700,7 @@ __metadata:
     vue: "npm:3.5.13"
     vue-chartjs: "npm:5.3.2"
     vue-cookies: "npm:1.8.6"
+    vue-eslint-parser: "npm:10.1.1"
     vue-markdown-render: "npm:2.2.1"
     vue-matomo: "npm:4.2.0"
     vue-router: "npm:4.5.0"
@@ -15716,6 +15718,8 @@ __metadata:
   resolution: "root-workspace-0b6124@workspace:."
   dependencies:
     "@yarnpkg/pnpify": "npm:4.1.4"
+    eslint: "npm:9.22.0"
+    prettier: "npm:3.5.3"
     typescript: "npm:5.8.2"
   languageName: unknown
   linkType: soft
@@ -18267,7 +18271,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vue-eslint-parser@npm:^10.1.1":
+"vue-eslint-parser@npm:10.1.1, vue-eslint-parser@npm:^10.1.1":
   version: 10.1.1
   resolution: "vue-eslint-parser@npm:10.1.1"
   dependencies:
