@@ -1,9 +1,9 @@
-name: codeclarity
+name: codeclarity-dev
 
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:management
+    image: rabbitmq:4.0.7-management-alpine
     env_file:
       - ../env/.env.dev
     ports:
@@ -30,7 +30,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres
+    image: postgres:17.4-alpine
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -50,7 +50,7 @@ services:
       - ../env/.env.dev
 
   pg_bouncer:
-    image: bitnami/pgbouncer
+    image: bitnami/pgbouncer:1.24.0
     restart: always
     env_file:
       - ../env/.env.dev
@@ -60,7 +60,7 @@ services:
       - 6432:6432
 
   adminer:
-    image: adminer
+    image: adminer:5.0.6
     restart: always
     ports:
       - 8080:8080
