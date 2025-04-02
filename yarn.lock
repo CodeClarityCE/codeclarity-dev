@@ -1983,26 +1983,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nest-lab/fastify-multer@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@nest-lab/fastify-multer@npm:1.3.0"
-  dependencies:
-    fastify-multer: "npm:2.0.3"
-  peerDependencies:
-    "@nestjs/common": ^9.0.0 || ^10.0.0 || ^11.0.0
-    "@nestjs/platform-fastify": ^9.0.0 || ^10.0.0 || ^11.0.0
-    rxjs: ^7.0.0
-  peerDependenciesMeta:
-    "@nestjs/common":
-      optional: false
-    "@nestjs/platform-fastify":
-      optional: false
-    rxjs:
-      optional: false
-  checksum: 10c0/e795f7ad96a5876d6dace337fddebb7c3b05549ce9017e118189f8d47c3e914392ea06e7dbae4cae995d6da679076e428b998928bfad1c126e921edb5c930eb1
-  languageName: node
-  linkType: hard
-
 "@nestjs-modules/mailer@npm:2.0.2":
   version: 2.0.2
   resolution: "@nestjs-modules/mailer@npm:2.0.2"
@@ -5124,6 +5104,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@webundsoehne/nest-fastify-file-upload@npm:2.3.1":
+  version: 2.3.1
+  resolution: "@webundsoehne/nest-fastify-file-upload@npm:2.3.1"
+  dependencies:
+    fastify-multer: "npm:^2.0.3"
+  peerDependencies:
+    "@fastify/multipart": ">=9"
+    "@nestjs/common": ">= 7 < 12"
+    "@nestjs/core": ">= 7 < 12"
+    "@nestjs/platform-fastify": ">= 7 < 12"
+  peerDependenciesMeta:
+    "@fastify/multipart":
+      optional: true
+  checksum: 10c0/5829ada0e6b8203312af3caec5a42d334003d63e7d89066baa2c55dfa2904fead085305f62b39d6e8106acb1a2cd6ad5f025dfe9aacae1d058afb01cb460e3e0
+  languageName: node
+  linkType: hard
+
 "@xtuc/ieee754@npm:^1.2.0":
   version: 1.2.0
   resolution: "@xtuc/ieee754@npm:1.2.0"
@@ -5601,7 +5598,6 @@ __metadata:
     "@fastify/compress": "npm:8.0.1"
     "@fastify/multipart": "npm:9.0.3"
     "@fastify/static": "npm:8.1.1"
-    "@nest-lab/fastify-multer": "npm:1.3.0"
     "@nestjs-modules/mailer": "npm:2.0.2"
     "@nestjs/axios": "npm:4.0.0"
     "@nestjs/cli": "npm:10.0.5"
@@ -5640,6 +5636,7 @@ __metadata:
     "@types/supertest": "npm:6.0.2"
     "@types/uuid": "npm:10.0.0"
     "@types/webcrypto": "npm:0.0.30"
+    "@webundsoehne/nest-fastify-file-upload": "npm:2.3.1"
     amqplib: "npm:0.10.5"
     axios: "npm:1.8.3"
     bcrypt: "npm:5.1.1"
@@ -9268,7 +9265,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fastify-multer@npm:2.0.3":
+"fastify-multer@npm:^2.0.3":
   version: 2.0.3
   resolution: "fastify-multer@npm:2.0.3"
   dependencies:
