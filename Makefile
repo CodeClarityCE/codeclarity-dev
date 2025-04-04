@@ -51,10 +51,8 @@ dump-database: ## Dumps the database
 	@cd .cloud/scripts && sh dump-db.sh codeclarity
 	@cd .cloud/scripts && sh dump-db.sh knowledge
 	@cd .cloud/scripts && sh dump-db.sh config
-	@cd .cloud/scripts && sh dump-db.sh plugins
 
 restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
-	@cd .cloud/scripts && sh restore-db.sh plugins
