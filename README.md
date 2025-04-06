@@ -14,69 +14,25 @@ This repository contains all the necessary tools and dependencies to develop on 
 
 ## License
 
-This project is licensed under the AGPL-3.0-or-later license. See [LICENSE](./LICENSE) for details.
+This project is licensed under the AGPL-3.0-or-later license.  You can find the full license details in the [LICENSE](./LICENSE) file.
 
 ## Requirements
 
-- curl
-- make
-- [golang >= 1.22](https://go.dev/dl/)
-- [docker](https://docs.docker.com/engine/install/)
-- [docker compose](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04)
+*   **curl:** Used for downloading the setup script and dumps.
+*   **make:** Used for automating certain build and deployment tasks.
+*   **Docker:**  A containerization platform.  [Installation instructions](https://docs.docker.com/engine/install/) are available on the Docker website.
+*   **Docker Compose:** A tool for defining and running multi-container Docker applications. [Installation instructions](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04) can be found here.
 
 ## Setup Instructions
 
-### 1. Clone this repository recursively
+### 1. Download and Execute the Setup Script
 
+This script automates the cloning of the development environment repository and initiates the setup process.
 ```bash
-git clone git@github.com:CodeClarityCE/codeclarity-dev.git --recursive
+curl -O https://raw.githubusercontent.com/CodeClarityCE/codeclarity-dev/main/setup.sh && sh setup.sh
 ```
 
-### 2. Navigate to the project directory
-
-```bash
-cd codeclarity-dev
-```
-
-### 3. Create your .netrc file (Optional)
-
-If you need access to a private Go library, create a [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) and run the following command:
-
-```bash
-echo "machine github.com login YOUR_GITHUB_LOGIN password ghp_***************" > backend/.cloud/docker/config/.netrc
-```
-
-Once this project is public, this won't be needed anymore.
-
-### 4. Build the project
-
-Run the following command in your terminal:
-
-```bash
-make build
-```
-
-This will compile and install all dependencies necessary for development.
-
-### 5. Start the containers
-
-Start the required services with the following commands:
-
-```bash
-make up
-```
-
-### 6. Initialize DB
-
-Run this command to create the databases in Postgres:
-
-```bash
-make download-dumps
-make knowledge-setup
-make restore-database
-```
-
-### 7. Update DB (Optional)
+### 2. Update DB (Optional)
 
 Please apply for an NVD API key [here](https://nvd.nist.gov/developers/request-an-api-key), and fill it in `codeclarity-dev/.cloud/env/.env.makefile`.
 
@@ -86,15 +42,33 @@ Run the command to update the knowledge DB:
 make knowledge-update
 ```
 
-### 9. Restart the containers
+Your development environment is now set up.
 
-Restart containers to be sure that all the containers connect to the DB
+### 4. Make Commands
+Once the initial configuration is complete, you no longer need to execute the setup script to start the platform. 
+Use ```make``` to list all the possible actions:
 
 ```bash
-make down && make up
+# —— 🦉 CodeClarity's Makefile 🦉 —————————————————————————————————— 
+help                           Outputs this help screen
+# —— Commands for the dev env 💻 ——————————————————————————————————————————————————————————————— 
+build                          Builds the Docker images
+up                             Starts the Docker images
+down                           Stops the Docker images
+pull                           Pulls the Docker images
+logs                           Displays the logs of the Docker images
+# —— Commands to test production 🎯 ——————————————————————————————————————————————————————————————— 
+build-prod                     Builds de production Docker images
+up-prod                        Starts the Docker images in prod mode
+down-prod                      Stops the Docker images in prod mode
+# —— Commands to setup database 💾 ——————————————————————————————————————————————————————————————— 
+knowledge-setup                Creates the database
+knowledge-update               Updates the database
+# —— Commands to dump and restore database 💾 ——————————————————————————————————————————————————————————————— 
+download-dumps                 Downloads the database dump
+dump-database                  Dumps the database
+restore-database               Restores the database
 ```
-
-Your development environment is now set up.
 
 ## Start using the platform
 
