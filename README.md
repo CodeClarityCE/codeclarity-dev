@@ -20,6 +20,7 @@ This project is licensed under the AGPL-3.0-or-later license.  You can find the 
 
 *   **curl:** Used for downloading the setup script and dumps.
 *   **make:** Used for automating certain build and deployment tasks.
+*   **golang >= 1.24** Used for plugins and downloadable [here](https://go.dev/dl/).
 *   **Docker:**  A containerization platform.  [Installation instructions](https://docs.docker.com/engine/install/) are available on the Docker website.
 *   **Docker Compose:** A tool for defining and running multi-container Docker applications. [Installation instructions](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04) can be found here.
 
