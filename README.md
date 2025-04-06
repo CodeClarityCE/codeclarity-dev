@@ -45,7 +45,7 @@ make knowledge-update
 
 Your development environment is now set up.
 
-### 4. Make Commands
+### 3. Make Commands
 Once the initial configuration is complete, you no longer need to execute the setup script to start the platform. 
 Use ```make``` to list all the possible actions:
 
