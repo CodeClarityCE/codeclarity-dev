@@ -6,9 +6,9 @@
   ],
   "devDependencies": {
     "@yarnpkg/pnpify": "4.1.4",
-    "eslint": "9.22.0",
+    "eslint": "9.25.1",
     "prettier": "3.5.3",
-    "typescript": "5.8.2"
+    "typescript": "5.8.3"
   },
   "packageManager": "yarn@4.9.1"
 }
