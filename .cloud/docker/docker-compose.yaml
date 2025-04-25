@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.0.7-management-alpine
+    image: rabbitmq:4.1.0-management-alpine
     env_file:
       - ../env/.env.dev
     ports:
@@ -50,7 +50,7 @@ services:
       - ../env/.env.dev
 
   pg_bouncer:
-    image: bitnami/pgbouncer:1.24.0
+    image: bitnami/pgbouncer:1.24.1
     restart: always
     env_file:
       - ../env/.env.dev
@@ -60,7 +60,7 @@ services:
       - 6432:6432
 
   adminer:
-    image: adminer:5.0.6
+    image: adminer:5.2.1
     restart: always
     ports:
       - 8080:8080
