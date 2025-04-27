@@ -11,8 +11,8 @@ if ! command -v make &>/dev/null; then
     exit 1
 fi
 
-if ! command -v docker &>/dev/null || ! command -v docker-compose &>/dev/null; then
-    echo "Error: docker or docker-compose is not installed."
+if ! command -v docker &>/dev/null || ! command -v docker compose &>/dev/null; then
+    echo "Error: docker or docker compose is not installed."
     exit 1
 fi
 
