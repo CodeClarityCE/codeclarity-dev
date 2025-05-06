@@ -80,7 +80,7 @@ If you imported the dump we provide, you can connect using the following credent
 - login: `john.doe@codeclarity.io`
 - password: `ThisIs4Str0ngP4ssW0rd?`
 
-Now, follow [this guide](https://www.codeclarity.io/docs/createanalysis) to create your first analysis!
+Now, follow [this guide](https://doc.codeclarity.io/docs/0.0.0/create-analysis) to create your first analysis!
 
 ## Contributing
 
