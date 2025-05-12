@@ -1,12 +1,13 @@
 github.com/CodeClarityCE/plugin-sbom-javascript v0.0.2/go.mod h1:BYEQYfPpyrEm5meARdykMnBnbhTuVBujCqqn7hFTY/U=
 github.com/CodeClarityCE/plugin-sca-vuln-finder v0.0.2/go.mod h1:m5dV/tJLaW0F73rlAPZrB2wzzG4xES+Igdq0NFkhCqA=
-github.com/CodeClarityCE/plugin-sca-vuln-finder v0.0.8-alpha/go.mod h1:ga5RA8K4tLI2dBKlWvS9WKlkhlMzyK7C+G3tyC3VuLQ=
 github.com/CodeClarityCE/service-knowledge v0.0.2/go.mod h1:FrubZo0C0ubvi4nwPjNtJXtJu9Ni00gP2qEzYk09qa4=
 github.com/CodeClarityCE/utility-amqp-helper v0.0.2/go.mod h1:cFV3nV4XR+B7+4F4WGi82A60b0Jv4XA2fE4yWPYAYAc=
 github.com/CodeClarityCE/utility-dbhelper v0.0.2/go.mod h1:ViRACSGu5dhrtDccwrKLMDHAew/8dQE2nqx8oJjClY0=
 github.com/CodeClarityCE/utility-types v0.0.0/go.mod h1:/DKxruKSf8DNSHyqWaa8ZYCWzLUl2GpRF+QGOvLZLew=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
+github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213/go.mod h1:vNUNkEQ1e29fT/6vq2aBdFsgNPmy8qMdSay1npru+Sw=
@@ -30,6 +31,8 @@ github.com/uptrace/bun v1.2.3/go.mod h1:8frYFHrO/Zol3I4FEjoXam0HoNk+t5k7aJRl3FXp
 github.com/uptrace/bun/dialect/pgdialect v1.2.3/go.mod h1:Vx9TscyEq1iN4tnirn6yYGwEflz0KG3rBZTBCLpKAjc=
 github.com/uptrace/bun/driver/pgdriver v1.2.3/go.mod h1:yDiYTZYd4FfXFtV01m4I/RkI33IGj9N254jLStaeJLs=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+go.opentelemetry.io/auto/sdk v1.1.0/go.mod h1:3wSPjt5PWp2RhlCcmmOial7AvC4DQqZb7a7wCow3W8A=
+go.opentelemetry.io/otel/metric v1.35.0/go.mod h1:nKVFgxBZ2fReX6IlyW28MgZojkoAkJGaE8CpgeAU3oE=
 golang.org/x/crypto v0.24.0/go.mod h1:Z1PMYSOR5nyMcyAVAIQSKCDwalqy85Aqn1x3Ws4L5DM=
 golang.org/x/crypto v0.26.0/go.mod h1:GY7jblb9wI+FOo5y8/S2oY4zWP07AkOJ4+jxCqdqn54=
 golang.org/x/crypto v0.27.0/go.mod h1:1Xngt8kV6Dvbssa53Ziq6Eqn0HqbZi5Z6R0ZpwQzt70=
