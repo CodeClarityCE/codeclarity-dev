@@ -2258,18 +2258,18 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["@iconify/vue", [\
-      ["npm:5.0.0", {\
-        "packageLocation": "./.yarn/cache/@iconify-vue-npm-5.0.0-9a48b4bec3-363133a77b.zip/node_modules/@iconify/vue/",\
+      ["npm:4.3.0", {\
+        "packageLocation": "./.yarn/cache/@iconify-vue-npm-4.3.0-6c12512a92-f4200f8aa9.zip/node_modules/@iconify/vue/",\
         "packageDependencies": [\
-          ["@iconify/vue", "npm:5.0.0"]\
+          ["@iconify/vue", "npm:4.3.0"]\
         ],\
         "linkType": "SOFT"\
       }],\
-      ["virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:5.0.0", {\
-        "packageLocation": "./.yarn/__virtual__/@iconify-vue-virtual-5746fbbc4e/0/cache/@iconify-vue-npm-5.0.0-9a48b4bec3-363133a77b.zip/node_modules/@iconify/vue/",\
+      ["virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:4.3.0", {\
+        "packageLocation": "./.yarn/__virtual__/@iconify-vue-virtual-a5379a5cbf/0/cache/@iconify-vue-npm-4.3.0-6c12512a92-f4200f8aa9.zip/node_modules/@iconify/vue/",\
         "packageDependencies": [\
           ["@iconify/types", "npm:2.0.0"],\
-          ["@iconify/vue", "virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:5.0.0"],\
+          ["@iconify/vue", "virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:4.3.0"],\
           ["@types/vue", null],\
           ["vue", "virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:3.5.13"]\
         ],\
@@ -12809,7 +12809,7 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["@eslint/js", "npm:9.26.0"],\
           ["@formkit/auto-animate", "npm:0.8.2"],\
-          ["@iconify/vue", "virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:5.0.0"],\
+          ["@iconify/vue", "virtual:129c180801e06ed395e4da371c76ab19371e66a3c2230c25e2f8aa53715d8f66998096a34403ac325c10f7034d54eaa1a82bf612b0d4bf56a1d1943388d98f11#npm:4.3.0"],\
           ["@internationalized/date", "npm:3.8.0"],\
           ["@popperjs/core", "npm:2.11.8"],\
           ["@rushstack/eslint-patch", "npm:1.11.0"],\

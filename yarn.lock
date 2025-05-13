@@ -1471,14 +1471,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@iconify/vue@npm:5.0.0":
-  version: 5.0.0
-  resolution: "@iconify/vue@npm:5.0.0"
+"@iconify/vue@npm:4.3.0":
+  version: 4.3.0
+  resolution: "@iconify/vue@npm:4.3.0"
   dependencies:
     "@iconify/types": "npm:^2.0.0"
   peerDependencies:
     vue: ">=3"
-  checksum: 10c0/363133a77bf697c4cebda2af776ca6fce312d15742a5ed6a2114d79d032814b15f04bcc1cec51cee31256f1a62dc64b0dbbcfe4e341692cb2dca64f0561fa1c0
+  checksum: 10c0/f4200f8aa9bf2986c1055a121adaeea5bda5ac1edc7a8d51c73599bcfac90af8d73217e4193f1866139d2ec03c31f6b233e4e9229434c3de543df6fc0b85da70
   languageName: node
   linkType: hard
 
@@ -10031,7 +10031,7 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:9.26.0"
     "@formkit/auto-animate": "npm:0.8.2"
-    "@iconify/vue": "npm:5.0.0"
+    "@iconify/vue": "npm:4.3.0"
     "@internationalized/date": "npm:3.8.0"
     "@popperjs/core": "npm:2.11.8"
     "@rushstack/eslint-patch": "npm:1.11.0"
