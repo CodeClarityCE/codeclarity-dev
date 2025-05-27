@@ -45,7 +45,7 @@ knowledge-update: ## Updates the database
 
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
 download-dumps: ## Downloads the database dump
-	@sh .cloud/scripts/download-dumps.sh
+	@sh deployment/scripts/download-dumps.sh
 
 dump-database: ## Dumps the database
 	@cd .cloud/scripts && sh dump-db.sh codeclarity
