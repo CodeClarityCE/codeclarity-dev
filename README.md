@@ -1,12 +1,35 @@
-# CodeClarity Development Environment
-
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/CodeClarityCE/identity/blob/main/logo/vectorized/logo_name_white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/CodeClarityCE/identity/blob/main/logo/vectorized/logo_name_black.svg">
+  <img alt="codeclarity-logo" src="https://github.com/CodeClarityCE/identity/blob/main/logo/vectorized/logo_name_black.svg">
+</picture>
+<br>
 <br>
 
-<div align="center">
-    <img src="https://user-images.githubusercontent.com/124595411/235138790-d86cc2b8-e3ef-43eb-846c-38055748c9db.svg" width="400px" />
-</div>
+Secure your software empower your team.
 
+[![License](https://img.shields.io/github/license/codeclarityce/codeclarity-dev)](LICENSE.txt)
+
+<details open="open">
+<summary>Table of Contents</summary>
+
+- [Overview](#overview)
+- [License](#license)
+- [Requirements](#requirements)
+- [Setup Instructions](#setup-instructions)
+  - [1. Download and Execute the Setup Script](#1-download-and-execute-the-setup-script)
+  - [2. Update DB (Optional)](#2-update-db-optional)
+  - [3. Make Commands](#3-make-commands)
+- [Start using the platform](#start-using-the-platform)
+- [Contributing](#contributing)
+- [Reporting Issues](#reporting-issues)
+
+</details>
+
+---
 <br>
+
+![CodeClarity! Secure your software empower your team!](https://github.com/CodeClarityCE/identity/blob/main/illustration/rasterized/demo_illu.png)
 
 ## Overview
 
