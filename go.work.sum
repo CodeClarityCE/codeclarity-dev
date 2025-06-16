@@ -1,5 +1,6 @@
 github.com/CodeClarityCE/plugin-sbom-javascript v0.0.2/go.mod h1:BYEQYfPpyrEm5meARdykMnBnbhTuVBujCqqn7hFTY/U=
 github.com/CodeClarityCE/plugin-sca-vuln-finder v0.0.2/go.mod h1:m5dV/tJLaW0F73rlAPZrB2wzzG4xES+Igdq0NFkhCqA=
+github.com/CodeClarityCE/plugin-sca-vuln-finder v0.0.12-alpha/go.mod h1:Gvr57dDdXYRP5Cr/ddldKwU3B+7AxWkjHeG+QspsSK8=
 github.com/CodeClarityCE/service-knowledge v0.0.2/go.mod h1:FrubZo0C0ubvi4nwPjNtJXtJu9Ni00gP2qEzYk09qa4=
 github.com/CodeClarityCE/utility-amqp-helper v0.0.2/go.mod h1:cFV3nV4XR+B7+4F4WGi82A60b0Jv4XA2fE4yWPYAYAc=
 github.com/CodeClarityCE/utility-dbhelper v0.0.2/go.mod h1:ViRACSGu5dhrtDccwrKLMDHAew/8dQE2nqx8oJjClY0=
