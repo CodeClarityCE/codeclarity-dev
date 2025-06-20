@@ -9,6 +9,21 @@
 Secure your software empower your team.
 
 [![License](https://img.shields.io/github/license/codeclarityce/codeclarity-dev)](LICENSE.txt)
+[![Website](https://img.shields.io/badge/Website-Visit-blue)](https://www.codeclarity.io)
+
+CodeClarity is an open-source alternative to Snyk, Checkmarx, and Black Duck, offering fast source code analysis to identify dependencies, licenses, and vulnerabilities instantly.
+
+It runs fully on-premises, giving you full control over your code.
+
+Integrate CodeClarity into your CI/CD (e.g., GitHub Actions, Bash) to block vulnerable code automatically.
+
+Create custom analysis pipelines by linking plugins. Currently, there are three in-house plugins (SBOM builder, vulnerability finder, license finder) and one external (CodeQL), with more coming soon.
+
+<br>
+
+![CodeClarity! Secure your software empower your team!](https://github.com/CodeClarityCE/identity/blob/main/illustration/rasterized/demo_illu.png)
+
+<br>
 
 ## Contributing to CodeClarity
 
