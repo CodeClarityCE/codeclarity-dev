@@ -62,7 +62,6 @@ curl -X 'GET' \
     --insecure \
     -s \
     -H 'accept: application/json' \
-    -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $token" >response.json
 
 projectID=$(jq -r '.data[0].id' ./response.json)
@@ -74,7 +73,6 @@ curl -X 'GET' \
     --insecure \
     -s \
     -H 'accept: application/json' \
-    -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $token" >response.json
 
 analyzerID=$(jq -r '.data.id' ./response.json)
