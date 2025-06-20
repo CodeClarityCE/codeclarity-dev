@@ -45,7 +45,7 @@ Be respectful and inclusive. Harassment or discrimination of any kind will not b
 
 ### Development Setup
 
-- Setup instruction can be found in the [README](./README).
+- Setup instruction can be found in the [README](./README.md).
 - Ensure you can build and run the project locally before submitting changes.
 
 ### Pull Request Process
