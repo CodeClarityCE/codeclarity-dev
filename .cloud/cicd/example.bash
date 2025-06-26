@@ -13,7 +13,6 @@ domain=${DOMAIN}
 # AUTHENTICATE
 curl -X 'POST' \
     'https://'$domain'/api/auth/authenticate' \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
@@ -34,7 +33,6 @@ rm ./auth_tokens.json
 # RETRIEVE USER
 curl -X 'GET' \
     'https://'$domain'/api/auth/user' \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H "Authorization: Bearer $token" >response.json
@@ -48,7 +46,6 @@ echo "You are connected with: $userFirstName $userLastName ($userId)"
 # RETRIEVE USER'S ORGANIZATIONS
 curl -X 'GET' \
     'https://'$domain'/api/org' \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H "Authorization: Bearer $token" >response.json
@@ -59,7 +56,6 @@ echo $organizationID
 # RETRIEVE ORGANIZATIONS'S PROJECTS
 curl -X 'GET' \
     "https://$domain/api/org/$organizationID/projects?search_key=$projectName" \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H "Authorization: Bearer $token" >response.json
@@ -70,7 +66,6 @@ echo $projectID
 # RETRIEVE ANALYZER
 curl -X 'GET' \
     "https://$domain/api/org/$organizationID/analyzers/name?analyzer_name=$analyzerName" \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H "Authorization: Bearer $token" >response.json
@@ -81,7 +76,6 @@ echo $analyzerID
 # RETRIEVE ANALYZER
 curl -X 'POST' \
     "https://$domain/api/org/$organizationID/projects/$projectID/analyses" \
-    --insecure \
     -s \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
