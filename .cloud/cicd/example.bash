@@ -73,7 +73,7 @@ curl -X 'GET' \
 analyzerID=$(jq -r '.data.id' ./response.json)
 echo $analyzerID
 
-# RETRIEVE ANALYZER
+# CREATE ANALYSIS
 curl -X 'POST' \
     "https://$domain/api/org/$organizationID/projects/$projectID/analyses" \
     -s \
