@@ -1,0 +1,41 @@
+name: CodeClarity
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  codeclarity-action:
+    name: CodeClarity Actions
+    runs-on: ubuntu-latest
+    env:
+      EMAIL: ${{ secrets.CODECLARITY_EMAIL }}
+      PASSWORD: ${{ secrets.CODECLARITY_PASSWORD }}
+      DOMAIN: ${{ secrets.CODECLARITY_DOMAIN }}
+
+    steps:
+      - name: Get branch names.
+        id: branch-names
+        uses: tj-actions/branch-names@v8
+
+      - name: Start Analysis
+        id: codeclarity-action
+        uses: CodeClarityCE/codeclarity-action@v0
+        with:
+          branch: ${{ steps.branch-names.outputs.current_branch }}
+          serverUrl: ${{ github.server_url }}
+          projectName: ${{ github.repository }}
+          analyzerName: 'JS Analyser'
+          failOnCritical: false
+          failOnHigh: false
+          failOnMedium: false
+          failOnLow: false
+          failOnInfo: false
+      
+      - name: Print Output
+        id: output
+        run: echo "${{ steps.codeclarity-action.outputs.vulnerabilities }}"
