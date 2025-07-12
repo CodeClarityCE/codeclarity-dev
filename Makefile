@@ -56,3 +56,4 @@ restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
+	@cd .cloud/scripts && sh restore-test-db.sh
