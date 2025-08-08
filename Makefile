@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build up down logs
+.PHONY        = help build build-prod up down logs migrate migrate-codeclarity migrate-knowledge migrate-plugins
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -57,3 +57,16 @@ restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
 	@cd .cloud/scripts && sh restore-test-db.sh
+
+## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
+migrate: ## Run all database migrations (api)
+	@cd api && make migrate
+
+migrate-codeclarity: ## Run codeclarity DB migrations (api)
+	@cd api && make migrate-codeclarity
+
+migrate-knowledge: ## Run knowledge DB migrations (api)
+	@cd api && make migrate-knowledge
+
+migrate-plugins: ## Run plugins DB migrations (api)
+	@cd api && make migrate-plugins
