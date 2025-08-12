@@ -96,6 +96,11 @@ make restore-database >/dev/null 2>&1
 printf "\r"
 print_success "Database content restored           "
 
+print_progress "Applying database migrations..."
+make migrate >/dev/null 2>&1
+printf "\r"
+print_success "Database migrations applied          "
+
 print_header "Starting Services"
 
 print_progress "Starting all development services..."
