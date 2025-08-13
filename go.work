@@ -4,11 +4,11 @@ toolchain go1.24.1
 
 use (
 	backend/plugins/codeql
-	backend/plugins/js-license
 	backend/plugins/js-patching
 	backend/plugins/js-sbom
-	backend/plugins/js-vuln-finder
+	backend/plugins/license-finder
 	backend/plugins/php-sbom
+	backend/plugins/vuln-finder
 
 	backend/services/dispatcher
 	backend/services/downloader
