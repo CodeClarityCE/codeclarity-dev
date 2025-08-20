@@ -7995,6 +7995,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "api@workspace:api"
   dependencies:
+    "@css-inline/css-inline": "npm:0.14.1"
     "@eslint/js": "npm:9.32.0"
     "@fastify/compress": "npm:8.1.0"
     "@fastify/multipart": "npm:9.0.3"
