@@ -1,0 +1,65 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # CodeClarity Services (Development - Docker Compose service names)
+  - job_name: 'codeclarity-services'
+    static_configs:
+      - targets: 
+        - 'codeclarity-dev-service-dispatcher-1:8080'
+        - 'codeclarity-dev-service-downloader-1:8080'
+        - 'codeclarity-dev-service-notifier-1:8080'
+        - 'codeclarity-dev-service-package-follower-1:8080'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  - job_name: 'codeclarity-plugins'
+    static_configs:
+      - targets:
+        - 'codeclarity-dev-plugin-js-sbom-1:8080'
+        - 'codeclarity-dev-plugin-php-sbom-1:8080'
+        - 'codeclarity-dev-plugin-license-finder-1:8080'
+        - 'codeclarity-dev-plugin-vuln-finder-1:8080'
+        - 'codeclarity-dev-plugin-codeql-1:8080'
+        - 'codeclarity-dev-plugin-js-patching-1:8080'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # API Service (if it has metrics endpoint)
+  - job_name: 'codeclarity-api'
+    static_configs:
+      - targets: ['codeclarity-dev-api-1:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Infrastructure Services
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['codeclarity-dev-rabbitmq-1:15692']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Database Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['codeclarity-postgres-exporter-dev:9187']
+    scrape_interval: 30s
+
+  # Caddy metrics
+  - job_name: 'caddy'
+    static_configs:
+      - targets: ['codeclarity-dev-caddy-1:2019']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
