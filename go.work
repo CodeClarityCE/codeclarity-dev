@@ -17,6 +17,7 @@ use (
 	backend/services/packageFollower
 
 	backend/utilities/amqp-helper
+	backend/utilities/boilerplates
 	backend/utilities/db-helper
 	backend/utilities/node-semver
 	backend/utilities/types
