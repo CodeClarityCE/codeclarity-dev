@@ -37,11 +37,11 @@ down-prod: ## Stops the Docker images in prod mode
 ## —— Commands to setup database 💾 ———————————————————————————————————————————————————————————————
 knowledge-setup: export PG_DB_PORT = 5432
 knowledge-setup: ## Creates the database
-	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run main.go -knowledge -action setup && cd -
+	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
 
 knowledge-update: export PG_DB_PORT = 6432
 knowledge-update: ## Updates the database
-	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run main.go -knowledge -action update && cd -
+	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
 
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
 download-dumps: ## Downloads the database dump

@@ -6,6 +6,13 @@ services:
     image: rabbitmq:4.1.1-management-alpine
     env_file:
       - ../env/.env.dev
+    environment:
+      - RABBITMQ_ENABLED_PLUGINS_FILE=/etc/rabbitmq/enabled_plugins
+    command: |
+      bash -c '
+        rabbitmq-plugins enable rabbitmq_management rabbitmq_prometheus --offline &&
+        exec docker-entrypoint.sh rabbitmq-server
+      '
     ports:
       - target: 5672
         published: ${AMQP_PORT:-5672}
@@ -13,6 +20,10 @@ services:
         mode: host
       - target: 15672
         published: ${AMQP_PORT_2:-15672}
+        protocol: tcp
+        mode: host
+      - target: 15692
+        published: ${AMQP_PROMETHEUS_PORT:-15692}
         protocol: tcp
         mode: host
     healthcheck:
@@ -49,16 +60,6 @@ services:
     env_file:
       - ../env/.env.dev
 
-  pg_bouncer:
-    image: bitnami/pgbouncer:1.24.1
-    restart: always
-    env_file:
-      - ../env/.env.dev
-    depends_on:
-      - db
-    ports:
-      - 6432:6432
-
   adminer:
     image: adminer:5.3.0
     restart: always
@@ -66,7 +67,84 @@ services:
       - 8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: codeclarity-prometheus-dev
+    restart: always
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=http://localhost:9091'
+    depends_on:
+      - rabbitmq
+      - db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  grafana:
+    image: grafana/grafana:11.5.0
+    container_name: codeclarity-grafana-dev
+    restart: always
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: codeclarity-postgres-exporter-dev
+    restart: always
+    env_file:
+      - ../env/.env.dev
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:$${POSTGRES_PASSWORD}@codeclarity-dev-db-1:5432/codeclarity?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
 volumes:
   results_db_data_container:
   results_db_apps_data_container:
   db_data_container:
+  prometheus_data:
+  grafana_data:
