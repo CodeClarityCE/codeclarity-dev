@@ -4,6 +4,19 @@
     "**/.pnp.*": true
   },
   "eslint.nodePath": ".yarn/sdks",
+  "eslint.workingDirectories": [
+    {
+      "pattern": "./frontend"
+    },
+    {
+      "pattern": "./api"
+    }
+  ],
+  "eslint.probe": [
+    "javascript",
+    "typescript",
+    "vue"
+  ],
   "prettier.prettierPath": ".yarn/sdks/prettier/index.cjs",
   "typescript.tsdk": ".yarn/sdks/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
