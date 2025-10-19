@@ -8,3 +8,10 @@ datasources:
     isDefault: true
     editable: true
     uid: prometheus
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://codeclarity-loki-dev:3100
+    isDefault: false
+    editable: true
+    uid: loki

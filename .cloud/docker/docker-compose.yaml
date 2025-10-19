@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.1.1-management-alpine
+    image: rabbitmq:4.1.4-management-alpine
     env_file:
       - ../env/.env.dev
     environment:
@@ -41,7 +41,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres:17.5-alpine
+    image: postgres:17.6-alpine
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -61,14 +61,14 @@ services:
       - ../env/.env.dev
 
   adminer:
-    image: adminer:5.3.0
+    image: adminer:5.4.1
     restart: always
     ports:
       - 8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
   prometheus:
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.7.1
     container_name: codeclarity-prometheus-dev
     restart: always
     ports:
@@ -97,7 +97,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:11.5.0
+    image: grafana/grafana:12.2.0
     container_name: codeclarity-grafana-dev
     restart: always
     ports:
@@ -122,7 +122,7 @@ services:
           memory: 256M
 
   postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
+    image: prometheuscommunity/postgres-exporter:v0.18.1
     container_name: codeclarity-postgres-exporter-dev
     restart: always
     env_file:
@@ -142,9 +142,57 @@ services:
           cpus: '0.1'
           memory: 64M
 
+  loki:
+    image: grafana/loki:3.5.7
+    container_name: codeclarity-loki-dev
+    restart: always
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  alloy:
+    image: grafana/alloy:v1.11.2
+    container_name: codeclarity-alloy-dev
+    restart: always
+    ports:
+      - "12345:12345"  # Alloy UI
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: 
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
 volumes:
   results_db_data_container:
   results_db_apps_data_container:
   db_data_container:
   prometheus_data:
   grafana_data:
+  loki_data:
