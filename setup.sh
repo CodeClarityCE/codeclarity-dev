@@ -8,21 +8,43 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
+# Setup logging
+SETUP_LOG="setup.log"
+ERROR_LOG="setup-errors.log"
+
+# Clear previous logs
+> "$SETUP_LOG"
+> "$ERROR_LOG"
+
+# Log function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$SETUP_LOG"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$ERROR_LOG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$SETUP_LOG"
+}
+
 # Helper function for formatted output using printf for cross-platform compatibility
 print_header() {
     printf "\n${BLUE}${BOLD}=== %s ===${NC}\n" "$1"
+    log "=== $1 ==="
 }
 
 print_success() {
     printf "${GREEN}✓${NC} %s\n" "$1"
+    log "SUCCESS: $1"
 }
 
 print_info() {
     printf "${BLUE}ℹ${NC} %s\n" "$1"
+    log "INFO: $1"
 }
 
 print_error() {
     printf "${RED}✗${NC} %s\n" "$1"
+    log_error "$1"
 }
 
 print_progress() {
@@ -55,58 +77,101 @@ if [ -f ".git" ] || [ -d ".git" ]; then
     print_info "Git repository found. Skipping clone."
 else
     print_progress "Cloning repository with submodules..."
-    git clone https://github.com/CodeClarityCE/codeclarity-dev.git --recursive >/dev/null 2>&1
-    cd codeclarity-dev
-    printf "\r"
-    print_success "Repository cloned with submodules       "
+    if git clone https://github.com/CodeClarityCE/codeclarity-dev.git --recursive >>"$SETUP_LOG" 2>&1; then
+        cd codeclarity-dev || exit 1
+        printf "\r"
+        print_success "Repository cloned with submodules       "
+    else
+        printf "\r"
+        print_error "Failed to clone repository - check $SETUP_LOG"
+        exit 1
+    fi
 fi
 
 # Development environment setup
 print_header "Development Environment Setup"
 
 print_progress "Stopping any running services..."
-make down >/dev/null 2>&1
-printf "\r"
-print_success "Services stopped                    "
+if make down >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Services stopped                    "
+else
+    printf "\r"
+    print_error "Failed to stop services - check $SETUP_LOG"
+fi
 
 print_progress "Building Docker images..."
-make build >/dev/null 2>&1
-printf "\r"
-print_success "Docker images built                 "
+if make build >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Docker images built                 "
+else
+    printf "\r"
+    print_error "Failed to build Docker images - check $SETUP_LOG"
+    exit 1
+fi
 
 print_progress "Starting database container..."
-cd .cloud/scripts && sh up.sh db >/dev/null 2>&1 && cd - >/dev/null 2>&1
-printf "\r"
-print_success "Database container started          "
+if cd .cloud/scripts && sh up.sh db >>"$SETUP_LOG" 2>&1 && cd - >/dev/null 2>&1; then
+    printf "\r"
+    print_success "Database container started          "
+else
+    printf "\r"
+    print_error "Failed to start database container - check $SETUP_LOG"
+    exit 1
+fi
 
 print_header "Database Setup"
 
 print_progress "Downloading database dumps..."
-make download-dumps >/dev/null 2>&1
-printf "\r"
-print_success "Database dumps downloaded           "
+if make download-dumps >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Database dumps downloaded           "
+else
+    printf "\r"
+    print_error "Failed to download database dumps - check $SETUP_LOG"
+    exit 1
+fi
 
 printf "${YELLOW}⚡${NC} Setting up knowledge database (interactive)...\n"
 printf "${BLUE}ℹ${NC} This step may ask if you want to recreate existing databases\n"
-make knowledge-setup
-print_success "Knowledge database configured"
+if make knowledge-setup 2>&1 | tee -a "$SETUP_LOG"; then
+    print_success "Knowledge database configured"
+else
+    print_error "Failed to setup knowledge database - check $SETUP_LOG"
+    exit 1
+fi
 
 print_progress "Restoring database content..."
-make restore-database >/dev/null 2>&1
-printf "\r"
-print_success "Database content restored           "
+if make restore-database >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Database content restored           "
+else
+    printf "\r"
+    print_error "Failed to restore database - check $SETUP_LOG"
+    exit 1
+fi
 
 print_progress "Applying database migrations..."
-make migrate >/dev/null 2>&1
-printf "\r"
-print_success "Database migrations applied          "
+if make migrate >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Database migrations applied          "
+else
+    printf "\r"
+    print_error "Database migrations failed - check $SETUP_LOG"
+    exit 1
+fi
 
 print_header "Starting Services"
 
 print_progress "Starting all development services..."
-make up >/dev/null 2>&1
-printf "\r"
-print_success "All services started                "
+if make up >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "All services started                "
+else
+    printf "\r"
+    print_error "Failed to start services - check $SETUP_LOG"
+    exit 1
+fi
 
 # Wait a moment for services to stabilize
 print_progress "Waiting for services to initialize..."
@@ -127,3 +192,7 @@ printf "• Schema changes applied automatically during development\n"
 printf "\n"
 printf "${YELLOW}ℹ${NC} Use 'make logs' to monitor service logs\n"
 printf "${YELLOW}ℹ${NC} Use 'make down' to stop all services\n"
+printf "${YELLOW}ℹ${NC} Setup logs available in: $SETUP_LOG\n"
+if [ -s "$ERROR_LOG" ]; then
+    printf "${RED}⚠${NC} Errors logged in: $ERROR_LOG\n"
+fi
