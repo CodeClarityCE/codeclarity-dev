@@ -21,5 +21,4 @@
   "typescript.tsdk": ".yarn/sdks/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "sarif-viewer.connectToGithubCodeScanning": "off",
-  "vue.hybridMode": false
 }
