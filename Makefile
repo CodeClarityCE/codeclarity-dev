@@ -39,7 +39,7 @@ knowledge-setup: export PG_DB_PORT = 5432
 knowledge-setup: ## Creates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
 
-knowledge-update: export PG_DB_PORT = 6432
+knowledge-update: export PG_DB_PORT = 5432
 knowledge-update: ## Updates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
 
