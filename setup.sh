@@ -69,6 +69,16 @@ if ! command -v docker &>/dev/null || ! command -v docker compose &>/dev/null; t
     exit 1
 fi
 
+# Check for yarn - either directly installed or via corepack
+if ! command -v yarn &>/dev/null; then
+    print_error "yarn is not installed."
+    print_info "You can install it using one of these methods:"
+    print_info "  1. Using corepack (recommended): corepack enable"
+    print_info "  2. Using npm: npm install -g yarn"
+    print_info "  3. Using Homebrew: brew install yarn"
+    exit 1
+fi
+
 print_success "All required commands are installed"
 
 # Repository check
