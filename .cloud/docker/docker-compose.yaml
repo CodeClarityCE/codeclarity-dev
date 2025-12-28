@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.1.4-management-alpine
+    image: rabbitmq:4.2.2-management-alpine
     env_file:
       - ../env/.env.dev
     environment:
@@ -41,7 +41,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres:17.6-alpine
+    image: postgres:18.1-alpine
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -53,8 +53,8 @@ services:
     #      size: 134217728 # 128*2^20 bytes = 128Mb
     volumes:
       - ./docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
-      - ../../dump:/dump
-      - db_data_container:/var/lib/postgresql/data/pgdata
+      - ../../deployment/dump:/dump
+      - db_data_container:/var/lib/postgresql/18
     ports:
       - 5432:5432
     env_file:
@@ -68,7 +68,7 @@ services:
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
   prometheus:
-    image: prom/prometheus:v3.7.1
+    image: prom/prometheus:v3.8.1
     container_name: codeclarity-prometheus-dev
     restart: always
     ports:
@@ -97,7 +97,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:12.2.0
+    image: grafana/grafana:12.3.0
     container_name: codeclarity-grafana-dev
     restart: always
     ports:
