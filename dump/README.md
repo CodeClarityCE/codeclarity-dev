@@ -1,2 +1,5 @@
-# How to restore dump?
-We provide dumps that you can put here at the following URL ```www.drive.codeclarity.io```
+# Database Dumps
+
+Database dumps have been moved to `deployment/dump/` and are now stored in Git LFS.
+
+This folder is no longer used. Please use the dumps in the `deployment/` submodule instead.
