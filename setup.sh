@@ -79,6 +79,16 @@ if ! command -v yarn &>/dev/null; then
     exit 1
 fi
 
+# Check for git-lfs (required for database dumps)
+if ! command -v git-lfs &>/dev/null && ! git lfs version &>/dev/null; then
+    print_error "git-lfs is not installed."
+    print_info "You can install it using one of these methods:"
+    print_info "  1. Using Homebrew (macOS): brew install git-lfs"
+    print_info "  2. Using apt (Debian/Ubuntu): sudo apt install git-lfs"
+    print_info "  3. Visit: https://git-lfs.com/"
+    exit 1
+fi
+
 print_success "All required commands are installed"
 
 # Repository check
@@ -132,13 +142,14 @@ fi
 
 print_header "Database Setup"
 
-print_progress "Downloading database dumps..."
-if make download-dumps >>"$SETUP_LOG" 2>&1; then
+print_progress "Fetching database dumps from Git LFS..."
+# Ensure Git LFS files are pulled (dumps are stored in deployment submodule)
+if cd deployment && git lfs pull --include="dump/*.dump" >>"../$SETUP_LOG" 2>&1 && cd - >/dev/null 2>&1; then
     printf "\r"
-    print_success "Database dumps downloaded           "
+    print_success "Database dumps fetched from Git LFS "
 else
     printf "\r"
-    print_error "Failed to download database dumps - check $SETUP_LOG"
+    print_error "Failed to fetch database dumps - check $SETUP_LOG"
     exit 1
 fi
 

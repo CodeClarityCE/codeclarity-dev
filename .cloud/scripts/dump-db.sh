@@ -11,4 +11,4 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "pg_dump -U postgres -d $1 -Fc > ../../dump/$1.dump"
+	exec db sh -c "pg_dump -U postgres -d $1 -Fc > /dump/$1.dump"
