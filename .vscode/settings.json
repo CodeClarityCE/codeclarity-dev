@@ -4,12 +4,15 @@
     "**/.pnp.*": true
   },
   "eslint.nodePath": ".yarn/sdks",
+  "eslint.useFlatConfig": true,
   "eslint.workingDirectories": [
     {
-      "pattern": "./frontend"
+      "directory": "./frontend",
+      "changeProcessCWD": true
     },
     {
-      "pattern": "./api"
+      "directory": "./api",
+      "changeProcessCWD": true
     }
   ],
   "eslint.probe": [

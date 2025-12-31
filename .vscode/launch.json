@@ -5,6 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Run VSCode Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/integrations/vscode-extension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/integrations/vscode-extension/dist/**/*.js"
+      ],
+      "preLaunchTask": "npm: compile - vscode-extension"
+    },
+    {
       "name": "Debug golang",
       "type": "go",
       "debugAdapter": "dlv-dap", // the default
@@ -31,32 +43,5 @@
       "autoAttachChildProcesses": true,
       "skipFiles": ["<node_internals>/**"]
     },
-    {
-      "name": "Setup KNOWLEDGE",
-      "type": "go",
-      "request": "launch",
-      "mode": "auto",
-      "program": "${workspaceFolder}/backend/services/knowledge",
-      "args": ["-knowledge", "-action", "setup"],
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.cloud/env/.env.dev",
-      "env": {
-        "PG_DB_HOST": "127.0.0.1",
-        "PG_DB_PORT": "5432",
-      }
-    },
-    {
-      "name": "Update KNOWLEDGE",
-      "type": "go",
-      "request": "launch",
-      "mode": "auto",
-      "program": "${workspaceFolder}/backend/services/knowledge",
-      "args": ["-knowledge", "-action", "update"],
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.cloud/env/.env.dev",
-      "env": {
-        "PG_DB_HOST": "127.0.0.1",
-      }
-    }
   ]
 }

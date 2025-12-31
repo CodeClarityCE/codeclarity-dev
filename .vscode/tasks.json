@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "command": "npm run compile",
+      "options": {
+        "cwd": "${workspaceFolder}/integrations/vscode-extension"
+      },
+      "problemMatcher": ["$tsc"],
+      "label": "npm: compile - vscode-extension",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "type": "shell",
+      "command": "npm run watch",
+      "options": {
+        "cwd": "${workspaceFolder}/integrations/vscode-extension"
+      },
+      "problemMatcher": ["$tsc-watch"],
+      "label": "npm: watch - vscode-extension",
+      "isBackground": true
+    }
+  ]
+}
