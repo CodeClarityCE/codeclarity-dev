@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.2.2-management-alpine
+    image: rabbitmq:4.2.3-management-alpine
     env_file:
       - ../env/.env.dev
     environment:
