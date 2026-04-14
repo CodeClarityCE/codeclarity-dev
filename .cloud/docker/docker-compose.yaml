@@ -45,26 +45,27 @@ services:
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
-    # or set shared memory limit when deploy via swarm stack
-    #volumes:
-    #  - type: tmpfs
-    #    target: /dev/shm
-    #    tmpfs:
-    #      size: 134217728 # 128*2^20 bytes = 128Mb
     volumes:
-      - ./docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
+      - ../../deployment/docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
       - ../../deployment/dump:/dump
       - db_data_container:/var/lib/postgresql/18
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: >
+      postgres
+        -c hba_file=/etc/postgresql/pg_hba.conf
+        -c password_encryption=scram-sha-256
     ports:
-      - 5432:5432
+      - 127.0.0.1:5432:5432
     env_file:
       - ../env/.env.dev
+    environment:
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
 
   adminer:
     image: adminer:5.4.1
     restart: always
     ports:
-      - 8080:8080
+      - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
   prometheus:
