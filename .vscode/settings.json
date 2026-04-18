@@ -23,5 +23,6 @@
   "prettier.prettierPath": ".yarn/sdks/prettier/index.cjs",
   "typescript.tsdk": ".yarn/sdks/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
-  "sarif-viewer.connectToGithubCodeScanning": "off"
+  "sarif-viewer.connectToGithubCodeScanning": "off",
+  "js/ts.tsdk.path": ".yarn/sdks/typescript/lib"
 }
