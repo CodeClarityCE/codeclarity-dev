@@ -1,4 +1,5 @@
 .DS_Store
+*.tsbuildinfo
 codeclarity.io
 .build/
 .cloud/docker/config/.netrc
