@@ -16,9 +16,13 @@
     "ghcr.io/devcontainers/features/go:1": {
       "version": "1.26"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {}
+    "ghcr.io/devcontainers/features/git-lfs:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": false
+    }
   },
-  "postCreateCommand": "corepack enable && corepack prepare yarn@4.12.0 --activate && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive",
+  "postCreateCommand": "corepack enable && corepack prepare yarn@4.12.0 --activate && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && python3 -m venv experiments/.venv && experiments/.venv/bin/pip install --upgrade pip && experiments/.venv/bin/pip install -r experiments/js-vuln-study/requirements.txt ipykernel jupytext",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -26,14 +30,20 @@
         "Vue.volar",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "golang.go"
+        "golang.go",
+        "ms-python.python",
+        "ms-toolsai.jupyter"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "python.defaultInterpreterPath": "${workspaceFolder}/experiments/.venv/bin/python"
       }
     }
   },
-  "mounts": [],
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached"
+  ],
   "runArgs": [
     "--cap-drop=ALL",
     "--cap-add=CHOWN",
