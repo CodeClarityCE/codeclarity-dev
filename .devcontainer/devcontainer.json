@@ -22,7 +22,7 @@
       "installTools": false
     }
   },
-  "postCreateCommand": "corepack enable && corepack prepare yarn@4.12.0 --activate && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && python3 -m venv experiments/.venv && experiments/.venv/bin/pip install --upgrade pip && experiments/.venv/bin/pip install -r experiments/js-vuln-study/requirements.txt ipykernel jupytext",
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@11.2.2 --activate && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && python3 -m venv experiments/.venv && experiments/.venv/bin/pip install --upgrade pip && experiments/.venv/bin/pip install -r experiments/js-vuln-study/requirements.txt ipykernel jupytext",
   "customizations": {
     "vscode": {
       "extensions": [

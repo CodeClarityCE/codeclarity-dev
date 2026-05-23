@@ -2,6 +2,7 @@
 
 ## Development Environment
 
+- **One-time host setup**: `docker volume create pnpm-store` (creates the shared external volume mounted into `api-dev` and `frontend-dev` for a deduped pnpm content-addressable store)
 - `make up` / `make down` - Start/stop all services
 - `make build` - Build all Docker images
 - `make logs` - View container logs
@@ -9,7 +10,7 @@
 - `make pull` - Pull latest images
 - Access at <https://localhost:443>
 - Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
-- IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `yarn dev`.
+- IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
 ## Architecture Overview
 
@@ -23,10 +24,10 @@
 
 ## Testing
 
-- **Frontend**: `cd frontend && yarn test:unit` (Vitest) / `yarn test:e2e` (Cypress)
-- **API**: `cd api && yarn test` (Jest) / `yarn test:e2e`
+- **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Cypress)
+- **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
-- **Linting**: `cd frontend && yarn lint` / `cd api && yarn lint`
+- **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
 
 ## Database Commands
 
@@ -37,9 +38,9 @@
 
 ### Migrations (API / TypeORM)
 
-- `cd api && yarn migration:generate src/migrations/MigrationName` - Generate from entity changes
-- `cd api && yarn migration:create src/migrations/MigrationName` - Create empty migration
-- `cd api && yarn migration:run` / `migration:revert` / `migration:show`
+- `cd api && pnpm migration:generate src/migrations/MigrationName` - Generate from entity changes
+- `cd api && pnpm migration:create src/migrations/MigrationName` - Create empty migration
+- `cd api && pnpm migration:run` / `migration:revert` / `migration:show`
 - `cd api && ./generate-migrations.sh` - Generate initial migrations from dev schema
 
 ## Production Deployment

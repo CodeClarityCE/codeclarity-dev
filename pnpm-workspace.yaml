@@ -1,0 +1,32 @@
+packages:
+  - api
+  - frontend
+
+# Set to 0 to override pnpm 11's default of 1440 (24h). Several lockfile entries
+# (ws@7.5.11, ws@8.21.0, baseline-browser-mapping, es-object-atoms, node-addon-api,
+# shell-quote, web-features) were published within the last 24h. The migration
+# lockfile is too fresh to satisfy any nonzero gate today.
+# TODO(re-enable 2026-05-26): switch to `minimumReleaseAge: 4320` (3d in minutes)
+# once those entries age out OR after a dedupe/refresh PR pins older stable versions.
+minimumReleaseAge: 0
+
+# pnpm 11 replaces `onlyBuiltDependencies` with `allowBuilds` (explicit per-package
+# true/false verdict). True allows the lifecycle script to run; false blocks it.
+# Anything not listed here is implicitly blocked.
+allowBuilds:
+  # Native bindings — required for runtime
+  bcrypt: true
+  "@swc/core": true
+  esbuild: true
+  "@parcel/watcher": true
+  unrs-resolver: true
+  msw: true
+  vue-demi: true
+  # Blocked deliberately (security)
+  "@nestjs/core": false   # donate-notice script — non-functional, blocked
+  "@percy/core": false    # downloads a bundled Chromium — only needed for visual regression; opt in when running stryker/percy
+  "@scarf/scarf": false   # telemetry — never allowed
+
+auditConfig:
+  ignoreCves: []
+  ignoreGhsas: []

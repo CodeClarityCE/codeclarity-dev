@@ -1,9 +1,8 @@
 {
   "search.exclude": {
-    "**/.yarn": true,
-    "**/.pnp.*": true
+    "**/node_modules": true,
+    "**/.pnpm-store": true
   },
-  "eslint.nodePath": ".yarn/sdks",
   "eslint.useFlatConfig": true,
   "eslint.workingDirectories": [
     {
@@ -20,9 +19,7 @@
     "typescript",
     "vue"
   ],
-  "prettier.prettierPath": ".yarn/sdks/prettier/index.cjs",
-  "typescript.tsdk": ".yarn/sdks/typescript/lib",
+  "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
-  "sarif-viewer.connectToGithubCodeScanning": "off",
-  "js/ts.tsdk.path": ".yarn/sdks/typescript/lib"
+  "sarif-viewer.connectToGithubCodeScanning": "off"
 }
