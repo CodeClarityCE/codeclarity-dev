@@ -10,7 +10,7 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "pg_restore -l /dump/knowledge.dump > /dump/knowledge.list && pg_restore -U postgres -d knowledge_test -L /dump/knowledge.list /dump/knowledge.dump"
+	exec db sh -c "pg_restore -l /dump/knowledge.dump > /dump/knowledge.list && PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -w -U postgres -d knowledge_test -L /dump/knowledge.list /dump/knowledge.dump"
 
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
@@ -24,7 +24,7 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "pg_restore -l /dump/config.dump > /dump/config.list && pg_restore -U postgres -d config_test -L /dump/config.list /dump/config.dump"
+	exec db sh -c "pg_restore -l /dump/config.dump > /dump/config.list && PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -w -U postgres -d config_test -L /dump/config.list /dump/config.dump"
 
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
@@ -38,4 +38,4 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "pg_restore -l /dump/codeclarity.dump > /dump/codeclarity.list && pg_restore -U postgres -d codeclarity_test -L /dump/codeclarity.list /dump/codeclarity.dump"
+	exec db sh -c "pg_restore -l /dump/codeclarity.dump > /dump/codeclarity.list && PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -w -U postgres -d codeclarity_test -L /dump/codeclarity.list /dump/codeclarity.dump"

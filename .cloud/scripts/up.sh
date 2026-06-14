@@ -1,3 +1,6 @@
+# Ensure the dev RabbitMQ TLS certificate exists before starting (idempotent).
+sh ../docker/scripts/generate-rabbitmq-dev-certs.sh
+
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
 	-f ../../frontend/.cloud/docker/docker-compose.yaml \

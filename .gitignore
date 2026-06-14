@@ -6,6 +6,8 @@ codeclarity.io
 .cloud/docker/config/id_rsa
 .cloud/docker/config/id_rsa.pub
 .cloud/docker/config/known_hosts
+# Generated dev RabbitMQ TLS certificates (created by up.sh)
+.cloud/docker/certs/
 node_modules
 .pnpm-store
 .pnp.*
