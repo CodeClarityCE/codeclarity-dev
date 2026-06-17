@@ -22,6 +22,23 @@
 - **Go module paths**: `github.com/CodeClarityCE/plugin-*`, `github.com/CodeClarityCE/utility-types`
 - **Message flow**: API Request -> Dispatcher -> Downloader (if git needed) -> Dispatcher -> Plugins (stage execution) -> Dispatcher (results)
 
+### Database connection pooling
+
+All services/plugins/API connect through a **pgbouncer** transaction pooler (`PG_DB_HOST=pgbouncer`,
+`PG_DB_PORT=6432`), never directly to Postgres. This multiplexes the many per-replica client pools
+onto a small server-side connection set, so replica count no longer drives `max_connections`.
+
+- **Per-instance pool bounds** are env-overridable: `DB_MAX_OPEN_CONNS` (default 15),
+  `DB_MAX_IDLE_CONNS` (3), `DB_CONN_MAX_LIFETIME_SECONDS` (300), `DB_CONN_MAX_IDLE_SECONDS` (60)
+  for the Go services/plugins (applied via `DatabaseConfig.ApplyPool` in
+  `backend/utilities/boilerplates/`), and `PG_DB_POOL_MAX` (10) for each NestJS API DataSource.
+- **Pooler config**: dev is inline in `.cloud/docker/docker-compose.yaml`; prod uses
+  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. Prod prereqs: regenerate
+  certs so the SAN includes `pgbouncer` (`make setup-pg-certs`) and keep `PGBOUNCER_AUTH_PASSWORD`
+  (`.env.database`) in sync with `deployment/config/userlist.txt`.
+- **Budget**: `default_pool_size(20) × (roles × databases)` stays under `max_connections`
+  (300 dev / 200 prod, kept as headroom). Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4.
+
 ## Testing
 
 - **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Cypress)
