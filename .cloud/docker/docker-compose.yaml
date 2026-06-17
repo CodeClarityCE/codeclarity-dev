@@ -57,6 +57,7 @@ services:
       postgres
         -c hba_file=/etc/postgresql/pg_hba.conf
         -c password_encryption=scram-sha-256
+        -c max_connections=300
     ports:
       - 127.0.0.1:5432:5432
     env_file:
