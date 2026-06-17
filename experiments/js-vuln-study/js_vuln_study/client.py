@@ -235,6 +235,34 @@ class CodeClarityClient:
                 return out
             page += 1
 
+    def delete_project(self, org_id: str, project_id: str) -> None:
+        """Delete a single project (cascade)."""
+        self._request("DELETE", f"/org/{org_id}/projects/{project_id}")
+
+    def delete_projects(
+        self,
+        org_id: str,
+        project_ids: list[str],
+        batch_size: int = 500,
+    ) -> list[dict[str, str]]:
+        """Bulk-delete projects via POST /org/{org}/projects/batch-delete.
+
+        The API auto-cancels each project's in-flight analyses and removes them
+        in bounded batches. ``batch_size`` chunks the request id list to stay at
+        or under the API's per-call cap (500). Returns the concatenated per-id
+        result objects ({"id", "status"}).
+        """
+        results: list[dict[str, str]] = []
+        for i in range(0, len(project_ids), batch_size):
+            chunk = project_ids[i : i + batch_size]
+            resp = self._request(
+                "POST",
+                f"/org/{org_id}/projects/batch-delete",
+                json={"project_ids": chunk},
+            )
+            results.extend(resp["data"]["results"])
+        return results
+
     # ---- analyses ------------------------------------------------------------
 
     def start_analysis(
@@ -280,6 +308,29 @@ class CodeClarityClient:
             "GET",
             f"/org/{org_id}/projects/{project_id}/analyses/{analysis_id}",
         )["data"]
+
+    def cancel_analyses(
+        self,
+        org_id: str,
+        project_id: str,
+        analysis_ids: list[str],
+        batch_size: int = 500,
+    ) -> list[dict[str, str]]:
+        """Cancel in-flight analyses so workers stop advancing them.
+
+        Non-terminal analyses transition to 'cancelled'; already-terminal ones
+        are reported as 'skipped'. Returns the per-id result objects.
+        """
+        results: list[dict[str, str]] = []
+        for i in range(0, len(analysis_ids), batch_size):
+            chunk = analysis_ids[i : i + batch_size]
+            resp = self._request(
+                "POST",
+                f"/org/{org_id}/projects/{project_id}/analyses/batch-cancel",
+                json={"analysis_ids": chunk},
+            )
+            results.extend(resp["data"]["results"])
+        return results
 
     def get_result(
         self,

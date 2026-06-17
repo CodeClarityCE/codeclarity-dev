@@ -6,6 +6,7 @@ Subcommands:
   submit    — import every project in the sample and submit all analyses
   poll      — poll all in-flight analyses and persist their results
   collect   — flatten raw blobs into Parquet tables
+  clean     — bulk-delete the org's projects/analyses (backlog clear)
 """
 
 from __future__ import annotations
@@ -138,6 +139,41 @@ def cmd_collect(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_clean(args: argparse.Namespace) -> int:
+    """Bulk-clear the study org's backlog of projects (and their analyses).
+
+    Uses the API's batch-delete endpoint, which auto-cancels in-flight analyses
+    and removes them in bounded batches — no per-project DELETE storm.
+    """
+    with _client() as client:
+        org_id, _, _ = _ensure_setup(client)
+
+        if args.ids:
+            project_ids = [pid.strip() for pid in args.ids.split(",") if pid.strip()]
+        else:
+            projects = client.list_projects(org_id)
+            project_ids = [p["id"] for p in projects]
+            if args.limit:
+                project_ids = project_ids[: args.limit]
+
+        if not project_ids:
+            log.info("nothing to clean — no projects found")
+            return 0
+
+        if args.dry_run:
+            log.info("[dry-run] would delete %d project(s) in org %s", len(project_ids), org_id)
+            return 0
+
+        log.info("deleting %d project(s) in org %s", len(project_ids), org_id)
+        results = client.delete_projects(org_id, project_ids, batch_size=args.batch_size)
+
+        by_status: dict[str, int] = {}
+        for r in results:
+            by_status[r["status"]] = by_status.get(r["status"], 0) + 1
+        log.info("clean complete: %s", by_status)
+    return 0
+
+
 def main() -> int:
     load_dotenv()
     logging.basicConfig(
@@ -181,6 +217,35 @@ def main() -> int:
         help="skip the per-dependency table (keeps dep counts); avoids OOM on the longitudinal run",
     )
     pc.set_defaults(func=cmd_collect)
+
+    pcl = sub.add_parser(
+        "clean",
+        help="bulk-delete the study org's projects/analyses (backlog clear)",
+    )
+    pcl.add_argument(
+        "--ids",
+        type=str,
+        default=None,
+        help="comma-separated project ids to delete (default: every project in the org)",
+    )
+    pcl.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="delete only the first N projects (ignored when --ids is given)",
+    )
+    pcl.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+        help="ids per batch-delete request (API caps a single call at 500)",
+    )
+    pcl.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list how many projects would be deleted without deleting them",
+    )
+    pcl.set_defaults(func=cmd_clean)
 
     args = p.parse_args()
     return args.func(args)
