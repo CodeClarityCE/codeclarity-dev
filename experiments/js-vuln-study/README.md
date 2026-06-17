@@ -1,10 +1,9 @@
-# JS Vulnerability-Evolution Experiment
+# JS Vulnerability Experiment
 
-Driver for the scientific experiment described in
-`/home/vscode/.claude/plans/i-want-to-write-vectorized-crab.md`: scan a
-popularity-stratified sample of JavaScript projects across several historical
-snapshots via the CodeClarity API and collect the results into Parquet tables
-for analysis.
+Driver that scans the **top 100 GitHub projects by stars** (JavaScript +
+TypeScript) that commit both a `package.json` and a lockfile, via the
+CodeClarity API, and collects the results into Parquet tables for analysis.
+Each project is analyzed once at its default-branch **HEAD**.
 
 No changes to the CodeClarity codebase are required; this directory contains
 only an external client and is independent of the monorepo build.
@@ -35,28 +34,32 @@ cp .env.example .env
 
 Each command writes into `data/`, which is gitignored.
 
-1. **Build the sample** (hits the public npms.io search API, ~2 min):
+1. **Build the sample** (queries the GitHub search API):
    ```bash
-   python run.py sample --per-tier 100
+   python run.py sample            # top 100 by default
+   python run.py sample --limit 50
    ```
-   Writes `data/sample.json` with ~400 project specs (top-100, top-1k,
-   top-10k, long-tail).
+   Ranks the top-starred `language:JavaScript` and `language:TypeScript` repos,
+   keeps the first `--limit` whose repository root commits both a `package.json`
+   and a lockfile, and writes `data/sample.json`. Repo probes are cached in
+   `data/repo_probe_cache.jsonl`; pass `--refresh` to discard the cache.
 
-2. **Smoke test** — single project (expressjs/express) at HEAD:
+2. **Smoke test** — single project (vuejs/core) at HEAD:
    ```bash
    python run.py smoke
    ```
    Confirms auth, org/analyzer creation, import, analysis trigger, polling,
    and result persistence all work. Exits when the analysis is terminal.
 
-3. **Submit the full batch**:
+3. **Submit the batch** (HEAD only by default):
    ```bash
-   python run.py submit           # 400 projects × 7 snapshots
-   python run.py submit --limit 10 --head-only   # quick trial
+   python run.py submit            # 100 projects, one HEAD analysis each
+   python run.py submit --limit 5  # quick trial
+   python run.py submit --snapshots  # also analyze historical quarterly snapshots
    ```
-   Imports every project and queues one analysis per target snapshot. All
-   submitted analyses are recorded in `data/manifest.jsonl`. Re-running skips
-   (project, date) pairs already present in the manifest.
+   Imports every project and queues one HEAD analysis (or the full historical
+   grid with `--snapshots`). All submitted analyses are recorded in
+   `data/manifest.jsonl`. Re-running skips (project, date) pairs already present.
 
 4. **Poll until everything is terminal**:
    ```bash
@@ -72,13 +75,14 @@ Each command writes into `data/`, which is gitignored.
    python run.py collect
    ```
    Emits `data/tables/analyses.parquet`, `vulns.parquet`, `dependencies.parquet`.
-   Load them straight into pandas / R to chase the six discoveries listed in
-   the plan:
+   Load them straight into pandas / R:
 
    ```python
    import pandas as pd
    a = pd.read_parquet("data/tables/analyses.parquet")
-   a.groupby("tier")[["total_vulnerabilities","patch_none","patch_full"]].mean()
+   a[["npm_name", "total_dependencies", "total_vulnerabilities"]].sort_values(
+       "total_vulnerabilities", ascending=False
+   )
    ```
 
 ## Files
@@ -87,24 +91,23 @@ Each command writes into `data/`, which is gitignored.
 |------|---------|
 | `run.py` | CLI entry point (`sample` / `smoke` / `submit` / `poll` / `collect`) |
 | `js_vuln_study/client.py` | Thin CodeClarity REST wrapper with JWT refresh |
-| `js_vuln_study/sample.py` | npms.io popularity-stratified sampler |
-| `js_vuln_study/snapshots.py` | Resolves commit hashes at target dates via the GitHub API |
+| `js_vuln_study/sample.py` | Top-N GitHub-stars sampler (filters to package.json + lockfile) |
+| `js_vuln_study/snapshots.py` | Resolves the HEAD commit (and optional historical dates) via the GitHub API |
 | `js_vuln_study/orchestrator.py` | Pipeline: import → submit → poll → persist raw JSON |
 | `js_vuln_study/collect.py` | Raw JSON → `analyses.parquet` / `vulns.parquet` / `dependencies.parquet` |
 | `data/` | Run artefacts (manifest, raw blobs, final tables) |
 
-## Verification checklist (before scaling to 400 × 7)
+## Verification checklist (before the full 100-project run)
 
-Mirrors the plan's Verification section. Run in order; each step gates the
-next.
+Run in order; each step gates the next.
 
-1. `python run.py smoke` completes and writes `data/raw/<pid>/<aid>/{js-sbom,vuln-finder,license-finder,js-patching}.json`.
-2. Manually feed a lockfile-less repo (e.g. a plain static-site repo) into
-   `import_and_schedule` and confirm it lands in `failed`, not `submitted`
-   forever.
-3. `python run.py submit --limit 5 --head-only && python run.py poll` —
+1. `python run.py smoke` completes and writes `data/raw/<pid>/<aid>/{js-sbom,vuln-finder,license-finder}.json`.
+2. `python run.py sample` writes `data/sample.json` with the requested number of
+   entries — all `tier="top-100"`, recognizable high-star repos, ranks in star
+   order. Spot-check a few on github.com for package.json + a lockfile.
+3. `python run.py submit --limit 5 && python run.py poll` —
    five projects through the happy path.
 4. Diff `data/tables/analyses.parquet` against the frontend result pages at
    <https://localhost:443> for three random rows to confirm numeric parity.
 5. Spot-check one project's `total_vulnerabilities` against `npm audit`.
-   Disagreement is expected (RQ5) but magnitudes should match.
+   Some disagreement is expected, but magnitudes should match.

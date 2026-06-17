@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -24,7 +25,7 @@ from typing import Iterable
 
 from .client import CodeClarityClient, CodeClarityError, TERMINAL_STATUSES
 from .sample import ProjectSpec
-from .snapshots import Snapshot, resolve_snapshots
+from .snapshots import SNAPSHOT_DATES, Snapshot, resolve_snapshots
 
 log = logging.getLogger(__name__)
 
@@ -32,10 +33,14 @@ PLUGIN_TYPES = ["js-sbom", "vuln-finder", "license-finder"]
 
 POLL_INITIAL = 10.0
 POLL_MAX = 120.0
-# 10 min hard cap — in practice small JS repos finish in seconds; a sub-10-min
-# hang almost always means a plugin container wedged and the dispatcher never
-# saw the ack. Better to time out and keep moving than to poll forever.
-POLL_TIMEOUT = 10 * 60
+# Stall timeout: max time an analysis may go WITHOUT any server-side status
+# change before we give up on it. The clock resets on every observed transition
+# (queued → started → ongoing → completed), so a large batch that waits its turn
+# behind limited plugin workers is never killed for being slow — only a
+# genuinely wedged analysis (no progress for this long) is failed.
+# Configurable via JS_VULN_POLL_TIMEOUT (seconds) — raise it for deep queues
+# (e.g. the ~1,700-analysis longitudinal run) where items wait long in 'started'.
+POLL_TIMEOUT = int(os.environ.get("JS_VULN_POLL_TIMEOUT", str(20 * 60)))
 
 
 @dataclass
@@ -97,9 +102,12 @@ def import_and_schedule(
 
     for spec in projects:
         try:
+            # HEAD-only is the default: pass an empty date grid so we skip the
+            # per-repo historical commit lookups entirely and only resolve HEAD.
             branch, snapshots = resolve_snapshots(
                 spec.github_owner,
                 spec.github_repo,
+                dates=[] if skip_head_only else SNAPSHOT_DATES,
                 include_head=True,
             )
         except Exception as e:  # noqa: BLE001 — we want to log and continue per project
@@ -109,9 +117,6 @@ def import_and_schedule(
         if branch is None or not snapshots:
             log.info("skipping %s: no default branch / no snapshots", spec.git_url)
             continue
-
-        if skip_head_only:
-            snapshots = [s for s in snapshots if s.date == "HEAD"]
 
         try:
             project_id = client.import_project(
@@ -199,6 +204,7 @@ def poll_and_collect(
     log.info("polling %d active analyses", len(active_idx))
 
     deadlines: dict[int, float] = {i: time.time() + POLL_TIMEOUT for i in active_idx}
+    last_status: dict[int, str | None] = {i: None for i in active_idx}
     wait = POLL_INITIAL
     last_summary = time.time()
 
@@ -220,6 +226,11 @@ def poll_and_collect(
 
             status = analysis.get("status")
             iter_statuses[status or "?"] = iter_statuses.get(status or "?", 0) + 1
+            # Reset the stall clock on any observed progress so queued analyses
+            # aren't failed while merely waiting behind limited plugin workers.
+            if status != last_status.get(i):
+                last_status[i] = status
+                deadlines[i] = time.time() + POLL_TIMEOUT
             terminated = False
             if status in TERMINAL_STATUSES:
                 rec["status"] = status

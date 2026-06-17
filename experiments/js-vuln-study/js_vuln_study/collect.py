@@ -75,6 +75,47 @@ def _get_package_manager(sbom: Any) -> str | None:
     return info.get("package_manager") if isinstance(info, dict) else None
 
 
+def _match_vuln(v: dict, key: str) -> dict:
+    """Return the nested {source}Match.Vulnerability dict, or {}."""
+    m = v.get(key)
+    if isinstance(m, dict):
+        vuln = m.get("Vulnerability")
+        if isinstance(vuln, dict):
+            return vuln
+    return {}
+
+
+def _disclosure_dates(v: dict) -> tuple[str | None, str | None, str | None]:
+    """Extract (published, modified, withdrawn) for a vulnerability.
+
+    The per-vuln dates live on the matched knowledge-DB record, not the top-level
+    object: NVDMatch.Vulnerability.{Published,LastModified}, OSVMatch.Vulnerability
+    .{published,modified,withdrawn}, GCVEMatch.Vulnerability.{datePublished,...}.
+    Prefer NVD, then OSV, then GCVE; fall back to the top-level PHP-path fields.
+    """
+    nvd = _match_vuln(v, "NVDMatch")
+    osv = _match_vuln(v, "OSVMatch")
+    gcve = _match_vuln(v, "GCVEMatch")
+
+    published = (
+        nvd.get("Published")
+        or osv.get("published") or osv.get("Published")
+        or gcve.get("datePublished") or gcve.get("DatePublished")
+        or v.get("published_date") or v.get("PublishedDate")
+    )
+    modified = (
+        nvd.get("LastModified")
+        or osv.get("modified") or osv.get("Modified")
+        or gcve.get("dateUpdated") or gcve.get("DateUpdated")
+        or v.get("modified_date") or v.get("ModifiedDate")
+    )
+    withdrawn = (
+        osv.get("withdrawn") or osv.get("Withdrawn")
+        or v.get("withdrawn_date") or v.get("WithdrawnDate")
+    )
+    return (published or None, modified or None, withdrawn or None)
+
+
 def _count_severity_classes(rows: list[dict]) -> dict[str, int]:
     """Count per-analysis severity classes from already-flattened vuln rows."""
     buckets = {"critical": 0, "high": 0, "medium": 0, "low": 0, "none": 0}
@@ -88,7 +129,14 @@ def _count_severity_classes(rows: list[dict]) -> dict[str, int]:
     return buckets
 
 
-def build_tables(data_dir: Path) -> None:
+def build_tables(data_dir: Path, include_deps: bool = True) -> None:
+    """Flatten raw blobs into Parquet tables.
+
+    `include_deps=False` keeps the per-analysis dependency *counts* in the
+    analyses table but skips materialising the giant per-dependency rows — needed
+    for the longitudinal run, where ~18 snapshots × 100 repos (some with 100k+
+    resolved deps) would otherwise produce tens of millions of rows and OOM.
+    """
     manifest = _read_manifest(data_dir)
     raw_root = data_dir / "raw"
     tables_dir = data_dir / "tables"
@@ -150,20 +198,21 @@ def build_tables(data_dir: Path) -> None:
                         dev_count += 1
                     if prod:
                         prod_count += 1
-                    dep_rows.append({
-                        **summary,
-                        "workspace": ws_name,
-                        "name": dep_name,
-                        "version": version,
-                        "package_manager": pm_for_analysis,
-                        "direct": direct,
-                        "transitive": transitive,
-                        "dev": dev,
-                        "prod": prod,
-                        "optional": bool(flags.get("Optional")),
-                        "bundled": bool(flags.get("Bundled")),
-                        "licenses": flags.get("Licenses") or [],
-                    })
+                    if include_deps:
+                        dep_rows.append({
+                            **summary,
+                            "workspace": ws_name,
+                            "name": dep_name,
+                            "version": version,
+                            "package_manager": pm_for_analysis,
+                            "direct": direct,
+                            "transitive": transitive,
+                            "dev": dev,
+                            "prod": prod,
+                            "optional": bool(flags.get("Optional")),
+                            "bundled": bool(flags.get("Bundled")),
+                            "licenses": flags.get("Licenses") or [],
+                        })
 
         total_vulns, vulnerable_deps = 0, set()
         direct_vulns, transitive_vulns = 0, 0
@@ -184,6 +233,7 @@ def build_tables(data_dir: Path) -> None:
                 sev = (v.get("Severity") or {})
                 epss = v.get("EPSS") or {}
                 conflict = v.get("Conflict") or {}
+                published, modified, withdrawn = _disclosure_dates(v)
                 row = {
                     **summary,
                     "workspace": ws_name,
@@ -200,6 +250,9 @@ def build_tables(data_dir: Path) -> None:
                     "conflict_flag": conflict.get("ConflictFlag") if isinstance(conflict, dict) else None,
                     "winning_source": conflict.get("WinningSource") if isinstance(conflict, dict) else None,
                     "direct_dependency": bool(v.get("DirectDependency") or v.get("direct_dependency")),
+                    "published_date": published,
+                    "modified_date": modified,
+                    "withdrawn_date": withdrawn,
                 }
                 vuln_rows.append(row)
                 per_analysis_vulns.append(row)
@@ -229,13 +282,16 @@ def build_tables(data_dir: Path) -> None:
 
     analyses_df = pd.DataFrame(analyses_rows)
     vulns_df = pd.DataFrame(vuln_rows)
-    deps_df = pd.DataFrame(dep_rows)
 
     analyses_df.to_parquet(tables_dir / "analyses.parquet", index=False)
     vulns_df.to_parquet(tables_dir / "vulns.parquet", index=False)
-    deps_df.to_parquet(tables_dir / "dependencies.parquet", index=False)
+    n_deps = 0
+    if include_deps:
+        deps_df = pd.DataFrame(dep_rows)
+        deps_df.to_parquet(tables_dir / "dependencies.parquet", index=False)
+        n_deps = len(deps_df)
 
     log.info(
         "wrote analyses=%d vulns=%d deps=%d to %s",
-        len(analyses_df), len(vulns_df), len(deps_df), tables_dir,
+        len(analyses_df), len(vulns_df), n_deps, tables_dir,
     )

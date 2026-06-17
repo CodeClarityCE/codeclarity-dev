@@ -33,7 +33,6 @@ from js_vuln_study.sample import ProjectSpec, build_sample, load_sample
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SAMPLE_PATH = DATA_DIR / "sample.json"
 SETUP_CACHE = DATA_DIR / "setup.json"
-AGGREGATE_CACHE = DATA_DIR / "npm_aggregate.json"
 PROBE_CACHE = DATA_DIR / "repo_probe_cache.jsonl"
 
 
@@ -82,15 +81,10 @@ def _ensure_setup(client: CodeClarityClient) -> tuple[str, str, str]:
 
 def cmd_sample(args: argparse.Namespace) -> int:
     if args.refresh:
-        for p in (AGGREGATE_CACHE, PROBE_CACHE):
-            p.unlink(missing_ok=True)
+        PROBE_CACHE.unlink(missing_ok=True)
     build_sample(
-        per_tier=args.per_tier,
-        seed=args.seed,
-        max_rank=args.max_rank,
+        limit=args.limit,
         output=SAMPLE_PATH,
-        require_lockfile=not args.no_lockfile_filter,
-        aggregate_cache=AGGREGATE_CACHE,
         probe_cache=PROBE_CACHE,
     )
     return 0
@@ -127,7 +121,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
         org_id, analyzer_id, integration_id = _ensure_setup(client)
         import_and_schedule(
             client, org_id, analyzer_id, specs, DATA_DIR,
-            integration_id=integration_id, skip_head_only=args.head_only,
+            integration_id=integration_id, skip_head_only=not args.snapshots,
         )
     return 0
 
@@ -140,7 +134,7 @@ def cmd_poll(args: argparse.Namespace) -> int:
 
 
 def cmd_collect(args: argparse.Namespace) -> int:
-    build_tables(DATA_DIR)
+    build_tables(DATA_DIR, include_deps=not args.no_deps)
     return 0
 
 
@@ -153,34 +147,39 @@ def main() -> int:
     p = argparse.ArgumentParser(prog="run.py")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    ps = sub.add_parser("sample", help="build the popularity-stratified sample")
-    ps.add_argument("--per-tier", type=int, default=100)
-    ps.add_argument("--seed", type=int, default=42)
-    ps.add_argument("--max-rank", type=int, default=20_000)
-    ps.add_argument(
-        "--no-lockfile-filter",
-        action="store_true",
-        help="do NOT drop repos without a committed lockfile (faster but produces empty scans)",
+    ps = sub.add_parser(
+        "sample",
+        help="build the top-N GitHub-stars sample of JS/TS repos with package.json + lockfile",
     )
+    ps.add_argument("--limit", type=int, default=100, help="number of repos to keep")
     ps.add_argument(
         "--refresh",
         action="store_true",
-        help="discard the npm-search and GitHub-probe caches before running",
+        help="discard the GitHub repo-probe cache before running",
     )
     ps.set_defaults(func=cmd_sample)
 
     psm = sub.add_parser("smoke", help="single-project HEAD-only verification run")
     psm.set_defaults(func=cmd_smoke)
 
-    pu = sub.add_parser("submit", help="import projects and submit all analyses")
+    pu = sub.add_parser("submit", help="import projects and submit one HEAD analysis each")
     pu.add_argument("--limit", type=int, default=None, help="scan only the first N projects")
-    pu.add_argument("--head-only", action="store_true", help="skip historical snapshots")
+    pu.add_argument(
+        "--snapshots",
+        action="store_true",
+        help="also analyze the historical quarterly snapshots (default: HEAD only)",
+    )
     pu.set_defaults(func=cmd_submit)
 
     pp = sub.add_parser("poll", help="poll in-flight analyses and persist results")
     pp.set_defaults(func=cmd_poll)
 
     pc = sub.add_parser("collect", help="build tidy Parquet tables from raw blobs")
+    pc.add_argument(
+        "--no-deps",
+        action="store_true",
+        help="skip the per-dependency table (keeps dep counts); avoids OOM on the longitudinal run",
+    )
     pc.set_defaults(func=cmd_collect)
 
     args = p.parse_args()

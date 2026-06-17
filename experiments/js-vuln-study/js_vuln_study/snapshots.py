@@ -21,15 +21,15 @@ log = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com"
 
-# 2024-Q4 .. 2026-Q1, spaced roughly quarterly. HEAD is the last entry and has
-# commit_hash = None (meaning "default branch HEAD").
+# Quarterly 2022-Q1 .. 2026-Q2 — a pre-LLM baseline (2022) through today, to
+# chart vulnerability evolution. Repos that don't yet exist at a date are skipped
+# (commit_before returns None). HEAD (commit_hash = None) is appended last.
 SNAPSHOT_DATES = [
-    "2024-10-01",
-    "2025-01-01",
-    "2025-04-01",
-    "2025-07-01",
-    "2025-10-01",
-    "2026-01-01",
+    "2022-01-01", "2022-04-01", "2022-07-01", "2022-10-01",
+    "2023-01-01", "2023-04-01", "2023-07-01", "2023-10-01",
+    "2024-01-01", "2024-04-01", "2024-07-01", "2024-10-01",
+    "2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01",
+    "2026-01-01", "2026-04-01",
 ]
 
 
