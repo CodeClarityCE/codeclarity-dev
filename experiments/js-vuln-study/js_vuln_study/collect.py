@@ -38,6 +38,67 @@ def _read_manifest(data_dir: Path) -> list[dict]:
     ]
 
 
+# Map every manifest status onto a coverage bucket so counts sum to the sample.
+_COVERAGE_BUCKETS = {
+    "completed": "completed",
+    "success": "completed",
+    "failure": "failed",
+    "failed": "failed",
+    "cancelled": "failed",
+    "skipped": "skipped",
+    "failed-submit": "failed-submit",
+}
+
+
+def coverage_report(data_dir: Path) -> dict[str, int]:
+    """Report true coverage from the manifest: how many (project, snapshot) pairs
+    were attempted and where they ended up. Counts sum to the manifest size so a
+    99/100-vs-100/100 gap is never silent. Returns the bucket counts.
+
+    Skip rows can be re-emitted across resumed `submit` runs (a transient GitHub
+    failure logs a fresh row each time), so they're de-duplicated by
+    (git_url, snapshot_date, status) before counting.
+    """
+    manifest = _read_manifest(data_dir)
+    seen: set[tuple] = set()
+    deduped: list[dict] = []
+    for rec in manifest:
+        if rec.get("status") in {"skipped", "failed-submit"}:
+            key = (rec.get("git_url"), rec.get("snapshot_date"), rec.get("status"))
+            if key in seen:
+                continue
+            seen.add(key)
+        deduped.append(rec)
+
+    counts: dict[str, int] = {}
+    for rec in deduped:
+        bucket = _COVERAGE_BUCKETS.get(rec.get("status"), "in-flight")
+        counts[bucket] = counts.get(bucket, 0) + 1
+
+    total = len(deduped)
+    assert sum(counts.values()) == total, f"coverage buckets {counts} != {total}"
+    log.info("coverage (%d attempted): %s", total, counts)
+
+    dropped = [
+        r for r in deduped
+        if r.get("status") in {"skipped", "failed-submit", "failure", "failed", "cancelled"}
+    ]
+    for r in dropped:
+        log.info(
+            "  dropped %s@%s [%s]: %s",
+            r.get("npm_name") or r.get("git_url"),
+            r.get("snapshot_date"),
+            r.get("status"),
+            r.get("error"),
+        )
+    if dropped:
+        tables_dir = data_dir / "tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(dropped).to_csv(tables_dir / "coverage_dropped.csv", index=False)
+
+    return counts
+
+
 def _load_blob(path: Path) -> Any:
     if not path.exists():
         return None
@@ -137,6 +198,7 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
     for the longitudinal run, where ~18 snapshots × 100 repos (some with 100k+
     resolved deps) would otherwise produce tens of millions of rows and OOM.
     """
+    coverage_report(data_dir)
     manifest = _read_manifest(data_dir)
     raw_root = data_dir / "raw"
     tables_dir = data_dir / "tables"
