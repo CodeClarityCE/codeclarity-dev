@@ -87,6 +87,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
         limit=args.limit,
         output=SAMPLE_PATH,
         probe_cache=PROBE_CACHE,
+        min_npm_downloads=args.min_npm_downloads,
     )
     return 0
 
@@ -192,6 +193,13 @@ def main() -> int:
         "--refresh",
         action="store_true",
         help="discard the GitHub repo-probe cache before running",
+    )
+    ps.add_argument(
+        "--min-npm-downloads",
+        type=int,
+        default=None,
+        help="drop npm-published packages below this last-month download count "
+        "(low-signal filter; unpublished repos are kept regardless)",
     )
     ps.set_defaults(func=cmd_sample)
 

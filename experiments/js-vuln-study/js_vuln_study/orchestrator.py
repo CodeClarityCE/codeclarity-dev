@@ -130,6 +130,24 @@ def _load_existing_manifest(data_dir: Path) -> set[tuple[str, str]]:
     return seen
 
 
+def _load_project_ids(data_dir: Path) -> dict[str, str]:
+    """Return {git_url: project_id} from previously recorded analyses, so re-runs
+    reuse existing projects instead of importing duplicates. The manifest is a
+    local, pagination-immune source of truth; server-side import is also
+    idempotent, so this is purely an optimization that avoids a redundant POST."""
+    path = _manifest_path(data_dir)
+    if not path.exists():
+        return {}
+    ids: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("project_id"):
+            ids[rec["git_url"]] = rec["project_id"]
+    return ids
+
+
 def import_and_schedule(
     client: CodeClarityClient,
     org_id: str,
@@ -144,6 +162,7 @@ def import_and_schedule(
     Returns the list of in-flight analysis records (status='submitted' or 'failed-submit').
     """
     seen = _load_existing_manifest(data_dir)
+    project_ids = _load_project_ids(data_dir)
     pending: list[AnalysisRecord] = []
 
     for spec in projects:
@@ -166,18 +185,21 @@ def import_and_schedule(
             _record_skip(data_dir, spec, "*", "no default branch / no snapshots")
             continue
 
-        try:
-            project_id = client.import_project(
-                org_id,
-                spec.git_url,
-                name=spec.npm_name,
-                description=f"{spec.tier} rank={spec.rank}",
-                integration_id=integration_id,
-            )
-        except CodeClarityError as e:
-            log.warning("import failed for %s: %s", spec.git_url, e)
-            _record_skip(data_dir, spec, "*", f"import: {e}")
-            continue
+        project_id = project_ids.get(spec.git_url)
+        if project_id is None:
+            try:
+                project_id = client.import_project(
+                    org_id,
+                    spec.git_url,
+                    name=spec.npm_name,
+                    description=f"{spec.tier} rank={spec.rank}",
+                    integration_id=integration_id,
+                )
+            except CodeClarityError as e:
+                log.warning("import failed for %s: %s", spec.git_url, e)
+                _record_skip(data_dir, spec, "*", f"import: {e}")
+                continue
+            project_ids[spec.git_url] = project_id
 
         for snap in snapshots:
             key = (spec.git_url, snap.date)

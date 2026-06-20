@@ -14,6 +14,7 @@ Probe results are cached by (owner, repo) so re-runs don't re-hit the API.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -27,6 +28,8 @@ import httpx
 log = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com"
+NPM_REGISTRY = "https://registry.npmjs.org"
+NPM_DOWNLOADS_API = "https://api.npmjs.org/downloads/point/last-month"
 SEARCH_LANGUAGES = ("JavaScript", "TypeScript")
 SEARCH_PAGES = 3  # 100 results/page → up to 300 candidates per language
 MIN_STARS = 1000  # floor for the search; the top-100 sits far above this
@@ -43,6 +46,12 @@ class ProjectSpec:
     github_owner: str
     github_repo: str
     default_branch: str
+    # npm registry cross-check (annotation; populated when the repo root's
+    # package.json declares a name that resolves on the registry). Trailing
+    # fields with defaults keep `load_sample` backward-compatible with older
+    # sample.json files that predate them.
+    npm_pkg: str | None = None  # real npm package name from root package.json
+    npm_downloads: int | None = None  # last-month downloads, if published
 
 
 def _auth_headers() -> dict[str, str]:
@@ -134,6 +143,69 @@ def _root_files(http: httpx.Client, owner: str, repo: str, branch: str) -> set[s
     return {e.get("name") for e in entries if isinstance(e, dict)}
 
 
+def _repo_metadata(http: httpx.Client, owner: str, repo: str) -> dict[str, Any] | None:
+    """Return the authoritative repo object, or None if it doesn't resolve.
+
+    `GET /repos/{owner}/{repo}` resolves renames/redirects (the client follows
+    the 301 to the current slug), so the returned `full_name` is canonical. A
+    404 (or any non-200) means the slug doesn't resolve.
+    """
+    r = _retry_get(http, f"{GITHUB_API}/repos/{owner}/{repo}")
+    if r is None or r.status_code != 200:
+        return None
+    try:
+        meta = r.json()
+    except Exception:
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _root_package_name(
+    http: httpx.Client, owner: str, repo: str, branch: str
+) -> str | None:
+    """Return the `name` declared by the repo root's package.json, if any."""
+    r = _retry_get(
+        http,
+        f"{GITHUB_API}/repos/{owner}/{repo}/contents/package.json",
+        params={"ref": branch},
+    )
+    if r is None or r.status_code != 200:
+        return None
+    try:
+        payload = r.json()
+        raw = base64.b64decode(payload["content"]) if payload.get("content") else b""
+        name = json.loads(raw).get("name")
+    except Exception:
+        return None
+    return name if isinstance(name, str) and name else None
+
+
+def _npm_check(http: httpx.Client, name: str) -> tuple[bool, int | None]:
+    """Return (published?, last-month downloads) for an npm package name.
+
+    Plain registry gets (no GitHub auth header); any failure degrades to
+    (False, None) so the npm cross-check never breaks sampling.
+    """
+    published = False
+    downloads: int | None = None
+    try:
+        r = http.get(f"{NPM_REGISTRY}/{name}", headers={"Accept": "application/json"})
+        published = r.status_code == 200
+    except Exception:
+        return False, None
+    if not published:
+        return False, None
+    try:
+        r = http.get(f"{NPM_DOWNLOADS_API}/{name}")
+        if r.status_code == 200:
+            value = r.json().get("downloads")
+            if isinstance(value, int):
+                downloads = value
+    except Exception:
+        downloads = None
+    return published, downloads
+
+
 class _ProbeCache:
     """Caches root-contents probe verdicts by (owner, repo) in a JSONL file."""
 
@@ -152,24 +224,77 @@ class _ProbeCache:
             log.info("loaded %d probe records from %s", len(self._cache), path)
 
     def get_or_probe(
-        self, http: httpx.Client, owner: str, repo: str, branch: str
+        self, http: httpx.Client, owner: str, repo: str
     ) -> dict[str, Any]:
+        """Resolve the canonical repo, probe its root, and cross-check npm.
+
+        Keyed by the *search* slug so re-runs stay cached even though the verdict
+        carries the canonical slug. A verdict that doesn't resolve (404/redirect
+        to nothing) is recorded so we never re-probe a dead slug.
+        """
         key = (owner.lower(), repo.lower())
         if key in self._cache:
             return self._cache[key]
-        names = _root_files(http, owner, repo, branch)
-        if names is None:
-            rec = {"owner": owner, "repo": repo, "qualifies": False, "error": "probe-failed"}
-        else:
-            has_pkg = REQUIRED_FILE in names
-            has_lock = any(lf in names for lf in LOCKFILES)
+
+        meta = _repo_metadata(http, owner, repo)
+        if meta is None:
             rec = {
                 "owner": owner,
                 "repo": repo,
-                "has_package_json": has_pkg,
-                "has_lockfile": has_lock,
-                "qualifies": has_pkg and has_lock,
+                "resolvable": False,
+                "qualifies": False,
+                "error": "unresolvable",
             }
+            self._cache[key] = rec
+            self._append(rec)
+            return rec
+
+        # Canonical, authoritative fields (override stale search-item values).
+        c_full = meta.get("full_name") or f"{owner}/{repo}"
+        c_owner = (meta.get("owner") or {}).get("login") or owner
+        c_repo = meta.get("name") or repo
+        c_branch = meta.get("default_branch")
+        c_url = meta.get("html_url") or f"https://github.com/{c_owner}/{c_repo}"
+        fork = bool(meta.get("fork"))
+        archived = bool(meta.get("archived"))
+        disabled = bool(meta.get("disabled"))
+
+        names = _root_files(http, c_owner, c_repo, c_branch) if c_branch else None
+        has_pkg = names is not None and REQUIRED_FILE in names
+        has_lock = names is not None and any(lf in names for lf in LOCKFILES)
+
+        npm_pkg: str | None = None
+        npm_published = False
+        npm_downloads: int | None = None
+        if has_pkg and c_branch:
+            npm_pkg = _root_package_name(http, c_owner, c_repo, c_branch)
+            if npm_pkg:
+                npm_published, npm_downloads = _npm_check(http, npm_pkg)
+
+        rec = {
+            "owner": owner,
+            "repo": repo,
+            "resolvable": True,
+            "canonical_full_name": c_full,
+            "canonical_owner": c_owner,
+            "canonical_repo": c_repo,
+            "canonical_branch": c_branch,
+            "canonical_url": c_url,
+            "fork": fork,
+            "archived": archived,
+            "disabled": disabled,
+            "has_package_json": has_pkg,
+            "has_lockfile": has_lock,
+            "npm_pkg": npm_pkg if npm_published else None,
+            "npm_published": npm_published,
+            "npm_downloads": npm_downloads,
+            "qualifies": (
+                bool(c_branch)
+                and not (fork or archived or disabled)
+                and has_pkg
+                and has_lock
+            ),
+        }
         self._cache[key] = rec
         self._append(rec)
         return rec
@@ -187,13 +312,20 @@ def build_sample(
     output: Path | None = None,
     probe_cache: Path | None = None,
     pages: int = SEARCH_PAGES,
+    min_npm_downloads: int | None = None,
 ) -> list[ProjectSpec]:
     """Build a top-`limit` GitHub-stars sample of JS/TS repos that commit both a
-    `package.json` and a lockfile.
+    `package.json` and a lockfile, with canonical, resolvable slugs.
 
     Strategy: pull the top-starred repos for each language, merge and re-rank by
-    stars, then probe each repo's root in star order — keeping those with both a
-    package.json and a lockfile — until `limit` qualify.
+    stars, then for each repo in star order resolve its canonical slug via
+    `GET /repos/{owner}/{repo}` (drops dead/redirecting URLs and forks), probe
+    its root for a package.json + lockfile, and cross-check the npm registry —
+    keeping those that qualify until `limit` are selected.
+
+    `min_npm_downloads`, when set, additionally drops *published* packages whose
+    last-month download count is below the threshold (low-signal libraries);
+    repos not published to npm are kept regardless.
     """
     if not (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")):
         log.warning(
@@ -201,7 +333,9 @@ def build_sample(
             "set a classic PAT with `public_repo` scope.",
         )
 
-    http = httpx.Client(timeout=30.0)
+    # follow_redirects so a renamed repo's 301 from /repos/{owner}/{repo}
+    # resolves to its canonical slug rather than surfacing as an error.
+    http = httpx.Client(timeout=30.0, follow_redirects=True)
     cache = _ProbeCache(probe_cache)
     try:
         candidates: dict[tuple[str, str], dict[str, Any]] = {}
@@ -229,30 +363,51 @@ def build_sample(
         log.info("gathered %d unique candidate repos", len(ranked))
 
         selected: list[ProjectSpec] = []
+        seen_canonical: set[str] = set()
         for item in ranked:
             if len(selected) >= limit:
                 break
             owner = item["owner"]["login"]
             repo = item["name"]
-            branch = item.get("default_branch")
-            if not branch:
-                continue
-            verdict = cache.get_or_probe(http, owner, repo, branch)
+            verdict = cache.get_or_probe(http, owner, repo)
             if not verdict.get("qualifies"):
                 continue
+            # Re-dedup on the canonical slug: a redirecting slug (react/react ->
+            # facebook/react) collapses onto the canonical entry rather than
+            # adding a duplicate.
+            canonical = verdict["canonical_full_name"]
+            if canonical.lower() in seen_canonical:
+                continue
+            # Opt-in low-signal filter: drop published packages below the
+            # download floor; unpublished apps/monorepos are kept.
+            downloads = verdict.get("npm_downloads")
+            if (
+                min_npm_downloads is not None
+                and verdict.get("npm_published")
+                and downloads is not None
+                and downloads < min_npm_downloads
+            ):
+                log.info(
+                    "dropped low-signal %s (npm %s, %d downloads < %d)",
+                    canonical, verdict.get("npm_pkg"), downloads, min_npm_downloads,
+                )
+                continue
+            seen_canonical.add(canonical.lower())
             rank = len(selected)
             selected.append(ProjectSpec(
-                npm_name=item["full_name"],
+                npm_name=canonical,
                 rank=rank,
                 tier="top-100",
-                git_url=item.get("html_url") or f"https://github.com/{owner}/{repo}",
-                github_owner=owner,
-                github_repo=repo,
-                default_branch=branch,
+                git_url=verdict["canonical_url"],
+                github_owner=verdict["canonical_owner"],
+                github_repo=verdict["canonical_repo"],
+                default_branch=verdict["canonical_branch"],
+                npm_pkg=verdict.get("npm_pkg"),
+                npm_downloads=downloads,
             ))
             log.info(
                 "kept #%d %s (%d stars)",
-                rank, item["full_name"], item.get("stargazers_count") or 0,
+                rank, canonical, item.get("stargazers_count") or 0,
             )
 
         log.info("final sample: %d projects", len(selected))
