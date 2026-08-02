@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config
+.PHONY        = help build build-prod up down logs migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config experiment-test
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -73,3 +73,7 @@ migrate-plugins: ## Run plugins DB migrations (api)
 
 migrate-config: ## Run config DB migrations (api)
 	@cd api && make migrate-config
+
+## —— Commands for experiments 🧪 ———————————————————————————————————————————————————————————————
+experiment-test: ## Runs the js-vuln-study experiment unit tests
+	@cd experiments/js-vuln-study && .venv/bin/python -m pytest tests/ -q
