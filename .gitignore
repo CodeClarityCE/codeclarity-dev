@@ -30,3 +30,4 @@ yarn.lock
 .env
 private
 setup*.log
+experiments/.venv
