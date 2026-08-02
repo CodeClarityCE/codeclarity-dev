@@ -99,6 +99,39 @@ def coverage_report(data_dir: Path) -> dict[str, int]:
     return counts
 
 
+def _copy_run_meta(data_dir: Path, tables_dir: Path) -> None:
+    """Copy the latest run_meta record next to the tables so a dataset always
+    carries its provenance, and warn when the manifest mixes runs submitted
+    under differing knowledge-DB snapshots (their vuln counts aren't strictly
+    comparable). Kept deliberately coarse: >1 distinct non-null
+    knowledge_sources tuple across run_meta.jsonl triggers the warning."""
+    path = data_dir / "run_meta.jsonl"
+    if not path.exists():
+        log.warning("no run_meta.jsonl — provenance unknown for these tables")
+        return
+    metas = [
+        json.loads(l)
+        for l in path.read_text(encoding="utf-8").splitlines()
+        if l.strip()
+    ]
+    if not metas:
+        return
+    (tables_dir / "run_meta.json").write_text(
+        json.dumps(metas[-1], indent=2), encoding="utf-8",
+    )
+    snapshots = {
+        tuple(sorted(ks.items()))
+        for m in metas
+        if isinstance(ks := (m.get("knowledge") or {}).get("knowledge_sources"), dict)
+    }
+    if len(snapshots) > 1:
+        log.warning(
+            "manifest spans %d distinct knowledge-DB snapshots — vuln counts are "
+            "not strictly comparable across runs (see %s)",
+            len(snapshots), path,
+        )
+
+
 def _load_blob(path: Path) -> Any:
     if not path.exists():
         return None
@@ -203,6 +236,7 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
     raw_root = data_dir / "raw"
     tables_dir = data_dir / "tables"
     tables_dir.mkdir(parents=True, exist_ok=True)
+    _copy_run_meta(data_dir, tables_dir)
 
     analyses_rows: list[dict] = []
     vuln_rows: list[dict] = []
@@ -309,8 +343,10 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
                     "exploitability": sev.get("Exploitability"),
                     "epss_score": epss.get("Score") if isinstance(epss, dict) else None,
                     "epss_percentile": epss.get("Percentile") if isinstance(epss, dict) else None,
+                    # Go Conflict struct (vuln-finder types.go) has no JSON tags,
+                    # so the fields marshal as ConflictFlag / ConflictWinner.
                     "conflict_flag": conflict.get("ConflictFlag") if isinstance(conflict, dict) else None,
-                    "winning_source": conflict.get("WinningSource") if isinstance(conflict, dict) else None,
+                    "winning_source": conflict.get("ConflictWinner") if isinstance(conflict, dict) else None,
                     "direct_dependency": bool(v.get("DirectDependency") or v.get("direct_dependency")),
                     "published_date": published,
                     "modified_date": modified,
