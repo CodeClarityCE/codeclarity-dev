@@ -1,0 +1,62 @@
+{
+ "result": {
+  "workspaces": {
+   ".": {
+    "dependencies": {
+     "ms": {
+      "2.0.0": {
+       "Dev": true,
+       "Key": "ms@2.0.0",
+       "Prod": false,
+       "Direct": false,
+       "Bundled": false,
+       "Licenses": null,
+       "Optional": false,
+       "Requires": null,
+       "Transitive": true,
+       "Dependencies": {}
+      }
+     },
+     "sirv": {
+      "3.0.2": {
+       "Dev": true,
+       "Key": "sirv@3.0.2",
+       "Prod": false,
+       "Direct": true,
+       "Bundled": false,
+       "Licenses": [
+        "MIT"
+       ],
+       "Optional": false,
+       "Requires": null,
+       "Transitive": false,
+       "Dependencies": {}
+      }
+     },
+     "vite": {
+      "5.4.0": {
+       "Dev": false,
+       "Key": "vite@5.4.0",
+       "Prod": true,
+       "Direct": true,
+       "Bundled": false,
+       "Licenses": [
+        "MIT"
+       ],
+       "Optional": false,
+       "Requires": null,
+       "Transitive": false,
+       "Dependencies": {}
+      }
+     }
+    }
+   }
+  },
+  "analysis_info": {
+   "package_manager": "PNPM",
+   "status": "success"
+  }
+ },
+ "plugin": "js-sbom",
+ "created_on": "2026-08-02T13:51:56.590Z"
+}

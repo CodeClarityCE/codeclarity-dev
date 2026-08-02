@@ -1,0 +1,110 @@
+{
+ "result": {
+  "workspaces": {
+   ".": {
+    "Vulnerabilities": [
+     {
+      "VulnerabilityId": "CVE-2024-27949",
+      "AffectedDependency": "sirv",
+      "AffectedVersion": "3.0.2",
+      "Sources": [
+       "GCVE"
+      ],
+      "Severity": {
+       "Impact": 2.5140719999999996,
+       "Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N",
+       "Severity": 5.4,
+       "SeverityType": "CVSS_V31",
+       "SeverityClass": "MEDIUM",
+       "Exploitability": 2.83525473,
+       "IntegrityImpact": "LOW",
+       "AvailabilityImpact": "NONE",
+       "ConfidentialityImpact": "LOW",
+       "IntegrityImpactNumerical": 0.5,
+       "AvailabilityImpactNumerical": 0,
+       "ConfidentialityImpactNumerical": 0.5
+      },
+      "Conflict": {
+       "ConflictFlag": "MATCH_POSSIBLE_INCORRECT",
+       "ConflictWinner": "GCVE"
+      },
+      "EPSS": {
+       "Score": 0.00042,
+       "Percentile": 0.113
+      },
+      "DirectDependency": true,
+      "GCVEMatch": {
+       "Vulnerability": {
+        "datePublished": "2024-03-01T07:30:26.981Z",
+        "dateUpdated": "2026-05-11T20:53:20.649Z"
+       }
+      }
+     },
+     {
+      "VulnerabilityId": "CVE-2015-8315",
+      "AffectedDependency": "ms",
+      "AffectedVersion": "2.0.0",
+      "Sources": [
+       "NVD",
+       "OSV"
+      ],
+      "Severity": {
+       "Severity": 7.5,
+       "SeverityClass": "HIGH",
+       "SeverityType": "CVSS_V3",
+       "Vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+       "Impact": 3.6,
+       "Exploitability": 3.9
+      },
+      "Conflict": {
+       "ConflictFlag": "MATCH_CORRECT",
+       "ConflictWinner": "NVD"
+      },
+      "NVDMatch": {
+       "Vulnerability": {
+        "Published": "2016-01-08T19:59:00.000",
+        "LastModified": "2019-04-22T17:29:00.000"
+       }
+      },
+      "OSVMatch": {
+       "Vulnerability": {
+        "published": "2018-07-01T00:00:00Z",
+        "modified": "2023-01-01T00:00:00Z"
+       }
+      }
+     },
+     {
+      "VulnerabilityId": "CVE-2025-30208",
+      "AffectedDependency": "vite",
+      "AffectedVersion": "5.4.0",
+      "Sources": [
+       "OSV"
+      ],
+      "Severity": {
+       "Severity": 9.8,
+       "SeverityClass": "CRITICAL",
+       "SeverityType": "CVSS_V31",
+       "Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+       "Impact": 5.9,
+       "Exploitability": 3.9
+      },
+      "Conflict": null,
+      "EPSS": null,
+      "OSVMatch": {
+       "Vulnerability": {
+        "published": "2025-03-24T00:00:00Z",
+        "modified": "2025-03-31T00:00:00Z",
+        "withdrawn": "2025-04-02T00:00:00Z"
+       }
+      }
+     }
+    ]
+   }
+  },
+  "analysis_info": {
+   "status": "success"
+  }
+ },
+ "plugin": "vuln-finder",
+ "created_on": "2026-08-02T13:52:00.769Z"
+}
