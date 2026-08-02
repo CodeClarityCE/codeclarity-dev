@@ -19,11 +19,13 @@ import logging
 import os
 import random
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
 from .client import CodeClarityClient, CodeClarityError, TERMINAL_STATUSES
+from .reclaim import leaf_for, reclaim_leaf
 from .sample import ProjectSpec
 from .snapshots import SNAPSHOT_DATES, Snapshot, resolve_snapshots
 
@@ -319,6 +321,32 @@ def _failure_reason(
     return f"failure at {where}; no plugin result"
 
 
+def _leaf_key(rec: dict) -> tuple[str, str] | None:
+    """The (project_id, clone-directory-leaf) a manifest record maps to.
+
+    reclaim.py deliberately doesn't know the manifest schema, so the adapter
+    lives here. Mirrors client.start_analysis's project_path construction.
+    """
+    project_id = rec.get("project_id")
+    leaf = leaf_for(rec.get("commit_hash"), rec.get("branch"))
+    return (project_id, leaf) if project_id and leaf else None
+
+
+def _active_leaves(records: list[dict]) -> Counter:
+    """How many still-in-flight records map to each clone leaf.
+
+    Two records can share a leaf (two HEAD analyses on `main`, or a
+    re-submission), so a leaf may only be reclaimed once the last of them is
+    terminal. Counted over *all* records, not just the ones this process is
+    polling, because a concurrent `run.py submit` can append rows.
+    """
+    return Counter(
+        key
+        for r in records
+        if r.get("status") == "submitted" and (key := _leaf_key(r)) is not None
+    )
+
+
 def poll_and_collect(
     client: CodeClarityClient,
     org_id: str,
@@ -326,6 +354,12 @@ def poll_and_collect(
 ) -> None:
     """Scan the manifest, poll every submitted analysis until terminal, and
     persist its plugin results under `data/raw/`.
+
+    Once results are safely persisted, the analysis's downloader clone is
+    deleted (see reclaim.py) — otherwise a longitudinal run accumulates one
+    ~10 MB checkout per snapshot until the disk fills. Set
+    JS_VULN_CLONE_DIR=/nonexistent to disable that if you need to inspect the
+    checkouts of failed analyses by hand.
 
     The manifest is rewritten atomically at the end with updated statuses.
     """
@@ -350,11 +384,14 @@ def poll_and_collect(
     first_seen: dict[int, float] = {i: now for i in active_idx}
     wait = POLL_INITIAL
     last_summary = time.time()
+    reclaimed_bytes = 0
 
     while active_idx:
         still_active: list[int] = []
         iter_statuses: dict[str, int] = {}
         queued_count = 0
+        # Rebuilt each pass so rows appended by a concurrent `submit` are seen.
+        active_leaves = _active_leaves(records)
         for i in active_idx:
             rec = records[i]
             try:
@@ -398,6 +435,12 @@ def poll_and_collect(
                         "analysis %s terminated status=%s: %s",
                         rec["analysis_id"], status, rec["error"],
                     )
+                # Results are persisted (and _failure_reason has already read
+                # the plugin blobs over the API), so the checkout is dead weight.
+                # Sad-terminal clones are reclaimed too: they are often partial
+                # trees, failures cluster in longitudinal runs, and a re-submitted
+                # analysis re-clones anyway.
+                reclaimed_bytes += _reclaim_for_record(org_id, rec, active_leaves)
                 terminated = True
             elif running and time.time() - last_progress[i] > POLL_TIMEOUT:
                 # Actively running but wedged — no forward progress for the stall
@@ -412,6 +455,10 @@ def poll_and_collect(
                 rec["status"] = "failed"
                 rec["error"] = "queued > started ceiling"
                 terminated = True
+            # NB: neither client-side timeout branch reclaims the clone. Those
+            # give up locally while the *server-side* analysis may still be
+            # running and writing into the checkout; `clean --clones` collects
+            # them later, once nothing is in flight.
             else:
                 still_active.append(i)
             # Flush manifest after every transition so Ctrl-C never loses progress.
@@ -432,6 +479,31 @@ def poll_and_collect(
             wait = min(POLL_MAX, wait * 1.5)
 
     _rewrite_manifest(path, records)
+    if reclaimed_bytes:
+        log.info("poll complete; reclaimed %.1f MB of clones", reclaimed_bytes / 1e6)
+
+
+def _reclaim_for_record(org_id: str, rec: dict, active_leaves: Counter) -> int:
+    """Delete the clone backing a now-terminal record. Returns bytes freed.
+
+    `active_leaves` counts records still in flight per leaf; this record's own
+    entry is decremented first, and the directory is only removed once nothing
+    else is using it.
+    """
+    key = _leaf_key(rec)
+    if key is None:
+        return 0
+    if active_leaves.get(key, 0) > 0:
+        active_leaves[key] -= 1
+    if active_leaves.get(key, 0) > 0:
+        log.debug("skip reclaim of %s/%s: leaf still in use", *key)
+        return 0
+
+    project_id, leaf = key
+    freed = reclaim_leaf(org_id, project_id, leaf)
+    if freed:
+        log.info("reclaimed %.1f MB from %s/%s", freed / 1e6, project_id, leaf)
+    return freed
 
 
 def _persist_results(

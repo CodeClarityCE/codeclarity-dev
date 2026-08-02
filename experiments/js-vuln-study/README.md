@@ -85,16 +85,36 @@ Each command writes into `data/`, which is gitignored.
    )
    ```
 
+## Disk usage
+
+The downloader clones every analysed snapshot to
+`<repo-root>/private/{org}/projects/{project}/{commit|branch}` and the backend
+never deletes those trees — only an API-side *project* delete does. At ~10 MB a
+checkout, a 100-project × 12-snapshot run would otherwise leave 10 GB+ behind.
+
+- `python run.py poll` now deletes each checkout as soon as its analysis is
+  terminal **and** its results are persisted, so peak usage tracks the number of
+  in-flight analyses rather than the size of the run. Results are unaffected —
+  they live in Postgres and are read back over the API.
+- `python run.py clean --clones-only` sweeps leftovers from earlier runs without
+  touching the backlog. Add `--dry-run` first to see what it would reclaim.
+  `--clones` does the sweep *and* the API-side project delete.
+- Set `JS_VULN_CLONE_DIR` to override where the clone tree is (defaults to
+  `<repo-root>/private`, correct inside the devcontainer). Pointing it at a
+  nonexistent path disables reclamation entirely — useful when you want to
+  inspect the checkout of a failed analysis by hand.
+
 ## Files
 
 | Path | Purpose |
 |------|---------|
-| `run.py` | CLI entry point (`sample` / `smoke` / `submit` / `poll` / `collect`) |
+| `run.py` | CLI entry point (`sample` / `smoke` / `submit` / `poll` / `collect` / `clean`) |
 | `js_vuln_study/client.py` | Thin CodeClarity REST wrapper with JWT refresh |
 | `js_vuln_study/sample.py` | Top-N GitHub-stars sampler (filters to package.json + lockfile) |
 | `js_vuln_study/snapshots.py` | Resolves the HEAD commit (and optional historical dates) via the GitHub API |
 | `js_vuln_study/orchestrator.py` | Pipeline: import → submit → poll → persist raw JSON |
 | `js_vuln_study/collect.py` | Raw JSON → `analyses.parquet` / `vulns.parquet` / `dependencies.parquet` |
+| `js_vuln_study/reclaim.py` | Deletes the downloader's clones once their analysis is terminal |
 | `data/` | Run artefacts (manifest, raw blobs, final tables) |
 
 ## Verification checklist (before the full 100-project run)
