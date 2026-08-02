@@ -8,6 +8,8 @@ Subcommands:
   retry     — re-submit sad-terminal manifest rows (failed/failure/cancelled/
               failed-submit), replacing each row in place
   collect   — flatten raw blobs into Parquet tables
+  triangulate — cross-check a stratified HEAD subsample against independent
+              scanners (npm audit, osv-scanner)
   clean     — bulk-delete the org's projects/analyses (backlog clear), and/or
               sweep the downloader's on-disk clones (--clones / --clones-only)
 """
@@ -169,6 +171,13 @@ def cmd_retry(args: argparse.Namespace) -> int:
 def cmd_collect(args: argparse.Namespace) -> int:
     build_tables(DATA_DIR, include_deps=not args.no_deps)
     return 0
+
+
+def cmd_triangulate(args: argparse.Namespace) -> int:
+    from js_vuln_study.triangulate import run_triangulation
+
+    out = Path(args.out) if args.out else DATA_DIR / "tables" / "triangulation.parquet"
+    return run_triangulation(DATA_DIR, n=args.n, out=out, dry_run=args.dry_run)
 
 
 def _clone_keep_set(
@@ -365,6 +374,30 @@ def main() -> int:
         help="skip the per-dependency table (keeps dep counts); avoids OOM on the longitudinal run",
     )
     pc.set_defaults(func=cmd_collect)
+
+    pt = sub.add_parser(
+        "triangulate",
+        help="cross-check a stratified HEAD subsample against npm audit / "
+        "osv-scanner and write per-project agreement stats",
+    )
+    pt.add_argument(
+        "--n",
+        type=int,
+        default=20,
+        help="target subsample size (stratified by vuln-load tercile x package manager)",
+    )
+    pt.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="output parquet path (default data/tables/triangulation.parquet)",
+    )
+    pt.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the selected subsample and scanner availability without scanning",
+    )
+    pt.set_defaults(func=cmd_triangulate)
 
     pcl = sub.add_parser(
         "clean",

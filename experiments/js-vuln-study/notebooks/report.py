@@ -36,6 +36,20 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Shared statistics (same module analysis.py uses) — one source for the numbers.
+import sys  # noqa: E402
+
+sys.path.insert(0, str(ROOT))
+from js_vuln_study.stats import (  # noqa: E402
+    gini,
+    km_curve,
+    km_median,
+    lorenz,
+    presence_intervals,
+    sensitivity_sweep,
+)
+
 TABLES = ROOT / "data" / "tables"
 OUT = ROOT / "data" / "report"
 FIGS = OUT / "figs"
@@ -83,20 +97,6 @@ assert total_instances == int(sev_totals.sum()), (total_instances, int(sev_total
 assert int(spread.iloc[0]) <= N, (int(spread.iloc[0]), N)
 
 
-def gini(x):
-    x = np.sort(np.asarray(x, dtype=float))
-    if x.sum() == 0:
-        return float("nan")
-    n = x.size
-    return float((2 * np.sum(np.arange(1, n + 1) * x) - (n + 1) * x.sum()) / (n * x.sum()))
-
-
-def lorenz(x):
-    x = np.sort(np.asarray(x, dtype=float))
-    cum = np.insert(np.cumsum(x), 0, 0)
-    return np.linspace(0, 1, cum.size), cum / cum[-1]
-
-
 proj_vulns = head["total_vulnerabilities"].values
 pkg_instances = pkg_counts.values
 gini_proj, gini_pkg = gini(proj_vulns), gini(pkg_instances)
@@ -114,27 +114,26 @@ def pkgs_for(target):
 # the high-confidence subset (conflict_flag == MATCH_CORRECT) so we can report
 # how much the concentration/remediation story depends on the dubious matches.
 # --------------------------------------------------------------------------- #
-def _headline(vdf):
-    """Return the headline summary dict for a HEAD vulns frame."""
-    pc = vdf.groupby("affected_dependency").size().sort_values(ascending=False)
-    tot = int(pc.sum())
-    cum = pc.cumsum() / tot if tot else pc.cumsum()
-    sev = vdf["severity_class"].str.upper().value_counts()
-    crit_high = int(sev.get("CRITICAL", 0) + sev.get("HIGH", 0))
-    return {
-        "instances": tot,
-        "packages": int(vdf["affected_dependency"].nunique()),
-        "top10_pkg": (pc.head(10).sum() / tot) if tot else float("nan"),
-        "gini_pkg": gini(pc.values) if tot else float("nan"),
-        "clear50": (int((cum < 0.5).sum()) + 1) if tot else 0,
-        "crit_high_share": (crit_high / tot) if tot else float("nan"),
-    }
-
-
+sweep = sensitivity_sweep(vulns_head, head)
+_sw = sweep.set_index("subset")
 vulns_head_hi = vulns_head[vulns_head["conflict_flag"].astype(str) == "MATCH_CORRECT"].copy()
 n_low_conf = total_instances - len(vulns_head_hi)
-sens_all = _headline(vulns_head)
-sens_hi = _headline(vulns_head_hi)
+sens_all = {
+    "instances": int(_sw.loc["all", "instances"]),
+    "packages": int(_sw.loc["all", "distinct_vuln_packages"]),
+    "top10_pkg": float(_sw.loc["all", "top10_pkg_share"]),
+    "gini_pkg": float(_sw.loc["all", "gini_pkg"]),
+    "clear50": int(_sw.loc["all", "pkgs_clear_50"]),
+    "crit_high_share": float(_sw.loc["all", "high_critical_share"]),
+}
+sens_hi = {
+    "instances": int(_sw.loc["match_correct_only", "instances"]),
+    "packages": int(_sw.loc["match_correct_only", "distinct_vuln_packages"]),
+    "top10_pkg": float(_sw.loc["match_correct_only", "top10_pkg_share"]),
+    "gini_pkg": float(_sw.loc["match_correct_only", "gini_pkg"]),
+    "clear50": int(_sw.loc["match_correct_only", "pkgs_clear_50"]),
+    "crit_high_share": float(_sw.loc["match_correct_only", "high_critical_share"]),
+}
 
 
 from scipy.stats import spearmanr  # noqa: E402
@@ -430,6 +429,19 @@ sens_rows = [
 ]
 table(sens_rows, col_widths=[7 * cm, 4.5 * cm, 4.5 * cm])
 
+P("The full sweep re-derives every scalar headline metric under four measurement subsets "
+  "(all matches, high-confidence only, non-withdrawn advisories, direct dependencies only). "
+  "Claims elsewhere in this report should be read against this table &mdash; a finding that "
+  "flips across rows is fragile:")
+sweep_rows = [["Subset", "Instances", "Affected", "Median load", "Top-10 pkg", "Gini pkg", "Clear 50%"]]
+for _, r in sweep.iterrows():
+    sweep_rows.append([
+        r["subset"], f"{int(r['instances']):,}", f"{int(r['n_affected'])}/{int(r['n_projects'])}",
+        f"{r['load_median']:.0f}", f"{r['top10_pkg_share']:.0%}", f"{r['gini_pkg']:.2f}",
+        f"{int(r['pkgs_clear_50'])}",
+    ])
+table(sweep_rows, col_widths=[3.6 * cm, 2.4 * cm, 2.2 * cm, 2.4 * cm, 2.2 * cm, 1.8 * cm, 1.8 * cm])
+
 story.append(PageBreak())
 
 # --- RQ-C ------------------------------------------------------------------
@@ -480,6 +492,19 @@ else:
     P("<i>Point-in-time per-project trajectories require a longitudinal "
       "(<tt>submit --snapshots</tt>) run; this report reflects the disclosure-date view only.</i>")
 
+# --- RQ-G: time-to-fix survival ---------------------------------------------
+if fig_km is not None:
+    P("RQ-G &mdash; Per-CVE time-to-fix (survival)", "H")
+    P("How long does a known-vulnerable (CVE, package) pair persist in a project once observed? "
+      "Presence intervals are built from consecutive completed snapshots of the same project "
+      "(a fix is counted only when the pair is absent at the immediately-next completed snapshot; "
+      "coverage gaps censor), and curves are Kaplan&ndash;Meier, stratified by severity.")
+    km_rows = [["Severity", "Intervals", "KM median days-to-fix"]]
+    for sev, n_i, med in km_medians:
+        km_rows.append([sev, str(n_i), "not reached" if med != med else f"{med:.0f}"])
+    table(km_rows, col_widths=[5 * cm, 4 * cm, 6 * cm])
+    figure(fig_km, "Figure 8. Survival of known-vulnerable (CVE, package) pairs, by severity.")
+
 # --- Threats to validity ---------------------------------------------------
 P("Threats to validity", "H")
 n_direct = int(vulns_head["direct_dependency"].sum())
@@ -494,7 +519,12 @@ threats = [
     "headline counts should be read with a sensitivity check that excludes them.",
     f"<b>Direct vs transitive.</b> {n_direct:,}/{total_instances:,} HEAD vulnerability rows are flagged "
     "direct and the rest transitive; the split is reported descriptively, not as a precise install-tree measure.",
-    "<b>No EPSS / source-winner.</b> Both fields are empty, so exploit-likelihood prioritisation is out of scope.",
+    (f"<b>EPSS coverage.</b> {int(vulns_head['epss_score'].notna().sum()):,}/{total_instances:,} HEAD matches "
+     "carry an EPSS exploit-likelihood score (attached at analysis time from the recorded EPSS snapshot); "
+     "rows analysed before EPSS attachment, or with non-CVE identifiers, have none.")
+    if int(vulns_head["epss_score"].notna().sum()) > 0
+    else "<b>No EPSS.</b> The EPSS field is empty for this dataset (analyses predate EPSS attachment), "
+         "so exploit-likelihood prioritisation is out of scope.",
     "<b>Disclosure-date recency.</b> The disclosure timeline holds the HEAD dependency tree fixed and dates "
     "vulnerabilities by advisory publication; it is not a trend in the projects. The point-in-time trajectory "
     "is the like-for-like longitudinal measure, but its panel composition grows over time (24&rarr;37 projects).",

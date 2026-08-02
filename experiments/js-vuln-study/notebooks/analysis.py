@@ -32,11 +32,28 @@ rather than means. Cells degrade gracefully when a column is empty.
 # # 0. Setup, helpers, and data-quality preamble
 
 # %%
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+# The shared statistics live in the js_vuln_study package one level up; both
+# this notebook and report.py import them so the two front-ends render the
+# same numbers (and the aggregations are unit-tested in tests/test_stats.py).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from js_vuln_study.stats import (  # noqa: E402
+    ecdf,
+    gini,
+    headline,
+    km_curve,
+    km_median,
+    lorenz,
+    pairwise_mwu,
+    presence_intervals,
+    sensitivity_sweep,
+)
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "tables"
 
@@ -68,69 +85,6 @@ print("vulns:   ", vulns.shape, "| HEAD vuln rows:", vulns_head.shape[0])
 print("deps:    ", deps.shape)
 # Population invariant: HEAD vuln rows must equal the summed per-project counts.
 assert len(vulns_head) == int(head[["n_critical", "n_high", "n_medium", "n_low", "n_none"]].sum().sum())
-
-
-# %%
-# --- small, dependency-free statistical helpers -----------------------------
-
-def gini(x):
-    """Gini coefficient of a non-negative array (0 = equal, →1 = concentrated)."""
-    x = np.asarray(x, dtype=float)
-    x = x[~np.isnan(x)]
-    if x.size == 0 or np.all(x == 0):
-        return float("nan")
-    x = np.sort(x)
-    n = x.size
-    cum = np.cumsum(x)
-    # Mean absolute difference formulation.
-    return float((2.0 * np.sum((np.arange(1, n + 1)) * x) - (n + 1) * cum[-1]) / (n * cum[-1]))
-
-
-def lorenz(x):
-    """Return (population_share, value_share) points for a Lorenz curve."""
-    x = np.sort(np.asarray(x, dtype=float))
-    x = x[~np.isnan(x)]
-    cum = np.cumsum(x)
-    cum = np.insert(cum, 0, 0)
-    pop = np.linspace(0.0, 1.0, cum.size)
-    val = cum / cum[-1] if cum[-1] > 0 else np.zeros_like(cum)
-    return pop, val
-
-
-def ecdf(x):
-    """Return (sorted_values, cumulative_probability) for an empirical CDF."""
-    x = np.sort(np.asarray(x, dtype=float))
-    y = np.arange(1, x.size + 1) / x.size
-    return x, y
-
-
-def pairwise_mwu(groups: dict):
-    """Bonferroni-corrected Mann–Whitney U posthoc across named groups.
-
-    `groups` maps label -> 1d array. Returns a tidy DataFrame of pairwise
-    comparisons. Avoids a scikit-posthocs dependency.
-    """
-    from itertools import combinations
-
-    from scipy.stats import mannwhitneyu
-
-    labels = [k for k, v in groups.items() if len(v) > 1]
-    pairs = list(combinations(labels, 2))
-    m = max(len(pairs), 1)
-    rows = []
-    for a, b in pairs:
-        try:
-            u, p = mannwhitneyu(groups[a], groups[b], alternative="two-sided")
-        except ValueError:
-            u, p = float("nan"), float("nan")
-        rows.append({
-            "a": a, "b": b,
-            "median_a": float(np.median(groups[a])),
-            "median_b": float(np.median(groups[b])),
-            "p_raw": p,
-            "p_bonferroni": min(p * m, 1.0) if p == p else p,
-        })
-    return pd.DataFrame(rows)
 
 
 # %% [markdown]
@@ -634,3 +588,56 @@ else:
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
+
+# %% [markdown]
+# # RQ-G. Per-CVE time-to-fix (survival)
+#
+# How long does a known-vulnerable (CVE, package) pair persist in a project
+# once observed? Presence intervals come from `stats.presence_intervals`
+# (event=1 only when the pair is absent at the project's immediately-next
+# completed snapshot; coverage gaps censor — see the stats module docstring),
+# and the curves are Kaplan–Meier, stratified by severity class.
+
+# %%
+if analyses["snapshot_date"].nunique() < 2:
+    print("HEAD-only data: RQ-G needs the longitudinal run (submit --snapshots).")
+else:
+    intervals = presence_intervals(vulns, analyses)
+    print(f"{len(intervals)} presence intervals "
+          f"({int(intervals['event'].sum())} observed fixes, "
+          f"{int((1 - intervals['event']).sum())} censored)")
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for sev, color in [("CRITICAL", "#a50f15"), ("HIGH", "#de2d26"),
+                       ("MEDIUM", "#fb6a4a"), ("LOW", "#fcae91")]:
+        sub = intervals[intervals["severity_class"].astype(str).str.upper() == sev]
+        if len(sub) < 5:
+            continue
+        t, sv = km_curve(sub["duration_days"], sub["event"])
+        ax.step(t, sv, where="post", color=color,
+                label=f"{sev} (n={len(sub)}, median={km_median(t, sv):.0f} d)")
+    ax.set_xlabel("days since first observed")
+    ax.set_ylabel("share still present (KM)")
+    ax.set_title("RQ-G: survival of known-vulnerable (CVE, package) pairs")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    plt.show()
+    med = (intervals.assign(sev=intervals["severity_class"].astype(str).str.upper())
+           .groupby("sev")
+           .apply(lambda g: km_median(*km_curve(g["duration_days"], g["event"])),
+                  include_groups=False))
+    print("KM median days-to-fix by severity (nan = survival never reaches 50%):")
+    print(med.round(0).to_string())
+
+# %% [markdown]
+# # Sensitivity sweep — every headline number under measurement subsets
+#
+# Each scalar headline metric recomputed on: all HEAD matches, only
+# `MATCH_CORRECT` matches (drops the possibly-incorrect ~18%), only
+# non-withdrawn advisories, and only direct dependencies. Claims in the
+# write-up cite this table: a finding that flips across rows is fragile.
+
+# %%
+sweep = sensitivity_sweep(vulns_head, head)
+with pd.option_context("display.width", 160, "display.max_columns", None):
+    print(sweep.round(3).to_string(index=False))
