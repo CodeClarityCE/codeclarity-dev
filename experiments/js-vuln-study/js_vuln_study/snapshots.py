@@ -73,13 +73,17 @@ def commit_before(
     http: httpx.Client,
     owner: str,
     repo: str,
-    until_iso: str,
+    until_iso: str | None,
     branch: str,
 ) -> tuple[str, str] | None:
-    """Return (sha, committed_at) for the latest commit on `branch` at or before `until_iso`."""
+    """Return (sha, committed_at) for the latest commit on `branch` at or before
+    `until_iso` — or the branch tip when `until_iso` is None."""
+    params: dict[str, str | int] = {"sha": branch, "per_page": 1}
+    if until_iso is not None:
+        params["until"] = until_iso
     r = http.get(
         f"/repos/{owner}/{repo}/commits",
-        params={"sha": branch, "until": until_iso, "per_page": 1},
+        params=params,
         headers=_auth_headers(),
     )
     if r.status_code == 409:
@@ -95,6 +99,17 @@ def commit_before(
     sha = items[0]["sha"]
     committed_at = items[0]["commit"]["committer"]["date"]
     return sha, committed_at
+
+
+def resolve_head(owner: str, repo: str, branch: str) -> tuple[str, str] | None:
+    """Resolve the current tip of `branch` to (sha, committed_at).
+
+    Used to pin HEAD analyses to a concrete commit at submit time: a branch-only
+    analysis is unreproducible (the downloader clones whatever the tip is when
+    the queue drains), and the manifest would carry no commit for the row.
+    """
+    with httpx.Client(base_url=GITHUB_API, timeout=30.0) as http:
+        return commit_before(http, owner, repo, None, branch)
 
 
 def resolve_snapshots(

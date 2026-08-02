@@ -14,6 +14,15 @@ import httpx
 
 log = logging.getLogger(__name__)
 
+# Plugin versions baked into a *newly created* analyzer. They must match the
+# tags of the deployed backend/plugins/* binaries; run_meta.jsonl records what
+# actually ran (the analyzer steps are read back at submit time).
+PLUGIN_VERSIONS = {
+    "js-sbom": "v0.0.25-alpha",
+    "vuln-finder": "v0.0.25-alpha",
+    "license-finder": "v0.0.18-alpha",
+}
+
 
 class CodeClarityError(RuntimeError):
     pass
@@ -152,7 +161,7 @@ class CodeClarityClient:
                 [
                     {
                         "name": "js-sbom",
-                        "version": "v0.0.25-alpha",
+                        "version": PLUGIN_VERSIONS["js-sbom"],
                         "config": {},
                         "persistant_config": {},
                     },
@@ -160,13 +169,13 @@ class CodeClarityClient:
                 [
                     {
                         "name": "vuln-finder",
-                        "version": "v0.0.25-alpha",
+                        "version": PLUGIN_VERSIONS["vuln-finder"],
                         "config": {},
                         "persistant_config": {},
                     },
                     {
                         "name": "license-finder",
-                        "version": "v0.0.18-alpha",
+                        "version": PLUGIN_VERSIONS["license-finder"],
                         "config": {"licensePolicy": []},
                         "persistant_config": {},
                     },
@@ -349,6 +358,17 @@ class CodeClarityClient:
                 "type": plugin_type,
             },
         )["data"]
+
+    # ---- knowledge -------------------------------------------------------------
+
+    def get_knowledge_provenance(self) -> dict[str, Any]:
+        """Knowledge-DB freshness for provenance capture.
+
+        Shape: {"knowledge_sources": {"<source>": "<ISO ts or null>", ...},
+        "epss_rows": <int>}. 404s on APIs that predate the endpoint — callers
+        must tolerate that.
+        """
+        return self._request("GET", "/knowledge/provenance")["data"]
 
 
 # The Go backend writes AnalysisStatus values that differ from the TypeScript

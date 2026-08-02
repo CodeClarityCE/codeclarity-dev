@@ -27,7 +27,7 @@ from typing import Iterable
 from .client import CodeClarityClient, CodeClarityError, TERMINAL_STATUSES
 from .reclaim import leaf_for, reclaim_leaf
 from .sample import ProjectSpec
-from .snapshots import SNAPSHOT_DATES, Snapshot, resolve_snapshots
+from .snapshots import SNAPSHOT_DATES, Snapshot, resolve_head, resolve_snapshots
 
 log = logging.getLogger(__name__)
 
@@ -207,11 +207,34 @@ def import_and_schedule(
             key = (spec.git_url, snap.date)
             if key in seen:
                 continue
+            if snap.date == "HEAD" and snap.commit_hash is None:
+                snap = _pin_head(spec, branch, snap)
             rec = _submit_analysis(client, org_id, project_id, analyzer_id, spec, branch, snap)
             _append_record(data_dir, rec)
             pending.append(rec)
 
     return pending
+
+
+def _pin_head(spec: ProjectSpec, branch: str, snap: Snapshot) -> Snapshot:
+    """Pin a HEAD snapshot to the branch tip's SHA resolved at submit time.
+
+    snapshot_date stays "HEAD" (the manifest/collect grouping key) but the
+    analysis is submitted with a concrete commit_hash, so the row is
+    reproducible and the clone leaf is the commit — consistent with historical
+    rows and with reclaim's leaf_for. On resolution failure the branch-only
+    submission is kept: the analysis still runs, it's just unpinned.
+    """
+    try:
+        head = resolve_head(spec.github_owner, spec.github_repo, branch)
+    except Exception as e:  # noqa: BLE001 — an unpinned submit beats a lost one
+        head = None
+        log.warning("HEAD resolution errored for %s@%s: %s", spec.git_url, branch, e)
+    if head is None:
+        log.warning("could not resolve HEAD sha for %s@%s; submitting unpinned", spec.git_url, branch)
+        return snap
+    sha, committed_at = head
+    return Snapshot(date=snap.date, commit_hash=sha, committed_at=committed_at)
 
 
 def _submit_analysis(
@@ -258,6 +281,98 @@ HAPPY_TERMINAL = {"completed", "success"}
 # Terminal statuses that mean the analysis did not succeed. 'cancelled' is not in
 # the imported TERMINAL_STATUSES set but is a terminal sad state we must honour.
 SAD_TERMINAL = (TERMINAL_STATUSES | {"cancelled"}) - HAPPY_TERMINAL
+# Manifest statuses `retry` re-drives by default: every sad-terminal server
+# status plus rows whose submission itself failed.
+RETRYABLE_STATUSES = SAD_TERMINAL | {"failed-submit"}
+
+
+def _spec_from_record(rec: dict) -> ProjectSpec:
+    """Rebuild the ProjectSpec fields a re-submit needs from a manifest row.
+
+    _submit_analysis only reads npm_name/tier/rank/git_url; owner/repo are
+    re-derived from the git_url for completeness.
+    """
+    owner, _, repo = rec["git_url"].removeprefix("https://github.com/").partition("/")
+    return ProjectSpec(
+        npm_name=rec["npm_name"],
+        rank=rec.get("rank") or 0,
+        tier=rec.get("tier") or "",
+        git_url=rec["git_url"],
+        github_owner=owner,
+        github_repo=repo,
+        default_branch=rec.get("branch") or "",
+    )
+
+
+def retry_failed(
+    client: CodeClarityClient,
+    org_id: str,
+    analyzer_id: str,
+    data_dir: Path,
+    statuses: set[str] | None = None,
+    date: str | None = None,
+    project: str | None = None,
+    dry_run: bool = False,
+) -> list[AnalysisRecord]:
+    """Re-submit sad-terminal manifest rows and replace them in place.
+
+    Each selected row is rebuilt into a Snapshot from its stored
+    snapshot_date/commit_hash/committed_at (a pinned HEAD stays pinned to the
+    same commit) and re-driven through _submit_analysis. The row is replaced —
+    fresh analysis_id, status 'submitted', error cleared — never appended, so
+    the (git_url, snapshot_date) dedupe key stays unique. Returns the
+    re-submitted records.
+    """
+    path = _manifest_path(data_dir)
+    if not path.exists():
+        log.warning("no manifest at %s", path)
+        return []
+    statuses = set(statuses) if statuses else set(RETRYABLE_STATUSES)
+
+    records = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    selected = [
+        i for i, r in enumerate(records)
+        if r.get("status") in statuses
+        and (date is None or r.get("snapshot_date") == date)
+        and (project is None or r.get("npm_name") == project)
+    ]
+    log.info("retry: %d of %d manifest rows match statuses=%s", len(selected), len(records), sorted(statuses))
+
+    resubmitted: list[AnalysisRecord] = []
+    for i in selected:
+        rec = records[i]
+        if not rec.get("project_id") or not rec.get("branch"):
+            # 'skipped'-style rows never got a project/branch; retry can't
+            # rebuild a submission from them — re-run `submit` instead.
+            log.warning(
+                "cannot retry %s@%s (status=%s): no project_id/branch recorded",
+                rec.get("npm_name"), rec.get("snapshot_date"), rec.get("status"),
+            )
+            continue
+        if dry_run:
+            log.info(
+                "[dry-run] would resubmit %s@%s (%s, was %s)",
+                rec["npm_name"], rec["snapshot_date"],
+                rec.get("commit_hash") or rec["branch"], rec["status"],
+            )
+            continue
+        snap = Snapshot(
+            date=rec["snapshot_date"],
+            commit_hash=rec.get("commit_hash"),
+            committed_at=rec.get("committed_at"),
+        )
+        new_rec = _submit_analysis(
+            client, org_id, rec["project_id"], analyzer_id,
+            _spec_from_record(rec), rec["branch"], snap,
+        )
+        records[i] = asdict(new_rec)
+        resubmitted.append(new_rec)
+        # Flush after every replacement so Ctrl-C never double-submits a row.
+        _rewrite_manifest(path, records)
+
+    if not dry_run:
+        log.info("retry: resubmitted %d row(s)", len(resubmitted))
+    return resubmitted
 
 
 def _progress_sig(analysis: dict) -> tuple:
@@ -296,10 +411,14 @@ def _failure_reason(
     rec: dict,
     analysis: dict,
 ) -> str:
-    """Build a concrete reason for a sad-terminal analysis. The API exposes no
-    analysis-level error field (ticket 005 deferred it), so we read the failing
-    step names from `steps` and pull the plugin error out of the result blob
-    (analysis_info.errors[].public_error.{key,description})."""
+    """Build a concrete reason for a sad-terminal analysis. Prefer the API's
+    analysis-level failure_reason (written by the downloader on unresolvable
+    commits / download errors); older analyses predate the column, so fall back
+    to reading the failing step names from `steps` and pulling the plugin error
+    out of the result blob (analysis_info.errors[].public_error.{key,description})."""
+    reason = (analysis.get("failure_reason") or "").strip()
+    if reason:
+        return reason
     failed_steps = [
         s.get("name")
         for stage in (analysis.get("steps") or [])

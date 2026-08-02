@@ -5,6 +5,8 @@ Subcommands:
   smoke     — run a single-project HEAD-only scan (verification gate)
   submit    — import every project in the sample and submit all analyses
   poll      — poll all in-flight analyses and persist their results
+  retry     — re-submit sad-terminal manifest rows (failed/failure/cancelled/
+              failed-submit), replacing each row in place
   collect   — flatten raw blobs into Parquet tables
   clean     — bulk-delete the org's projects/analyses (backlog clear), and/or
               sweep the downloader's on-disk clones (--clones / --clones-only)
@@ -27,9 +29,12 @@ except ImportError:  # pragma: no cover — dotenv is optional for CLI help
 from js_vuln_study.client import CodeClarityClient, CodeClarityError
 from js_vuln_study.collect import build_tables
 from js_vuln_study.orchestrator import (
+    RETRYABLE_STATUSES,
     import_and_schedule,
     poll_and_collect,
+    retry_failed,
 )
+from js_vuln_study.provenance import capture_run_meta
 from js_vuln_study.reclaim import clone_root, leaf_for, sweep
 from js_vuln_study.sample import ProjectSpec, build_sample, load_sample
 
@@ -55,7 +60,9 @@ def _ensure_setup(client: CodeClarityClient) -> tuple[str, str, str]:
     The client-side dedupe on org name is unreliable (list shape quirks),
     which previously caused poll runs to hit 403 because a fresh org was
     provisioned on every invocation. We persist the IDs from the first
-    successful setup and reuse them on later runs.
+    successful setup and reuse them on later runs. NB: the cache wins over the
+    JS_VULN_ORG_NAME / JS_VULN_ANALYZER_NAME env overrides — delete
+    data/setup.json to re-provision after changing the names.
     """
     import json as _json
 
@@ -70,10 +77,13 @@ def _ensure_setup(client: CodeClarityClient) -> tuple[str, str, str]:
             "required to import projects as git (not FILE uploads)."
         )
     org_id = client.ensure_org(
-        name="js-vuln-study-2026",
+        name=os.environ.get("JS_VULN_ORG_NAME", "js-vuln-study-2026"),
         description="Popularity-stratified study of JS vulnerability evolution.",
     )
-    analyzer_id = client.ensure_js_analyzer(org_id)
+    analyzer_id = client.ensure_js_analyzer(
+        org_id,
+        name=os.environ.get("JS_VULN_ANALYZER_NAME", "js-vuln-study-v2"),
+    )
     integration_id = client.ensure_github_integration(org_id, token)
     SETUP_CACHE.parent.mkdir(parents=True, exist_ok=True)
     SETUP_CACHE.write_text(_json.dumps({
@@ -115,6 +125,7 @@ def cmd_smoke(args: argparse.Namespace) -> int:
             client, org_id, analyzer_id, [spec], DATA_DIR,
             integration_id=integration_id, skip_head_only=True,
         )
+        capture_run_meta(client, org_id, analyzer_id, DATA_DIR, extra={"cmd": "smoke"})
         poll_and_collect(client, org_id, DATA_DIR)
     return 0
 
@@ -129,6 +140,10 @@ def cmd_submit(args: argparse.Namespace) -> int:
             client, org_id, analyzer_id, specs, DATA_DIR,
             integration_id=integration_id, skip_head_only=not args.snapshots,
         )
+        capture_run_meta(
+            client, org_id, analyzer_id, DATA_DIR,
+            extra={"cmd": "submit", "sample_limit": args.limit, "snapshots": args.snapshots},
+        )
     return 0
 
 
@@ -136,6 +151,18 @@ def cmd_poll(args: argparse.Namespace) -> int:
     with _client() as client:
         org_id, _, _ = _ensure_setup(client)
         poll_and_collect(client, org_id, DATA_DIR)
+    return 0
+
+
+def cmd_retry(args: argparse.Namespace) -> int:
+    statuses = {s.strip() for s in args.status.split(",") if s.strip()}
+    with _client() as client:
+        org_id, analyzer_id, _ = _ensure_setup(client)
+        retry_failed(
+            client, org_id, analyzer_id, DATA_DIR,
+            statuses=statuses, date=args.date, project=args.project,
+            dry_run=args.dry_run,
+        )
     return 0
 
 
@@ -301,6 +328,35 @@ def main() -> int:
 
     pp = sub.add_parser("poll", help="poll in-flight analyses and persist results")
     pp.set_defaults(func=cmd_poll)
+
+    pr = sub.add_parser(
+        "retry",
+        help="re-submit sad-terminal manifest rows, replacing each row in place",
+    )
+    pr.add_argument(
+        "--status",
+        type=str,
+        default=",".join(sorted(RETRYABLE_STATUSES)),
+        help="comma-separated manifest statuses to re-drive",
+    )
+    pr.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        help="only rows with this snapshot_date (e.g. 2024-01-01, or HEAD)",
+    )
+    pr.add_argument(
+        "--project",
+        type=str,
+        default=None,
+        help="only rows with this npm_name",
+    )
+    pr.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print what would be resubmitted without submitting anything",
+    )
+    pr.set_defaults(func=cmd_retry)
 
     pc = sub.add_parser("collect", help="build tidy Parquet tables from raw blobs")
     pc.add_argument(
