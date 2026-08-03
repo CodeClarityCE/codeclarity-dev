@@ -590,10 +590,14 @@ else:
     plt.show()
 
 # %% [markdown]
-# # RQ-G. Per-CVE time-to-fix (survival)
+# # RQ-G. Vulnerable-version residence time (survival)
 #
 # How long does a known-vulnerable (CVE, package) pair persist in a project
-# once observed? Presence intervals come from `stats.presence_intervals`
+# once observed? NOTE: intervals are built on all observed instances — for a
+# large share of historical rows the advisory was published *after* the
+# snapshot (or has no recorded date), so these are residence times of
+# vulnerable versions, NOT remediation lags (a project cannot fix an
+# undisclosed CVE). Presence intervals come from `stats.presence_intervals`
 # (event=1 only when the pair is absent at the project's immediately-next
 # completed snapshot; coverage gaps censor — see the stats module docstring),
 # and the curves are Kaplan–Meier, stratified by severity class.
@@ -617,7 +621,7 @@ else:
                 label=f"{sev} (n={len(sub)}, median={km_median(t, sv):.0f} d)")
     ax.set_xlabel("days since first observed")
     ax.set_ylabel("share still present (KM)")
-    ax.set_title("RQ-G: survival of known-vulnerable (CVE, package) pairs")
+    ax.set_title("RQ-G: residence of known-vulnerable (CVE, package) pairs")
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8)
     plt.tight_layout()
@@ -626,7 +630,7 @@ else:
            .groupby("sev")
            .apply(lambda g: km_median(*km_curve(g["duration_days"], g["event"])),
                   include_groups=False))
-    print("KM median days-to-fix by severity (nan = survival never reaches 50%):")
+    print("KM median residence days by severity (nan = survival never reaches 50%):")
     print(med.round(0).to_string())
 
 # %% [markdown]

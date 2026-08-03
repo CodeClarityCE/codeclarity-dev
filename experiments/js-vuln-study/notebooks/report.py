@@ -296,6 +296,30 @@ if n_snapshots >= 2:
         ax.grid(True, alpha=0.3)
         fig_traj = _save(fig, "evolution_trajectory.png")
 
+# RQ-G: survival of (CVE, package) pairs — needs the longitudinal tables.
+fig_km = None
+km_medians: list[tuple[str, int, float]] = []
+if analyses["snapshot_date"].nunique() >= 2:
+    _intervals = presence_intervals(vulns, analyses)
+    if len(_intervals):
+        fig, ax = plt.subplots(figsize=(7.5, 4))
+        for sev, color in [("CRITICAL", "#a50f15"), ("HIGH", "#de2d26"),
+                           ("MEDIUM", "#fb6a4a"), ("LOW", "#fcae91")]:
+            sub_i = _intervals[_intervals["severity_class"].astype(str).str.upper() == sev]
+            if len(sub_i) < 5:
+                continue
+            t, sv = km_curve(sub_i["duration_days"], sub_i["event"])
+            km_medians.append((sev, len(sub_i), km_median(t, sv)))
+            ax.step(t, sv, where="post", color=color, label=f"{sev} (n={len(sub_i)})")
+        if km_medians:
+            ax.set_xlabel("days since first observed")
+            ax.set_ylabel("share still present (KM)")
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=8)
+            fig_km = _save(fig, "survival_km.png")
+        else:
+            plt.close(fig)
+
 # --------------------------------------------------------------------------- #
 # PDF assembly
 # --------------------------------------------------------------------------- #
@@ -494,12 +518,15 @@ else:
 
 # --- RQ-G: time-to-fix survival ---------------------------------------------
 if fig_km is not None:
-    P("RQ-G &mdash; Per-CVE time-to-fix (survival)", "H")
+    P("RQ-G &mdash; Vulnerable-version residence time (survival)", "H")
     P("How long does a known-vulnerable (CVE, package) pair persist in a project once observed? "
       "Presence intervals are built from consecutive completed snapshots of the same project "
-      "(a fix is counted only when the pair is absent at the immediately-next completed snapshot; "
-      "coverage gaps censor), and curves are Kaplan&ndash;Meier, stratified by severity.")
-    km_rows = [["Severity", "Intervals", "KM median days-to-fix"]]
+      "(a removal is counted only when the pair is absent at the immediately-next completed snapshot; "
+      "coverage gaps censor), and curves are Kaplan&ndash;Meier, stratified by severity. "
+      "These are <b>residence times of vulnerable versions</b>, not remediation lags: for a large "
+      "share of historical rows the advisory was published after the snapshot (or carries no date), "
+      "so the clock can start before disclosure.")
+    km_rows = [["Severity", "Intervals", "KM median residence (days)"]]
     for sev, n_i, med in km_medians:
         km_rows.append([sev, str(n_i), "not reached" if med != med else f"{med:.0f}"])
     table(km_rows, col_widths=[5 * cm, 4 * cm, 6 * cm])
