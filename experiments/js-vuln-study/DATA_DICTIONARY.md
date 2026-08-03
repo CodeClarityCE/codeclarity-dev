@@ -145,8 +145,26 @@ tables is never silent. **Columns = the manifest fields** (see above).
 the same transient drop. The `error` column carries the concrete reason —
 including the server's `failure_reason` for download failures.
 
-## data/tables/triangulation.parquet (planned)
+## data/tables/triangulation.parquet
 
-Not yet produced. Planned multi-scanner triangulation table (CodeClarity vs
-`npm audit` / OSV-Scanner on a subsample) to bound single-scanner error —
-see FINDINGS.md §11. Schema will be documented here when it lands.
+Produced by `python run.py triangulate --n 20`: a stratified HEAD subsample
+cross-checked against independent scanners, normalized to `(package, CVE)`
+pairs. Two row types share one schema (`row_type` distinguishes them):
+`pair` rows compare two scanners; `project` rows summarize CodeClarity
+against the union of all scanners that ran.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `npm_name`, `project_id`, `analysis_id`, `commit_hash` | str | The HEAD analysis the comparison ran against (lockfiles fetched at exactly `commit_hash`). |
+| `lockfile` | str | Which lockfile was scanned (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`). `npm audit` reads only npm lockfiles, so per-lockfile splits matter. |
+| `stratum` | str | Sampling stratum: vuln-load tercile × package manager. |
+| `scanners_run` | str | Comma list of scanners that produced output for this project. |
+| `npm_audit_unmapped`, `osv_unmapped` | int | Advisories the scanner reported that could not be normalized to a CVE id (excluded from set comparisons). |
+| `row_type` | str | `pair` or `project`. |
+| `pair` | str | For `pair` rows: `codeclarity_vs_npm_audit`, `codeclarity_vs_osv`, or `npm_audit_vs_osv`. |
+| `n_a`, `n_b`, `n_intersection`, `n_union`, `jaccard` | num | Set sizes and agreement for the pair (a = first-named scanner). |
+| `a_only`, `b_only` | int | Pairs found by only one side. |
+| `codeclarity_only`, `scanner_only`, `recall_vs_union` | num | For `project` rows: CodeClarity vs the union of independent scanners. |
+
+Raw per-project `(package, CVE)` sets are kept alongside in
+`triangulation_pairs.json` for auditability.

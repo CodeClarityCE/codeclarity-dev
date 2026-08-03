@@ -87,9 +87,9 @@ CodeClarity codebase and is independent of the monorepo build.
 excludes popular libraries that deliberately do not commit one (express,
 lodash, …) and monorepos whose packages live below the root. The sample skews
 toward applications and monorepos with parseable root lockfiles; Yarn-Berry
-lockfile formats additionally fail SBOM generation downstream (see
-[FINDINGS.md](FINDINGS.md) §9). Expect attrition: in the 2026-06 run, ~90 of
-100 sampled repos produced a clean HEAD scan.
+lockfile formats additionally fail SBOM generation downstream (see the
+threats-to-validity section of [RESULTS.md](RESULTS.md)). Expect some
+attrition: the 2026-08 run completed 98 of 100 sampled repos at HEAD.
 
 Repo probes are cached in `data/repo_probe_cache.jsonl` keyed by (owner, repo);
 pass `--refresh` to discard the cache and re-probe.
@@ -104,7 +104,8 @@ pass `--refresh` to discard the cache and re-probe.
   date is resolved via the GitHub API. **Repos that do not yet exist at a date
   are skipped**, so the longitudinal panel is *unbalanced*: the set of
   projects grows over time, and naive per-snapshot means are
-  composition-confounded (see FINDINGS.md §8 — use a balanced panel).
+  composition-confounded (see the longitudinal section of RESULTS.md — use a
+  balanced panel).
 - **HEAD rows are pinned**: at submit time the branch tip is resolved to a
   concrete SHA and the analysis is submitted with that `commit_hash`, so the
   row is reproducible. `snapshot_date` stays `"HEAD"` as the grouping key. If
@@ -156,6 +157,11 @@ to re-run and a run is resumable at any point.
    with no per-step progress for `JS_VULN_POLL_TIMEOUT` (default 20 min) is
    marked `failed`; a *queued-only* analysis older than
    `JS_VULN_STARTED_TIMEOUT` (default 24 h; 0 disables) is marked `failed`.
+   **For full-grid runs raise the stall timeout** — with a thousand-deep
+   download queue the server marks analyses "ongoing" long before they make
+   per-step progress, and the 20-min default mass-fails work that is merely
+   waiting its turn (`JS_VULN_POLL_TIMEOUT=14400 python run.py poll` worked
+   well for a 1,600-analysis run).
    For sad-terminal analyses the server's `failure_reason` (or the failing
    plugin's error) is captured into the manifest `error` field. Each terminal
    analysis's downloader clone is deleted once results are persisted (see
@@ -287,7 +293,7 @@ nonexistent path to keep checkouts for inspecting failures by hand.
 | `tests/` | Unit tests (`.venv/bin/python -m pytest tests/ -q`) |
 | `notebooks/` | Analysis notebook + PDF report (see `notebooks/README.md`) |
 | `DATA_DICTIONARY.md` | Column-by-column reference for every output file |
-| `FINDINGS.md` | Working results memo, incl. threats to validity |
+| `RESULTS.md` | Canonical results document: provenance, coverage, findings, threats to validity |
 | `data/` | Run artifacts (manifest, run_meta, raw blobs, tables) — gitignored |
 
 ## Verification checklist (before a full run)
