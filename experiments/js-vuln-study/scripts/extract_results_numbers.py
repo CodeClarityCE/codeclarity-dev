@@ -193,7 +193,12 @@ def main() -> None:
                 k: {"n_defined": int(g.jaccard.notna().sum()), "n_total": int(len(g)), "mean": float(g.jaccard.mean())}
                 for k, g in osv.groupby("lockfile")
             },
-            "npm_audit_all_empty": bool(pairs[pairs["pair"].str.contains("npm_audit")].n_b.fillna(0).eq(0).all()),
+            # npm audit's own set size: side b in codeclarity_vs_npm_audit,
+            # side a in npm_audit_vs_osv (pair names order the sides).
+            "npm_audit_all_empty": bool(
+                pairs.loc[pairs["pair"] == "codeclarity_vs_npm_audit", "n_b"].fillna(0).eq(0).all()
+                and pairs.loc[pairs["pair"] == "npm_audit_vs_osv", "n_a"].fillna(0).eq(0).all()
+            ),
             "recall_vs_union_mean": float(proj_rows.recall_vs_union.mean()),
             "recall_defined_projects": int(proj_rows.recall_vs_union.notna().sum()),
             "recall_min": float(proj_rows.recall_vs_union.min()),
