@@ -450,6 +450,11 @@ eliminate, single-scanner error in the headline counts (§14, threat 6).
 7. **Direct/transitive heuristic.** The `direct_dependency` flag is an SBOM
    heuristic, not a precise install-tree measure; the `direct_only` subset
    (§7) and RQ-D splits are descriptive only.
+8. **Endpoint-dependent corpus provenance.** The sample is drawn from the
+   configured GitHub endpoint's repository population (the endpoint bases
+   are env-overridable; see README). Corpora sampled from different
+   endpoints contain different repositories, so cross-environment
+   comparisons are corpus-level, not project-level.
 
 ## 15. Regeneration
 

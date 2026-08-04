@@ -234,6 +234,25 @@ The analyzer's plugin versions (`PLUGIN_VERSIONS` in `js_vuln_study/client.py`)
 apply only to a *newly created* analyzer; `run_meta.jsonl` records the steps
 the analyzer actually runs, read back from the API at submit time.
 
+## Running against a different GitHub/npm endpoint
+
+The GitHub and npm endpoint bases are environment-overridable: `GH_API_BASE`,
+`GH_RAW_BASE`, `GH_WEB_BASE`, `NPM_REGISTRY_BASE`, `NPM_DOWNLOADS_BASE` (see
+`.env.example` for defaults and per-variable roles). To repoint a run:
+
+1. Export the variables in the environment (they are read once at module
+   import, e.g. `GH_API_BASE=… python run.py sample`), with a `GITHUB_TOKEN`
+   valid for that endpoint.
+2. Delete `data/sample.json` and `data/repo_probe_cache.jsonl` before
+   resampling — both are keyed to the previous endpoint's repositories.
+3. Re-run `python run.py sample` and proceed as usual.
+
+The sampled corpus — and therefore every downstream count — depends on the
+configured endpoint's repository population: endpoints with different
+populations yield different top-N samples, so results produced against
+different endpoints are comparable at the corpus level only, never
+project-by-project (see the threats-to-validity section of RESULTS.md).
+
 ## Outputs
 
 `collect` emits `data/tables/`: `analyses.parquet` (one row per completed

@@ -23,6 +23,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import urlparse
 
 from .client import CodeClarityClient, CodeClarityError, TERMINAL_STATUSES
 from .reclaim import leaf_for, reclaim_leaf
@@ -290,9 +291,10 @@ def _spec_from_record(rec: dict) -> ProjectSpec:
     """Rebuild the ProjectSpec fields a re-submit needs from a manifest row.
 
     _submit_analysis only reads npm_name/tier/rank/git_url; owner/repo are
-    re-derived from the git_url for completeness.
+    re-derived from the git_url's path (host-agnostic) for completeness.
     """
-    owner, _, repo = rec["git_url"].removeprefix("https://github.com/").partition("/")
+    slug = urlparse(rec["git_url"]).path.strip("/")
+    owner, _, repo = slug.removesuffix(".git").partition("/")
     return ProjectSpec(
         npm_name=rec["npm_name"],
         rank=rec.get("rank") or 0,

@@ -1,7 +1,8 @@
 """Cross-scanner triangulation: CodeClarity vs `npm audit` vs `osv-scanner`.
 
-Reads the local parquet tables plus raw.githubusercontent.com only — it never
-talks to the CodeClarity API. For a stratified subsample of HEAD analyses
+Reads the local parquet tables plus the configured raw-content endpoint
+(GH_RAW_BASE, default raw.githubusercontent.com) only — it never talks to the
+CodeClarity API. For a stratified subsample of HEAD analyses
 (tercile of total_vulnerabilities × package_manager), it re-fetches each
 project's package.json + lockfile at the exact analysed commit, runs the two
 independent scanners on it, normalises everything to (package_name, CVE)
@@ -37,13 +38,16 @@ import subprocess
 import tempfile
 from itertools import combinations
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import pandas as pd
 
 log = logging.getLogger(__name__)
 
-RAW_GITHUB = "https://raw.githubusercontent.com"
+# Env-overridable (GH_RAW_BASE), read once at import; empty/unset falls through
+# to the canonical host, trailing slashes stripped — same contract as sample.py.
+RAW_GITHUB = (os.environ.get("GH_RAW_BASE") or "https://raw.githubusercontent.com").rstrip("/")
 LOCKFILES = ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"]
 NPM_LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json"}
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}")
@@ -62,9 +66,18 @@ def _auth_headers() -> dict[str, str]:
 
 
 def parse_owner_repo(git_url: str) -> tuple[str, str] | None:
-    """Extract (owner, repo) from a github.com URL (https or ssh)."""
-    m = re.search(r"github\.com[:/]+([^/]+)/([^/]+?)(?:\.git)?/?$", str(git_url))
-    return (m.group(1), m.group(2)) if m else None
+    """Extract (owner, repo) from a git remote URL (https or ssh), any host."""
+    url = str(git_url).strip()
+    if "://" not in url:
+        # scp-style ssh remote (git@host:owner/repo.git) has no scheme — give
+        # it one urlparse understands; anything else is a scheme-less https URL.
+        m = re.match(r"^(?:[\w.+-]+@)?([^/:@]+):(.*)$", url)
+        url = f"ssh://{m.group(1)}/{m.group(2)}" if m else f"https://{url}"
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[0], parts[1].removesuffix(".git")
+    return (owner, repo) if owner and repo else None
 
 
 # --------------------------------------------------------------------------- #

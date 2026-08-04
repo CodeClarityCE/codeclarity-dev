@@ -27,9 +27,16 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-GITHUB_API = "https://api.github.com"
-NPM_REGISTRY = "https://registry.npmjs.org"
-NPM_DOWNLOADS_API = "https://api.npmjs.org/downloads/point/last-month"
+# Endpoint bases are env-overridable (read once at import) so a run can target
+# a different GitHub/npm deployment; empty/unset falls through to the canonical
+# host, and trailing slashes are stripped defensively.
+GITHUB_API = (os.environ.get("GH_API_BASE") or "https://api.github.com").rstrip("/")
+NPM_REGISTRY = (os.environ.get("NPM_REGISTRY_BASE") or "https://registry.npmjs.org").rstrip("/")
+NPM_DOWNLOADS_API = (
+    os.environ.get("NPM_DOWNLOADS_BASE")
+    or "https://api.npmjs.org/downloads/point/last-month"
+).rstrip("/")
+GH_WEB_BASE = (os.environ.get("GH_WEB_BASE") or "https://github.com").rstrip("/")
 SEARCH_LANGUAGES = ("JavaScript", "TypeScript")
 SEARCH_PAGES = 3  # 100 results/page → up to 300 candidates per language
 MIN_STARS = 1000  # floor for the search; the top-100 sits far above this
@@ -254,7 +261,7 @@ class _ProbeCache:
         c_owner = (meta.get("owner") or {}).get("login") or owner
         c_repo = meta.get("name") or repo
         c_branch = meta.get("default_branch")
-        c_url = meta.get("html_url") or f"https://github.com/{c_owner}/{c_repo}"
+        c_url = meta.get("html_url") or f"{GH_WEB_BASE}/{c_owner}/{c_repo}"
         fork = bool(meta.get("fork"))
         archived = bool(meta.get("archived"))
         disabled = bool(meta.get("disabled"))

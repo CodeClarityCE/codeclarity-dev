@@ -19,7 +19,9 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-GITHUB_API = "https://api.github.com"
+# Env-overridable (GH_API_BASE), read once at import; empty/unset falls through
+# to the canonical host, trailing slashes stripped — same contract as sample.py.
+GITHUB_API = (os.environ.get("GH_API_BASE") or "https://api.github.com").rstrip("/")
 
 # Quarterly 2022-Q1 .. 2026-Q2 — a pre-LLM baseline (2022) through today, to
 # chart vulnerability evolution. Repos that don't yet exist at a date are skipped
