@@ -227,6 +227,13 @@ def main() -> None:
         "panel_hist_rows_total": int(len(tt)),
     }
 
+    # June->August drift decomposition, if scripts/drift_decomposition.py has
+    # run. Loaded verbatim — that script owns the computation; this file stays
+    # the single aggregation point RESULTS.md quotes from.
+    drift_path = TABLES / "drift_decomposition.json"
+    if drift_path.exists():
+        out["drift"] = json.load(open(drift_path))
+
     dest = TABLES / "results_numbers.json"
     json.dump(out, open(dest, "w"), indent=1, default=str)
     print(f"wrote {dest}")

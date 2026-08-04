@@ -645,3 +645,59 @@ else:
 sweep = sensitivity_sweep(vulns_head, head)
 with pd.option_context("display.width", 160, "display.max_columns", None):
     print(sweep.round(3).to_string(index=False))
+
+# %% [markdown]
+# # Knowledge-snapshot drift decomposition (June -> August)
+#
+# The study was run twice off the same sample: the June-knowledge archive run
+# and the current run. `scripts/drift_decomposition.py` pairs the two on
+# (npm_name, snapshot_date) and splits pairs by commit equality: same-commit
+# deltas are PURE knowledge drift (identical trees, only the NVD/OSV/GCVE/EPSS
+# vintage moved); the raw delta additionally contains HEAD code movement.
+# Caveats travel with the JSON (`meta.caveats`): the HEAD same-commit subset
+# is a subsample, and the June OSV vintage is an interval, not a point.
+
+# %%
+import json
+
+_drift_path = DATA_DIR / "drift_decomposition.json"
+if not _drift_path.exists():
+    print("(no drift_decomposition.json — run scripts/drift_decomposition.py; drift cells skipped)")
+    drift = None
+else:
+    drift = json.load(open(_drift_path))
+    d, p = drift["deltas"], drift["pairing"]
+    print(f"pairs: {p['n_pairs']} (archive-only {p['archive_only']}, live-only {p['live_only']}) | "
+          f"HEAD same-commit {p['same_commit']['head']['same_commit']}/{p['same_commit']['head']['n_pairs']}")
+    rows = [(subset, scope, b["archive_instances"], b["live_instances"], b["delta_pct"], b["n_pairs"])
+            for subset in ("paired_all", "same_commit")
+            for scope, b in d[subset].items()]
+    tab = pd.DataFrame(rows, columns=["subset", "scope", "june", "august", "delta_pct", "n_pairs"])
+    print(tab.round(2).to_string(index=False))
+    print("epss_rows:", drift["meta"]["epss_rows"], "| knowledge_date:", drift["meta"]["knowledge_date"])
+    ch = drift["churn_same_commit"]
+    print(f"same-commit churn: +{ch['new_instances']} / -{ch['vanished_instances']} instances, "
+          f"+{ch['new_vuln_package_pairs']} / -{ch['vanished_vuln_package_pairs']} (package, vuln) pairs "
+          f"(n_pairs={ch['n_pairs']})")
+
+# %%
+# Which source drives the drift, and how old are the newly-appearing advisories?
+if drift is not None:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+    src = pd.DataFrame(drift["by_winning_source"]["same_commit_overall"]).T
+    ax1.bar(src.index, src["abs_delta"], color="#3182bd")
+    for i, (a, r) in enumerate(zip(src["abs_delta"], src["rel_delta_pct"])):
+        ax1.annotate(f"+{int(a):,}\n({r:+.0f}%)", (i, a), ha="center", va="bottom", fontsize=8)
+    ax1.set_ylabel("instance delta (June -> August)")
+    ax1.set_title("Knowledge drift by winning source (same-commit pairs)")
+    ax1.grid(True, alpha=0.3, axis="y")
+
+    bins = drift["advisory_age_new_instances"]["new_same_commit"]
+    labels = [k for k in bins if k != "n"]
+    ax2.bar(labels, [bins[k] for k in labels], color="#de2d26")
+    ax2.set_ylabel("new August-only instances")
+    ax2.set_title(f"Advisory age of NEW instances at the August\n"
+                  f"knowledge date (n={bins['n']}, same-commit pairs)")
+    ax2.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    plt.show()
