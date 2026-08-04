@@ -5,6 +5,18 @@ Column-by-column reference for every artifact the harness writes. Producers:
 `run.py collect` derives everything under `data/tables/` from them plus the raw
 plugin blobs in `data/raw/`.
 
+**Rung dirs (`data-ladder/rung-<T>/`)**: a knowledge-staleness ladder rung is
+a full data dir of exactly this layout, selected via `JS_VULN_DATA_DIR` (see
+the README's ladder section). Differences from `data/`: no `sample.json` /
+`repo_probe_cache.jsonl` (rows are populated by `run.py resubmit-frozen` from
+a source manifest, not sampled), `snapshot_date` is carried over **verbatim**
+from the source rows (with `--dedupe-sha` one arbitrary representative date
+per `(git_url, commit_hash)` tree — join cross-rung on those two columns, not
+on `snapshot_date`), and `skipped` rows may carry the reason
+`no pinned commit in source` for source rows without a `commit_hash`.
+`run_meta.jsonl` records `cmd: "resubmit-frozen"` plus the `source_manifest`
+path and the selection flags used.
+
 Read the semantic notes, not just the column names — several fields are easy
 to misread (instances vs unique packages, resolved multiset vs install set,
 heuristic flags).
@@ -181,3 +193,51 @@ against the union of all scanners that ran.
 
 Raw per-project `(package, CVE)` sets are kept alongside in
 `triangulation_pairs.json` for auditability.
+
+## data/tables/remediation_events.parquet
+
+Produced by `python run.py mine-lag`: one row per **mining unit** — event=1
+presence intervals grouped on (project, dependency, vulnerable-version-set,
+snapshot window), so CVEs fixed by the same lockfile change are mined once.
+Each row records where in the repo's git history the vulnerable resolved
+version left the ROOT lockfile (see the README's mine-lag section for the
+search rules). `stats.merge_day_resolution` joins these back onto intervals
+on `(project_id, affected_dependency, last_seen)`.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `npm_name`, `project_id` | str | The project mined. |
+| `affected_dependency` | str | The vulnerable package. |
+| `affected_version` | str | Comma-joined sorted set of the vulnerable resolved versions observed at `last_seen` (all workspaces — they resolve from the root lockfile in the common monorepo layouts). |
+| `workspace_scope` | str | Always `root`: only the repo-root lockfile is mined; a fix that only touched a workspace-local lockfile surfaces as `ambiguous`/`not_in_root_lockfile`. |
+| `last_seen`, `next_snapshot` | str | The window bounds as `YYYY-MM-DD`: last snapshot where the pair was present, next completed snapshot where it was gone (interval-censored fix window). |
+| `lockfile` | str | Root lockfile the version was last seen in (null when it never appeared in one). |
+| `fix_commit_sha`, `fixed_at` | str | For `found` rows: the first commit at which **no occurrence** of any vulnerable version remains in the root lockfile, and its committer date (the day-resolution fix time). Null otherwise. |
+| `method` | str | `binary_search` / `linear_scan` (windows ≤ 6 commits — exact, detects reintroductions) for `found`; failure reason otherwise: `no_lockfile_commits`, `not_in_root_lockfile`, `still_present_at_window_end`, `non_monotonic`, `unparseable_lockfile`, `unparseable_git_url`. |
+| `status` | str | `found` (day-resolution fix located), `ambiguous` (excluded from KM by `merge_day_resolution`, but counted), `not_found` (no lockfile-touching commits in the window — the disappearance did not come from a root-lockfile change). |
+| `n_intervals` | int | Event=1 intervals this unit covers (grouped CVEs). |
+| `n_commits` | int | Candidate lockfile-touching commits in the window (union over the three root lockfile names). |
+
+Commit lists, parsed lockfile blobs, and per-unit results are cached under
+`data/mining_cache/` (`results.jsonl` makes the mine resumable — delete a
+line to re-mine a unit).
+
+## data/tables/ladder_dose_response.json
+
+Produced by `scripts/ladder_dose_response.py` from the per-rung `tables/`
+outputs (see the README's ladder section); loaded verbatim into
+`results_numbers.json` under `ladder`. Rungs are sorted stalest → freshest by
+their run_meta knowledge date (the OSV stamp when present — the ladder
+rebuilds OSV per rung — else the max parseable source stamp).
+
+| Field | Meaning |
+|-------|---------|
+| `meta.rung_dirs`, `meta.freshest` | The rung dirs in sorted order and the freshest (comparison baseline). |
+| `meta.common_analyses` | Size of the **common completed subset**: `(git_url, commit_hash)` keys completed in *every* rung — the like-for-like panel all `*_common` numbers are restricted to. |
+| `meta.sha_mismatch`, `meta.shas` | Whether `api_sha`/`backend_sha` differ across rungs (they must not — that breaks the code-held-fixed premise; warned, not fatal), plus the per-rung values. |
+| `rungs[].knowledge_date`, `rungs[].epss_rows` | The rung's knowledge vintage and EPSS row count. |
+| `rungs[].n_analyses`, `rungs[].instances_total` | Completed analyses and vulnerability instances in the rung's own tables (unrestricted). |
+| `rungs[].instances_common` | Instances on the common subset (deduplicated on the instance key) — the dose-response y-axis. |
+| `rungs[].severity_mix_common`, `rungs[].winning_source_mix_common` | Instance counts per severity class / winning source, common subset. |
+| `rungs[].vs_freshest` | `instance_delta_common` (+`_pct`) vs the freshest rung on the common subset, and `jaccard_pairs` — Jaccard of the `(affected_dependency, vulnerability_id)` pair sets. |
+| `fidelity` | Present when some rung's knowledge date is within a few days of the archive's: that rung vs the archived tables on the shared-key join (`shared_analyses`, per-side instances, `instance_delta_pct`, `instance_jaccard`) — an upper bound on how faithfully the dated rebuild reproduces the original run. Null otherwise. |

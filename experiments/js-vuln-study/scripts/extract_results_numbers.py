@@ -38,6 +38,7 @@ from js_vuln_study.stats import (  # noqa: E402
     headline,
     km_curve,
     km_median,
+    merge_day_resolution,
     presence_intervals,
     sensitivity_sweep,
 )
@@ -66,6 +67,31 @@ def survival_block(vulns: pd.DataFrame, analyses: pd.DataFrame) -> dict:
         "fixed": int(ints.event.sum()),
         "censored": int((1 - ints.event).sum()),
         "unclassed_intervals": int(len(ints) - classed),
+        "km_by_severity": by_sev,
+    }
+
+
+def survival_day_block(vulns: pd.DataFrame, analyses: pd.DataFrame,
+                       events: pd.DataFrame) -> dict:
+    """`survival_block`, but with mined day-resolution fixes folded in via
+    `merge_day_resolution` — intervals whose only matching mine is ambiguous
+    are excluded from the KM fits but counted."""
+    ints = merge_day_resolution(presence_intervals(vulns, analyses), events)
+    kept = ints[~ints["excluded"]]
+    by_sev = {}
+    for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+        s = kept[kept.severity_class.astype(str).str.upper() == sev]
+        t, sv = km_curve(s.duration_days, s.event)
+        by_sev[sev] = {
+            "n": int(len(s)),
+            "n_day_resolution": int((s.resolution == "day").sum()),
+            "km_median_days": float(km_median(t, sv)),
+        }
+    return {
+        "intervals": int(len(ints)),
+        "fixed": int(ints.event.sum()),
+        "day_resolution": int((ints.resolution == "day").sum()),
+        "excluded_ambiguous": int(ints.excluded.sum()),
         "km_by_severity": by_sev,
     }
 
@@ -162,6 +188,19 @@ def main() -> None:
     disclosed = v[pub_all.notna() & (pub_all <= snap_eff)]
     out["survival_disclosed"] = survival_block(disclosed, a)
 
+    # Day-resolution refinement, if `python run.py mine-lag` has produced the
+    # remediation events (see js_vuln_study/remediation.py).
+    rem_path = TABLES / "remediation_events.parquet"
+    if rem_path.exists():
+        ev = pd.read_parquet(rem_path)
+        out["survival_day_resolution"] = {
+            "events": int(len(ev)),
+            "by_status": {k: int(n) for k, n in ev.status.value_counts().items()},
+            "by_method": {k: int(n) for k, n in ev.method.value_counts().items()},
+            "residence": survival_day_block(v, a, ev),
+            "disclosed": survival_day_block(disclosed, a, ev),
+        }
+
     from scipy.stats import spearmanr
 
     sub = h[h.total_dependencies > 0]
@@ -233,6 +272,14 @@ def main() -> None:
     drift_path = TABLES / "drift_decomposition.json"
     if drift_path.exists():
         out["drift"] = json.load(open(drift_path))
+
+    # Knowledge-staleness ladder dose-response, if
+    # scripts/ladder_dose_response.py has run. Loaded verbatim — that script
+    # owns the computation; this file stays the single aggregation point
+    # RESULTS.md quotes from.
+    ladder_path = TABLES / "ladder_dose_response.json"
+    if ladder_path.exists():
+        out["ladder"] = json.load(open(ladder_path))
 
     dest = TABLES / "results_numbers.json"
     json.dump(out, open(dest, "w"), indent=1, default=str)

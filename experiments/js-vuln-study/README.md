@@ -227,6 +227,102 @@ to re-run and a run is resumable at any point.
    Also accepts `--ids`, `--limit`, `--batch-size` (API caps one batch-delete
    call at 500 ids).
 
+## The knowledge-staleness ladder (`resubmit-frozen`)
+
+The ladder answers "how much of the measured exposure is just the
+vulnerability database's vintage?" by re-scanning the archived 2026-06 run's
+**exact pinned commit SHAs** under several **dated knowledge-DB states**
+(rungs: the 2026-08-03 natural dump plus reconstructed 2026-06-29, 2026-01-01,
+2025-01-01, 2024-01-01, 2023-01-01 states), with the backend code held fixed —
+so any result delta is 100% attributable to the knowledge state. Dated states
+are restored via the root Makefile's dated knowledge-restore targets (OSV
+rebuilt from the advisory-database git history, EPSS from FIRST's dated CSVs;
+nvd/gcve/npm stay frozen at the natural dump).
+
+Each rung runs in its **own data dir** via `JS_VULN_DATA_DIR` (absolute, or
+relative to this directory; export it in the shell — it is read at import,
+before `.env` loads). Every artifact path — manifest, `setup.json`,
+`raw/`, `tables/` — derives from it, so `poll`/`collect` work per-rung
+unchanged. A rung dir needs no `sample.json`: `resubmit-frozen` derives
+everything from the source manifest.
+
+Per rung, after restoring its dated knowledge state:
+
+```bash
+export JS_VULN_DATA_DIR=data-ladder/rung-<T>       # e.g. rung-2024-01-01
+python run.py resubmit-frozen \
+    --from data/archive-run-2026-06-snapshot/manifest.jsonl \
+    --only-completed --dedupe-sha --dry-run        # preview: expect ~1,341
+python run.py resubmit-frozen \
+    --from data/archive-run-2026-06-snapshot/manifest.jsonl \
+    --only-completed --dedupe-sha                  # submit for real
+python run.py poll                                 # converge (raise JS_VULN_POLL_TIMEOUT as usual)
+python run.py collect --no-deps                    # rung tables + run_meta.json
+```
+
+Semantics: the source manifest is **read-only**; `--only-completed` keeps
+`completed`/`success` rows; `--dedupe-sha` collapses rows sharing
+`(git_url, commit_hash)` onto the first, so a frozen tree pinned by several
+snapshot dates is scanned once (1,423 completed archive rows → 1,341 trees).
+Every submission is **commit-pinned at the archived SHA** — pinned-HEAD rows
+included, they are never re-resolved — with `snapshot_date` carried over
+verbatim, so no GitHub access is needed at all. Rows without a `commit_hash`
+become `skipped` rung-manifest rows (`no pinned commit in source`). The rung's
+own `(git_url, snapshot_date)` dedupe makes re-runs resumable/idempotent; the
+rung's denylist (merged with the source dir's, if any) is honoured unless
+`--ignore-denylist`. Projects the server no longer has (archived ids are stale
+after `run.py clean`) are re-imported by `git_url`. `--dry-run` prints the
+selection/dedup/skip summary and writes nothing.
+
+Once every rung is collected, aggregate the dose-response:
+
+```bash
+python scripts/ladder_dose_response.py --rungs 'data-ladder/rung-*' \
+    --archive data/archive-run-2026-06-snapshot   # default out: data/tables/ladder_dose_response.json
+```
+
+Per rung (sorted by knowledge date) it reports completed analyses, instances,
+instances on the **common completed subset** (same `(git_url, commit_hash)`
+keys in every rung — the like-for-like panel), severity/source mixes, and
+deltas + pair-set Jaccard vs the freshest rung; it warns if `api_sha`/
+`backend_sha` differ across rungs, and when a rung's knowledge date lands near
+the archive's it reports rung-vs-archive agreement (reconstruction-fidelity
+bound). `scripts/extract_results_numbers.py` folds the JSON in under
+`ladder`, and `notebooks/analysis.py` renders the instances-vs-staleness
+curve. See DATA_DICTIONARY.md for the rung-dir and output-file layouts.
+
+## Day-resolution remediation lag (`mine-lag`)
+
+The survival analysis (RQ-G) observes projects quarterly, so every fix is
+interval-censored at ~90 days: an event=1 presence interval only says the fix
+landed between `last_seen` and the next completed snapshot. `mine-lag`
+recovers the day: for each event=1 interval it lists the commits touching any
+root lockfile (`yarn.lock` / `package-lock.json` / `pnpm-lock.yaml` — the
+js-sbom list) inside that window, then binary-searches them for the first
+commit where **no occurrence** of the vulnerable resolved version remains in
+the root lockfile (all-occurrences rule; small windows are scanned linearly,
+which detects reintroductions exactly and marks them `ambiguous`).
+
+```bash
+python run.py mine-lag --dry-run    # unit count + projected request budget only
+python run.py mine-lag --limit 5    # smoke: first 5 units (deterministic order)
+python run.py mine-lag              # full mine (resumable — safe to interrupt)
+```
+
+Intervals are grouped into **mining units** on (project, dependency,
+vulnerable-version-set, window) — CVEs fixed by the same lockfile change are
+mined once (~7.6k units from ~16.6k event intervals). Commit lists and parsed
+lockfile blobs are cached under `data/mining_cache/` and per-unit results
+append to `mining_cache/results.jsonl`, so re-runs skip completed units; only
+the commit-list calls count against the GitHub core-API limit (raw blob
+fetches hit `GH_RAW_BASE`). Output: `data/tables/remediation_events.parquet`
+(`--out` overrides; see DATA_DICTIONARY.md). `stats.merge_day_resolution`
+folds the found fixes back into the intervals (`resolution='day'`, rewritten
+`duration_days`; ambiguous mines excluded from KM but counted) —
+`scripts/extract_results_numbers.py` reports it under
+`survival_day_resolution`, and `notebooks/analysis.py` renders the
+quarter-vs-day KM comparison.
+
 ## Configuration
 
 `.env.example` is the canonical, commented reference — copy it to `.env` and
@@ -237,6 +333,7 @@ edit. Summary:
 | `CC_BASE_URL`, `CC_EMAIL`, `CC_PASSWORD`, `CC_VERIFY_TLS` | API endpoint + credentials. From a devcontainer/agent shell use `http://172.17.0.1:3000` (no `/api` prefix). |
 | `GITHUB_TOKEN` | **Required.** Classic PAT, `public_repo`. `GH_TOKEN` is honoured as an alias for GitHub API lookups (sample / snapshot resolution) only — **the integration setup reads `GITHUB_TOKEN` exclusively**. |
 | `JS_VULN_ORG_NAME`, `JS_VULN_ANALYZER_NAME` | Org / analyzer names provisioned on first run (defaults `js-vuln-study-2026` / `js-vuln-study-v2`). `data/setup.json` caches the provisioned IDs and **wins over these** — delete it to re-provision after renaming. |
+| `JS_VULN_DATA_DIR` | Override the run's data dir (default `data/`; absolute, or relative to this directory). Used per-rung by the knowledge-staleness ladder. Read at import — export it in the shell, not `.env`. |
 | `JS_VULN_POLL_TIMEOUT`, `JS_VULN_STARTED_TIMEOUT` | Client-side poll give-up rules, seconds (defaults 1200 / 86400; see Workflow step 4). |
 | `JS_VULN_SUBMIT_WORKERS` | Project-level `submit` parallelism (default 8); manifest writes stay single-threaded. |
 | `JS_VULN_CLONE_DIR` | Where the downloader's clones land on this host (default `<repo-root>/private`, correct in the devcontainer). Point at a nonexistent path to disable clone reclamation. |
@@ -323,7 +420,8 @@ nonexistent path to keep checkouts for inspecting failures by hand.
 
 | Path | Purpose |
 |------|---------|
-| `run.py` | CLI entry point (`sample` / `smoke` / `submit` / `poll` / `retry` / `collect` / `clean`) |
+| `run.py` | CLI entry point (`sample` / `smoke` / `submit` / `poll` / `retry` / `collect` / `triangulate` / `resubmit-frozen` / `mine-lag` / `clean`) |
+| `scripts/ladder_dose_response.py` | Aggregates per-rung tables into the knowledge-staleness dose-response JSON |
 | `js_vuln_study/client.py` | Thin CodeClarity REST wrapper with JWT refresh; `PLUGIN_VERSIONS` |
 | `js_vuln_study/sample.py` | Top-N GitHub-stars sampler (package.json + lockfile filter, canonical-slug dedup) |
 | `js_vuln_study/snapshots.py` | Snapshot grid + commit resolution (historical dates, pinned HEAD) |
@@ -331,6 +429,8 @@ nonexistent path to keep checkouts for inspecting failures by hand.
 | `js_vuln_study/collect.py` | Raw JSON → Parquet tables + coverage report |
 | `js_vuln_study/provenance.py` | Per-run provenance capture → `data/run_meta.jsonl` |
 | `js_vuln_study/reclaim.py` | Deletes the downloader's clones once their analysis is terminal |
+| `js_vuln_study/lockfiles.py` | Minimal root-lockfile parsers (npm v1-v3, yarn v1/berry, pnpm both dialects) |
+| `js_vuln_study/remediation.py` | Day-resolution fix-commit miner (`mine-lag`) over the repos' lockfile history |
 | `tests/` | Unit tests (`.venv/bin/python -m pytest tests/ -q`) |
 | `notebooks/` | Analysis notebook + PDF report (see `notebooks/README.md`) |
 | `DATA_DICTIONARY.md` | Column-by-column reference for every output file |

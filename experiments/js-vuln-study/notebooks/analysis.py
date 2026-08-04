@@ -50,6 +50,7 @@ from js_vuln_study.stats import (  # noqa: E402
     km_curve,
     km_median,
     lorenz,
+    merge_day_resolution,
     pairwise_mwu,
     presence_intervals,
     sensitivity_sweep,
@@ -634,6 +635,63 @@ else:
     print(med.round(0).to_string())
 
 # %% [markdown]
+# ## RQ-G at day resolution — mined lockfile fix commits
+#
+# The quarterly snapshot grid interval-censors every fix at ~90 days: an
+# event=1 interval only says the fix landed somewhere between `last_seen` and
+# the next snapshot. `python run.py mine-lag` locates the exact commit where
+# the vulnerable resolved version left the ROOT lockfile inside that window
+# (binary search over the lockfile's commit history), and
+# `stats.merge_day_resolution` rewrites the matched intervals' durations to
+# day resolution; ambiguous mines are excluded from KM but counted. The
+# quarter curves systematically round fix times UP to the observing snapshot,
+# so the day-resolution curve sits left of (below) the quarter curve.
+
+# %%
+_rem_path = DATA_DIR / "remediation_events.parquet"
+if not _rem_path.exists():
+    print("(no remediation_events.parquet — run `python run.py mine-lag`; day-resolution cells skipped)")
+elif analyses["snapshot_date"].nunique() < 2:
+    print("HEAD-only data: day-resolution RQ-G needs the longitudinal run (submit --snapshots).")
+else:
+    events = pd.read_parquet(_rem_path)
+    base = presence_intervals(vulns, analyses)
+    merged = merge_day_resolution(base, events)
+    kept = merged[~merged["excluded"]]
+    print(f"{len(events)} mined units: "
+          + ", ".join(f"{k}={int(n)}" for k, n in events["status"].value_counts().items()))
+    print(f"{int((merged['resolution'] == 'day').sum())}/{int(merged['event'].sum())} "
+          f"event intervals upgraded to day resolution; "
+          f"{int(merged['excluded'].sum())} excluded as ambiguous")
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for label, frame, style, color in [
+        ("quarter-resolution", base, "--", "#9ecae1"),
+        ("day-resolution", kept, "-", "#08519c"),
+    ]:
+        t, sv = km_curve(frame["duration_days"], frame["event"])
+        ax.step(t, sv, where="post", linestyle=style, color=color,
+                label=f"{label} (n={len(frame)}, median={km_median(t, sv):.0f} d)")
+    ax.set_xlabel("days since first observed")
+    ax.set_ylabel("share still present (KM)")
+    ax.set_title("RQ-G: quarter- vs day-resolution residence of vulnerable pairs")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    plt.show()
+    med_cmp = pd.DataFrame({
+        "quarter": (base.assign(sev=base["severity_class"].astype(str).str.upper())
+                    .groupby("sev")
+                    .apply(lambda g: km_median(*km_curve(g["duration_days"], g["event"])),
+                           include_groups=False)),
+        "day": (kept.assign(sev=kept["severity_class"].astype(str).str.upper())
+                .groupby("sev")
+                .apply(lambda g: km_median(*km_curve(g["duration_days"], g["event"])),
+                       include_groups=False)),
+    })
+    print("KM median days by severity, quarter vs day resolution:")
+    print(med_cmp.round(0).to_string())
+
+# %% [markdown]
 # # Sensitivity sweep — every headline number under measurement subsets
 #
 # Each scalar headline metric recomputed on: all HEAD matches, only
@@ -701,3 +759,73 @@ if drift is not None:
     ax2.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
     plt.show()
+
+# %% [markdown]
+# # Knowledge-staleness dose-response (the ladder)
+#
+# The ladder re-scans the archived June run's exact pinned commits under
+# several DATED knowledge-DB states (rungs) with the backend code held fixed,
+# so the instances-vs-staleness curve below is a pure measure of how much of
+# the reported exposure exists only because the vulnerability database moved.
+# `scripts/ladder_dose_response.py` computes the JSON; all per-rung counts
+# here are on the COMMON completed-analysis subset (the same
+# (git_url, commit_hash) keys completed in every rung), so composition is held
+# fixed too.
+
+# %%
+_ladder_path = DATA_DIR / "ladder_dose_response.json"
+if not _ladder_path.exists():
+    print("(no ladder_dose_response.json — run scripts/ladder_dose_response.py; ladder cells skipped)")
+    ladder = None
+else:
+    ladder = json.load(open(_ladder_path))
+    lr = pd.DataFrame(ladder["rungs"])
+    # keep knowledge_date as the JSON string for tables; parse for plotting
+    lr["knowledge_dt"] = pd.to_datetime(lr["knowledge_date"], errors="coerce", utc=True)
+    lr["delta_vs_freshest_pct"] = [r["vs_freshest"]["instance_delta_pct"] for r in ladder["rungs"]]
+    lr["jaccard_pairs"] = [r["vs_freshest"]["jaccard_pairs"] for r in ladder["rungs"]]
+    print(f"{len(lr)} rungs | common completed analyses: {ladder['meta']['common_analyses']}"
+          + (" | WARNING: api/backend SHAs differ across rungs" if ladder["meta"]["sha_mismatch"] else ""))
+    cols = ["dir", "knowledge_date", "n_analyses", "instances_total", "instances_common",
+            "delta_vs_freshest_pct", "jaccard_pairs"]
+    print(lr[cols].round(3).to_string(index=False))
+    if ladder.get("fidelity"):
+        f = ladder["fidelity"]
+        print(f"\nreconstruction fidelity vs archive ({f['rung_dir']}): "
+              f"shared analyses={f['shared_analyses']}, instances "
+              f"{f['rung_instances']} vs {f['archive_instances']}, "
+              f"instance jaccard={f['instance_jaccard']}")
+
+# %%
+# The money figure: known-vulnerability instances on the fixed panel as a
+# function of the knowledge-DB date. Code and commits identical at every point
+# — the slope is the vulnerability database's contribution to measured exposure.
+if ladder is not None:
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(lr["knowledge_dt"], lr["instances_common"], marker="o", color="#08519c")
+    for _, row in lr.iterrows():
+        if pd.notna(row["knowledge_dt"]):
+            ax.annotate(f"{row['instances_common']:,}",
+                        (row["knowledge_dt"], row["instances_common"]),
+                        fontsize=8, xytext=(0, 6), textcoords="offset points", ha="center")
+    ax.set_xlabel("knowledge-DB date (rung)")
+    ax.set_ylabel("vuln instances (common subset)")
+    ax.set_title("Dose-response: measured exposure vs knowledge-DB staleness\n"
+                 "(same commits, same code — only the database moves)")
+    ax.grid(True, alpha=0.3)
+    plt.xticks(rotation=30, fontsize=8)
+    plt.tight_layout()
+    plt.show()
+
+# %%
+# Severity-class mix per rung (common subset) — does staleness change the mix,
+# or just scale the level?
+if ladder is not None:
+    sev_tab = pd.DataFrame(
+        [r["severity_mix_common"] for r in ladder["rungs"]],
+        index=[r["knowledge_date"] or r["dir"] for r in ladder["rungs"]],
+    ).fillna(0).astype(int)
+    sev_order = [c for c in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE"] if c in sev_tab.columns]
+    sev_tab = sev_tab[sev_order + [c for c in sev_tab.columns if c not in sev_order]]
+    print("Severity mix per rung (common subset):")
+    print(sev_tab.to_string())

@@ -243,6 +243,33 @@ def record_unresolvable(data_dir: Path, rec: dict, reason: str | None) -> dict:
     return row
 
 
+def _ensure_project_id(
+    client: CodeClarityClient,
+    org_id: str,
+    spec: ProjectSpec,
+    project_ids: dict[str, str],
+    ids_lock: threading.Lock,
+    integration_id: str | None,
+) -> str:
+    """Return the project_id for spec.git_url, importing the project once if
+    unknown. `project_ids` is the shared {git_url: project_id} cache (guarded
+    by ids_lock); server-side import is idempotent, so a lost race costs one
+    redundant POST at worst. Raises CodeClarityError when the import fails."""
+    with ids_lock:
+        project_id = project_ids.get(spec.git_url)
+    if project_id is None:
+        project_id = client.import_project(
+            org_id,
+            spec.git_url,
+            name=spec.npm_name,
+            description=f"{spec.tier} rank={spec.rank}",
+            integration_id=integration_id,
+        )
+        with ids_lock:
+            project_ids[spec.git_url] = project_id
+    return project_id
+
+
 def import_and_schedule(
     client: CodeClarityClient,
     org_id: str,
@@ -286,22 +313,13 @@ def import_and_schedule(
             log.info("skipping %s: no default branch / no snapshots", spec.git_url)
             return [_skip_record(spec, "*", "no default branch / no snapshots")]
 
-        with ids_lock:
-            project_id = project_ids.get(spec.git_url)
-        if project_id is None:
-            try:
-                project_id = client.import_project(
-                    org_id,
-                    spec.git_url,
-                    name=spec.npm_name,
-                    description=f"{spec.tier} rank={spec.rank}",
-                    integration_id=integration_id,
-                )
-            except CodeClarityError as e:
-                log.warning("import failed for %s: %s", spec.git_url, e)
-                return [_skip_record(spec, "*", f"import: {e}")]
-            with ids_lock:
-                project_ids[spec.git_url] = project_id
+        try:
+            project_id = _ensure_project_id(
+                client, org_id, spec, project_ids, ids_lock, integration_id,
+            )
+        except CodeClarityError as e:
+            log.warning("import failed for %s: %s", spec.git_url, e)
+            return [_skip_record(spec, "*", f"import: {e}")]
 
         out: list[AnalysisRecord] = []
         for snap in snapshots:
@@ -526,6 +544,186 @@ def retry_failed(
             len(resubmitted), denylist_skipped,
         )
     return resubmitted
+
+
+def resubmit_frozen(
+    client: CodeClarityClient | None,
+    org_id: str,
+    analyzer_id: str,
+    source_manifest: Path,
+    data_dir: Path,
+    integration_id: str | None = None,
+    only_completed: bool = False,
+    dedupe_sha: bool = False,
+    dry_run: bool = False,
+    ignore_denylist: bool = False,
+    max_workers: int = SUBMIT_WORKERS,
+) -> list[AnalysisRecord]:
+    """Re-submit a source manifest's rows commit-pinned at their archived SHAs.
+
+    The ladder experiment's submit path: the SOURCE manifest (read READ-ONLY,
+    never touched) fixes WHAT to scan — every selected row is re-submitted at
+    its recorded commit_hash with snapshot_date carried over verbatim (pinned
+    HEAD rows included: they submit at the archived SHA, never re-resolved) —
+    while the knowledge-DB state behind this rung's data_dir fixes what it is
+    scanned AGAINST. No GitHub resolution happens at all, so a submit worker is
+    just one project's import-check + analysis POSTs.
+
+    Selection: every source row, or happy-terminal rows only with
+    only_completed; dedupe_sha collapses rows sharing (git_url, commit_hash)
+    onto the first, so the same frozen tree is scanned once even when several
+    snapshot_dates pinned to it. Rows without a commit_hash cannot be frozen
+    and become 'skipped' rung-manifest rows (reason 'no pinned commit in
+    source'). The RUNG manifest's own (git_url, snapshot_date) dedupe applies,
+    so re-runs are resumable/idempotent per rung; the rung dir's denylist —
+    merged with the source dir's, if one exists — is honoured unless
+    ignore_denylist. Projects the server no longer has (archived project_ids
+    are stale after `run.py clean`) are re-imported by git_url.
+
+    dry_run prints the selection/dedup/skip summary and writes NOTHING
+    (`client` may be None then). Returns the in-flight records, like
+    import_and_schedule.
+    """
+    if not source_manifest.exists():
+        log.warning("no source manifest at %s", source_manifest)
+        return []
+    source_rows = [
+        json.loads(l)
+        for l in source_manifest.read_text(encoding="utf-8").splitlines()
+        if l.strip()
+    ]
+    selected = [
+        r for r in source_rows
+        if not only_completed or r.get("status") in HAPPY_TERMINAL
+    ]
+    n_selected = len(selected)
+    if dedupe_sha:
+        # Keep the first row per (git_url, commit_hash); sha-less rows can't
+        # alias a tree, so they pass through to the skip path individually.
+        deduped: list[dict] = []
+        seen_sha: set[tuple[str, str]] = set()
+        for r in selected:
+            sha = r.get("commit_hash")
+            if sha:
+                key = (r.get("git_url"), sha)
+                if key in seen_sha:
+                    continue
+                seen_sha.add(key)
+            deduped.append(r)
+        selected = deduped
+
+    seen = _load_existing_manifest(data_dir)
+    denylist = {} if ignore_denylist else {
+        **load_denylist(source_manifest.parent),
+        **load_denylist(data_dir),
+    }
+
+    # Disposition pass — pure bookkeeping, no client: what each selected row
+    # will become in the rung manifest.
+    dispositions: list[tuple[str, dict]] = []
+    for r in selected:
+        key = (r.get("git_url"), r.get("snapshot_date"))
+        if key in seen:
+            disposition = "already"
+        elif not r.get("commit_hash"):
+            disposition = "no-sha"
+        elif key in denylist:
+            disposition = "denylist"
+        else:
+            disposition = "submit"
+        dispositions.append((disposition, r))
+    counts = Counter(d for d, _ in dispositions)
+
+    log.info(
+        "%sresubmit-frozen from %s: %d source row(s) -> %d selected%s -> "
+        "%d after sha-dedupe; %d already in rung manifest, %d missing "
+        "commit_hash, %d denylisted, %d to submit",
+        "[dry-run] " if dry_run else "", source_manifest, len(source_rows),
+        n_selected, " (completed/success only)" if only_completed else "",
+        len(selected), counts.get("already", 0), counts.get("no-sha", 0),
+        counts.get("denylist", 0), counts.get("submit", 0),
+    )
+    if dry_run:
+        return []
+
+    try:
+        project_ids = {
+            p["url"]: p["id"] for p in client.list_projects(org_id) if p.get("url")
+        }
+    except CodeClarityError as e:
+        log.warning(
+            "could not list projects (%s); falling back to the rung manifest's ids", e,
+        )
+        project_ids = _load_project_ids(data_dir)
+    ids_lock = threading.Lock()
+
+    work: dict[str, list[tuple[str, dict]]] = {}
+    for disposition, r in dispositions:
+        if disposition != "already":
+            work.setdefault(r["git_url"], []).append((disposition, r))
+
+    def _process(items: list[tuple[str, dict]]) -> list[AnalysisRecord]:
+        out: list[AnalysisRecord] = []
+        project_id: str | None = None
+        import_failed = False
+        for disposition, rec in items:
+            spec = _spec_from_record(rec)
+            if disposition == "no-sha":
+                out.append(_skip_record(
+                    spec, rec.get("snapshot_date") or "*",
+                    "no pinned commit in source",
+                ))
+                continue
+            if disposition == "denylist":
+                deny = denylist[(rec["git_url"], rec["snapshot_date"])]
+                log.info(
+                    "skipping denylisted %s@%s: %s",
+                    rec["git_url"], rec["snapshot_date"], deny.get("reason"),
+                )
+                out.append(_skip_record(
+                    spec, rec["snapshot_date"], f"denylist: {deny.get('reason')}",
+                ))
+                continue
+            if import_failed:
+                continue  # the project-wide "*" skip row already covers this
+            if project_id is None:
+                try:
+                    project_id = _ensure_project_id(
+                        client, org_id, spec, project_ids, ids_lock, integration_id,
+                    )
+                except CodeClarityError as e:
+                    log.warning("import failed for %s: %s", rec["git_url"], e)
+                    import_failed = True
+                    out.append(_skip_record(spec, "*", f"import: {e}"))
+                    continue
+            snap = Snapshot(
+                date=rec["snapshot_date"],
+                commit_hash=rec["commit_hash"],
+                committed_at=rec.get("committed_at"),
+            )
+            out.append(_submit_analysis(
+                client, org_id, project_id, analyzer_id, spec, rec["branch"], snap,
+            ))
+        return out
+
+    pending: list[AnalysisRecord] = []
+    appended = Counter()
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_process, items) for items in work.values()]
+        # Submission (not completion) order, as in import_and_schedule: rows
+        # land grouped per project, in source-manifest order — deterministic.
+        for future in futures:
+            for rec_out in future.result():
+                _append_record(data_dir, rec_out)
+                appended[rec_out.status] += 1
+                if rec_out.status != "skipped":
+                    pending.append(rec_out)
+
+    log.info(
+        "resubmit-frozen: appended %d record(s) (%s) to %s",
+        sum(appended.values()), dict(appended), _manifest_path(data_dir),
+    )
+    return pending
 
 
 def _progress_sig(analysis: dict) -> tuple:

@@ -347,6 +347,70 @@ def presence_intervals(vulns: pd.DataFrame, analyses: pd.DataFrame) -> pd.DataFr
     return pd.DataFrame(rows, columns=_INTERVAL_COLS)
 
 
+def merge_day_resolution(intervals: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
+    """Fold mined day-resolution fixes into presence intervals.
+
+    `intervals` is `presence_intervals` output; `events` is the miner's
+    remediation_events table (`js_vuln_study.remediation` — one row per
+    mining unit, status in {found, ambiguous, not_found}). Units carry no
+    vulnerability_id, so matching is on (project_id, affected_dependency,
+    last_seen): every event=1 interval of that dependency ending at that
+    snapshot shares the unit's mined fix commit. Adds two columns and
+    rewrites one:
+
+    * resolution — 'day' for event=1 intervals matched to a `found` event
+      (duration_days is REWRITTEN to (fixed_at - first_seen).days); 'quarter'
+      for everything else (durations untouched).
+    * excluded — True for event=1 intervals whose matching events are all
+      `ambiguous` (keep them out of KM fits, but count them); False otherwise.
+
+    When several `found` events share a key (two vulnerable version sets of
+    the same dependency fixed in the same window), the LATEST fixed_at wins —
+    conservative, since an interval only ends once its whole version set is
+    gone. A `found` fixed_at earlier than first_seen (clock skew on the
+    mined committer date) is ignored and the row stays at quarter resolution.
+
+    Worked example — interval [first_seen 2024-01-01, last_seen 2024-04-01],
+    event=1, quarterly duration 182 d (fix observed at the 2024-07-01
+    snapshot): a `found` event with fixed_at 2024-04-20 rewrites
+    duration_days to 110 and sets resolution='day'; an `ambiguous` event
+    instead sets excluded=True and leaves the 182 d quarter duration as is.
+    """
+    out = intervals.copy()
+    out["resolution"] = "quarter"
+    out["excluded"] = False
+    if out.empty or events is None or len(events) == 0:
+        return out
+
+    last_seen = pd.to_datetime(events["last_seen"], errors="coerce")
+    fixed_at = pd.to_datetime(events["fixed_at"], errors="coerce", utc=True)
+    fixed_at = fixed_at.dt.tz_localize(None).dt.normalize()
+    found: dict[tuple, pd.Timestamp] = {}
+    ambiguous: set[tuple] = set()
+    for pid, dep, ls, status, fx in zip(
+        events["project_id"], events["affected_dependency"], last_seen,
+        events["status"], fixed_at,
+    ):
+        key = (pid, dep, ls)
+        if status == "found" and pd.notna(fx):
+            if key not in found or fx > found[key]:
+                found[key] = fx
+        elif status == "ambiguous":
+            ambiguous.add(key)
+
+    for idx in out.index[out["event"] == 1]:
+        key = (out.at[idx, "project_id"], out.at[idx, "affected_dependency"],
+               out.at[idx, "last_seen"])
+        if key in found:
+            fx = found[key]
+            if fx >= out.at[idx, "first_seen"]:
+                out.at[idx, "duration_days"] = int((fx - out.at[idx, "first_seen"]).days)
+                out.at[idx, "resolution"] = "day"
+        elif key in ambiguous:
+            out.at[idx, "excluded"] = True
+    return out
+
+
 def km_curve(duration_days, event):
     """Kaplan–Meier estimator. Returns (times, survival) numpy arrays.
 

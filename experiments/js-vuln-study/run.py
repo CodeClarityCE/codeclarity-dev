@@ -11,6 +11,10 @@ Subcommands:
   collect   — flatten raw blobs into Parquet tables
   triangulate — cross-check a stratified HEAD subsample against independent
               scanners (npm audit, osv-scanner)
+  resubmit-frozen — re-submit a source manifest's rows commit-pinned at their
+              archived SHAs (knowledge-staleness ladder rung re-scan)
+  mine-lag  — mine each repo's lockfile history for day-resolution fix
+              commits of the survival analysis's event=1 intervals
   clean     — bulk-delete the org's projects/analyses (backlog clear), and/or
               sweep the downloader's on-disk clones (--clones / --clones-only)
 """
@@ -37,6 +41,7 @@ from js_vuln_study.orchestrator import (
     import_and_schedule,
     poll_and_collect,
     poll_with_retries,
+    resubmit_frozen,
     retry_failed,
 )
 from js_vuln_study.provenance import capture_run_meta
@@ -45,7 +50,22 @@ from js_vuln_study.sample import ProjectSpec, build_sample, load_sample
 
 log = logging.getLogger("js_vuln_study.run")
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+def _data_dir() -> Path:
+    """`data/` beside this file, or JS_VULN_DATA_DIR — absolute, or relative to
+    this directory (e.g. JS_VULN_DATA_DIR=data-ladder/rung-2024-01-01 for a
+    knowledge-staleness ladder rung). Every artifact path (manifest, caches,
+    raw blobs, tables) derives from it, so poll/collect follow the override
+    unchanged. Read once at import, like the endpoint bases in sample.py —
+    export it in the shell, not in .env."""
+    override = os.environ.get("JS_VULN_DATA_DIR")
+    base = Path(__file__).resolve().parent
+    if not override:
+        return base / "data"
+    path = Path(override)
+    return path if path.is_absolute() else base / path
+
+
+DATA_DIR = _data_dir()
 SAMPLE_PATH = DATA_DIR / "sample.json"
 SETUP_CACHE = DATA_DIR / "setup.json"
 PROBE_CACHE = DATA_DIR / "repo_probe_cache.jsonl"
@@ -175,6 +195,37 @@ def cmd_retry(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
+    source = Path(args.from_manifest)
+    if args.dry_run:
+        # Pure selection preview off the source manifest + rung-dir state — no
+        # client, no org provisioning, nothing written (not even setup.json).
+        resubmit_frozen(
+            None, "", "", source, DATA_DIR,
+            only_completed=args.only_completed, dedupe_sha=args.dedupe_sha,
+            dry_run=True, ignore_denylist=args.ignore_denylist,
+        )
+        return 0
+    with _client() as client:
+        org_id, analyzer_id, integration_id = _ensure_setup(client)
+        resubmit_frozen(
+            client, org_id, analyzer_id, source, DATA_DIR,
+            integration_id=integration_id,
+            only_completed=args.only_completed, dedupe_sha=args.dedupe_sha,
+            ignore_denylist=args.ignore_denylist,
+        )
+        capture_run_meta(
+            client, org_id, analyzer_id, DATA_DIR,
+            extra={
+                "cmd": "resubmit-frozen",
+                "source_manifest": str(source),
+                "only_completed": args.only_completed,
+                "dedupe_sha": args.dedupe_sha,
+            },
+        )
+    return 0
+
+
 def cmd_collect(args: argparse.Namespace) -> int:
     build_tables(DATA_DIR, include_deps=not args.no_deps)
     return 0
@@ -185,6 +236,13 @@ def cmd_triangulate(args: argparse.Namespace) -> int:
 
     out = Path(args.out) if args.out else DATA_DIR / "tables" / "triangulation.parquet"
     return run_triangulation(DATA_DIR, n=args.n, out=out, dry_run=args.dry_run)
+
+
+def cmd_mine_lag(args: argparse.Namespace) -> int:
+    from js_vuln_study.remediation import run_mining
+
+    out = Path(args.out) if args.out else DATA_DIR / "tables" / "remediation_events.parquet"
+    return run_mining(DATA_DIR, out=out, limit=args.limit, dry_run=args.dry_run)
 
 
 def _clone_keep_set(
@@ -395,6 +453,40 @@ def main() -> int:
     add_ignore_denylist(pr)
     pr.set_defaults(func=cmd_retry)
 
+    prf = sub.add_parser(
+        "resubmit-frozen",
+        help="re-submit a source manifest's rows commit-pinned at their "
+        "archived SHAs into this DATA_DIR (ladder rung re-scan; no GitHub "
+        "resolution, no sample.json needed)",
+    )
+    prf.add_argument(
+        "--from",
+        dest="from_manifest",
+        required=True,
+        metavar="MANIFEST",
+        help="source manifest.jsonl to re-drive, read-only "
+        "(e.g. data/archive-run-2026-06-snapshot/manifest.jsonl)",
+    )
+    prf.add_argument(
+        "--only-completed",
+        action="store_true",
+        help="select only rows whose source status is completed/success",
+    )
+    prf.add_argument(
+        "--dedupe-sha",
+        action="store_true",
+        help="collapse rows sharing (git_url, commit_hash) onto the first, so "
+        "the same frozen tree is scanned once even when several snapshot_dates "
+        "pinned to it",
+    )
+    prf.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the selection/dedup/skip summary without writing anything",
+    )
+    add_ignore_denylist(prf)
+    prf.set_defaults(func=cmd_resubmit_frozen)
+
     pc = sub.add_parser("collect", help="build tidy Parquet tables from raw blobs")
     pc.add_argument(
         "--no-deps",
@@ -426,6 +518,32 @@ def main() -> int:
         help="print the selected subsample and scanner availability without scanning",
     )
     pt.set_defaults(func=cmd_triangulate)
+
+    pml = sub.add_parser(
+        "mine-lag",
+        help="mine day-resolution fix commits for the survival analysis's "
+        "event=1 intervals from the repos' root-lockfile git history",
+    )
+    pml.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="mine only the first N units (deterministic unit_key order) — "
+        "smoke runs; already-mined units are skipped either way",
+    )
+    pml.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the unit count and projected request budget without "
+        "fetching anything",
+    )
+    pml.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="output parquet path (default data/tables/remediation_events.parquet)",
+    )
+    pml.set_defaults(func=cmd_mine_lag)
 
     pcl = sub.add_parser(
         "clean",
