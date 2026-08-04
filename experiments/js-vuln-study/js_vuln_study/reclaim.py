@@ -48,6 +48,12 @@ _UUID_RE = re.compile(
 _COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9._][A-Za-z0-9._-]{0,254}$")
 
+# Directory name reserved for the downloader's shared clone cache
+# ({root}/{org}/cache). Unlike a checkout leaf it is a long-lived cache, not a
+# per-analysis input, so reclaim/sweep must never treat it as reclaimable at
+# any level of the tree.
+CACHE_DIR_NAME = "cache"
+
 _UNSET = object()
 _root_cache: object = _UNSET
 _warned_missing = False
@@ -150,6 +156,8 @@ def is_uuid(value: str | None) -> bool:
 def is_leaf_shaped(value: str | None) -> bool:
     """True when `value` looks like something the downloader would have created."""
     if not value or value in (".", "..") or ".." in value:
+        return False
+    if value == CACHE_DIR_NAME:  # the shared clone cache is never a checkout leaf
         return False
     return bool(_COMMIT_RE.match(value) or _BRANCH_RE.match(value))
 
@@ -291,6 +299,10 @@ def sweep(
         if not project_dir.is_dir() or project_dir.is_symlink():
             continue  # tolerate stray files like .DS_Store
         project_id = project_dir.name
+        if project_id == CACHE_DIR_NAME:
+            rep.scanned += 1
+            rep.kept.append((project_dir, "cache"))
+            continue
         if not is_uuid(project_id):
             rep.scanned += 1
             rep.kept.append((project_dir, "shape-rejected"))
@@ -301,6 +313,9 @@ def sweep(
                 continue
             rep.scanned += 1
             leaf = leaf_dir.name
+            if leaf == CACHE_DIR_NAME:
+                rep.kept.append((leaf_dir, "cache"))
+                continue
             if not is_leaf_shaped(leaf):
                 rep.kept.append((leaf_dir, "shape-rejected"))
                 continue

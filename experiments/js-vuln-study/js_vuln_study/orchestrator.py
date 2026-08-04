@@ -18,9 +18,12 @@ import json
 import logging
 import os
 import random
+import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
@@ -58,6 +61,17 @@ STARTED_TIMEOUT = int(os.environ.get("JS_VULN_STARTED_TIMEOUT", str(24 * 60 * 60
 # (waiting for the downloader / dispatcher to pick it up).
 QUEUED_STATUSES = {"started", "queued", "", None}
 
+# Project-level submit parallelism: one worker resolves all snapshot dates for
+# one project (GitHub API calls) and submits its analyses. Manifest writes stay
+# on the main thread — the workers only build records.
+SUBMIT_WORKERS = int(os.environ.get("JS_VULN_SUBMIT_WORKERS", "8"))
+
+
+def _utcnow_iso() -> str:
+    # datetime, not the time module: poll tests replace orchestrator.time with a
+    # fake clock that only implements time()/sleep().
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 @dataclass
 class AnalysisRecord:
@@ -76,6 +90,11 @@ class AnalysisRecord:
     analysis_id: str | None
     status: str
     error: str | None = None
+    # ISO-UTC telemetry stamps: when the analysis was submitted and when the
+    # poll loop saw it go terminal. Older manifests predate both fields, so
+    # every reader must .get them.
+    submitted_at: str | None = None
+    terminal_at: str | None = None
 
 
 def _manifest_path(data_dir: Path) -> Path:
@@ -88,19 +107,16 @@ def _append_record(data_dir: Path, rec: AnalysisRecord) -> None:
         f.write(json.dumps(asdict(rec)) + "\n")
 
 
-def _record_skip(
-    data_dir: Path,
-    spec: ProjectSpec,
-    snapshot_date: str,
-    reason: str,
-) -> AnalysisRecord:
-    """Append a 'skipped' manifest row for a (project, snapshot) pair dropped
-    before an analysis could be submitted, so `collect` can report true coverage.
+def _skip_record(spec: ProjectSpec, snapshot_date: str, reason: str) -> AnalysisRecord:
+    """Build (without writing) a 'skipped' manifest row for a (project, snapshot)
+    pair dropped before an analysis could be submitted, so `collect` can report
+    true coverage. Kept append-free so submit workers can build skip rows while
+    the main thread stays the manifest's single writer.
 
     snapshot_date is "*" for project-wide drops (resolution/import failure, where
     no individual snapshot is known yet).
     """
-    rec = AnalysisRecord(
+    return AnalysisRecord(
         npm_name=spec.npm_name,
         tier=spec.tier,
         rank=spec.rank,
@@ -114,6 +130,16 @@ def _record_skip(
         status="skipped",
         error=reason,
     )
+
+
+def _record_skip(
+    data_dir: Path,
+    spec: ProjectSpec,
+    snapshot_date: str,
+    reason: str,
+) -> AnalysisRecord:
+    """Build and append a 'skipped' manifest row (see _skip_record)."""
+    rec = _skip_record(spec, snapshot_date, reason)
     _append_record(data_dir, rec)
     return rec
 
@@ -151,6 +177,72 @@ def _load_project_ids(data_dir: Path) -> dict[str, str]:
     return ids
 
 
+# ---- unresolvable-commit denylist ------------------------------------------
+
+DENYLIST_FILENAME = "unresolvable_commits.jsonl"
+
+# Manifest `error` fragments that mark a (git_url, snapshot_date) as permanently
+# unresolvable — re-driving it re-fails identically, so it's denylisted instead:
+#   * "CommitUnresolvable" — the downloader's failure_reason for a historical
+#     commit that no longer exists in the remote (git.go ErrCommitUnresolvable);
+#     the whole wrapped error is "CommitUnresolvable: commit <sha> in <url>: …".
+#   * "failure at stage-0/download; no plugin result" — _failure_reason's
+#     fallback for a download-stage failure with no failure_reason recorded.
+#     Empirically the stable signature of the unresolvable-commit set: the same
+#     225 (git_url, snapshot_date) pairs carry exactly this error in both
+#     data/manifest.jsonl and data/archive-run-2026-06-snapshot/manifest.jsonl.
+# "context deadline exceeded" (download timeout) is deliberately NOT matched —
+# a timeout can succeed on retry.
+UNRESOLVABLE_REASON_MARKERS = (
+    "CommitUnresolvable",
+    "failure at stage-0/download; no plugin result",
+)
+
+
+def _denylist_path(data_dir: Path) -> Path:
+    return data_dir / DENYLIST_FILENAME
+
+
+def is_unresolvable_reason(error: str | None) -> bool:
+    """True when a manifest error marks the commit as permanently unresolvable."""
+    return bool(error) and any(m in error for m in UNRESOLVABLE_REASON_MARKERS)
+
+
+def load_denylist(data_dir: Path) -> dict[tuple[str, str], dict]:
+    """Return {(git_url, snapshot_date): row} from the denylist file."""
+    path = _denylist_path(data_dir)
+    if not path.exists():
+        return {}
+    out: dict[tuple[str, str], dict] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        out[(row["git_url"], row["snapshot_date"])] = row
+    return out
+
+
+def record_unresolvable(data_dir: Path, rec: dict, reason: str | None) -> dict:
+    """Append one denylist row and return it. Callers dedup via load_denylist —
+    this only appends, so the file stays a plain audit log."""
+    row = {
+        "git_url": rec.get("git_url"),
+        "snapshot_date": rec.get("snapshot_date"),
+        "commit": rec.get("commit_hash"),
+        "reason": reason,
+        "recorded_at": _utcnow_iso(),
+    }
+    path = _denylist_path(data_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+    log.info(
+        "denylisted %s@%s (%s): %s",
+        row["git_url"], row["snapshot_date"], row["commit"], reason,
+    )
+    return row
+
+
 def import_and_schedule(
     client: CodeClarityClient,
     org_id: str,
@@ -159,16 +251,24 @@ def import_and_schedule(
     data_dir: Path,
     integration_id: str | None = None,
     skip_head_only: bool = False,
+    ignore_denylist: bool = False,
+    max_workers: int = SUBMIT_WORKERS,
 ) -> list[AnalysisRecord]:
     """Import each project and kick off one analysis per snapshot.
+
+    Projects are processed on a thread pool (snapshot resolution is GitHub-API
+    bound and dominated the old serial submit); the manifest stays single-writer
+    — workers only build records, the main thread appends them in project order,
+    so the output is byte-identical to a serial run.
 
     Returns the list of in-flight analysis records (status='submitted' or 'failed-submit').
     """
     seen = _load_existing_manifest(data_dir)
+    denylist = {} if ignore_denylist else load_denylist(data_dir)
     project_ids = _load_project_ids(data_dir)
-    pending: list[AnalysisRecord] = []
+    ids_lock = threading.Lock()
 
-    for spec in projects:
+    def _process(spec: ProjectSpec) -> list[AnalysisRecord]:
         try:
             # HEAD-only is the default: pass an empty date grid so we skip the
             # per-repo historical commit lookups entirely and only resolve HEAD.
@@ -180,15 +280,14 @@ def import_and_schedule(
             )
         except Exception as e:  # noqa: BLE001 — we want to log and continue per project
             log.warning("snapshot resolution failed for %s: %s", spec.git_url, e)
-            _record_skip(data_dir, spec, "*", f"snapshot-resolution: {e}")
-            continue
+            return [_skip_record(spec, "*", f"snapshot-resolution: {e}")]
 
         if branch is None or not snapshots:
             log.info("skipping %s: no default branch / no snapshots", spec.git_url)
-            _record_skip(data_dir, spec, "*", "no default branch / no snapshots")
-            continue
+            return [_skip_record(spec, "*", "no default branch / no snapshots")]
 
-        project_id = project_ids.get(spec.git_url)
+        with ids_lock:
+            project_id = project_ids.get(spec.git_url)
         if project_id is None:
             try:
                 project_id = client.import_project(
@@ -200,19 +299,37 @@ def import_and_schedule(
                 )
             except CodeClarityError as e:
                 log.warning("import failed for %s: %s", spec.git_url, e)
-                _record_skip(data_dir, spec, "*", f"import: {e}")
-                continue
-            project_ids[spec.git_url] = project_id
+                return [_skip_record(spec, "*", f"import: {e}")]
+            with ids_lock:
+                project_ids[spec.git_url] = project_id
 
+        out: list[AnalysisRecord] = []
         for snap in snapshots:
             key = (spec.git_url, snap.date)
             if key in seen:
                 continue
+            if key in denylist:
+                log.info(
+                    "skipping denylisted %s@%s: %s",
+                    spec.git_url, snap.date, denylist[key].get("reason"),
+                )
+                out.append(_skip_record(spec, snap.date, f"denylist: {denylist[key].get('reason')}"))
+                continue
             if snap.date == "HEAD" and snap.commit_hash is None:
                 snap = _pin_head(spec, branch, snap)
-            rec = _submit_analysis(client, org_id, project_id, analyzer_id, spec, branch, snap)
-            _append_record(data_dir, rec)
-            pending.append(rec)
+            out.append(_submit_analysis(client, org_id, project_id, analyzer_id, spec, branch, snap))
+        return out
+
+    pending: list[AnalysisRecord] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_process, spec) for spec in projects]
+        # Iterate in submission (not completion) order: manifest rows land
+        # grouped per project, in the sample's order — deterministic output.
+        for future in futures:
+            for rec in future.result():
+                _append_record(data_dir, rec)
+                if rec.status != "skipped":
+                    pending.append(rec)
 
     return pending
 
@@ -275,6 +392,7 @@ def _submit_analysis(
         analysis_id=analysis_id,
         status=status,
         error=err,
+        submitted_at=_utcnow_iso(),
     )
 
 
@@ -315,6 +433,7 @@ def retry_failed(
     date: str | None = None,
     project: str | None = None,
     dry_run: bool = False,
+    ignore_denylist: bool = False,
 ) -> list[AnalysisRecord]:
     """Re-submit sad-terminal manifest rows and replace them in place.
 
@@ -324,12 +443,19 @@ def retry_failed(
     fresh analysis_id, status 'submitted', error cleared — never appended, so
     the (git_url, snapshot_date) dedupe key stays unique. Returns the
     re-submitted records.
+
+    Rows on the unresolvable-commit denylist — or whose current error already
+    carries an unresolvable-commit signature (recorded to the denylist on the
+    spot) — are not re-driven: the row is converted in place to a 'skipped'
+    record, keeping the (git_url, snapshot_date) key unique and moving it out
+    of the retryable set. --ignore-denylist disables both.
     """
     path = _manifest_path(data_dir)
     if not path.exists():
         log.warning("no manifest at %s", path)
         return []
     statuses = set(statuses) if statuses else set(RETRYABLE_STATUSES)
+    denylist = {} if ignore_denylist else load_denylist(data_dir)
 
     records = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     selected = [
@@ -341,6 +467,7 @@ def retry_failed(
     log.info("retry: %d of %d manifest rows match statuses=%s", len(selected), len(records), sorted(statuses))
 
     resubmitted: list[AnalysisRecord] = []
+    denylist_skipped = 0
     for i in selected:
         rec = records[i]
         if not rec.get("project_id") or not rec.get("branch"):
@@ -351,6 +478,27 @@ def retry_failed(
                 rec.get("npm_name"), rec.get("snapshot_date"), rec.get("status"),
             )
             continue
+        if not ignore_denylist:
+            key = (rec.get("git_url"), rec.get("snapshot_date"))
+            deny = denylist.get(key)
+            if deny is None and is_unresolvable_reason(rec.get("error")):
+                if dry_run:
+                    deny = {"reason": rec.get("error")}  # don't write in dry-run
+                else:
+                    deny = record_unresolvable(data_dir, rec, rec.get("error"))
+                    denylist[key] = deny
+            if deny is not None:
+                denylist_skipped += 1
+                if dry_run:
+                    log.info(
+                        "[dry-run] would skip denylisted %s@%s: %s",
+                        rec["npm_name"], rec["snapshot_date"], deny.get("reason"),
+                    )
+                    continue
+                rec["status"] = "skipped"
+                rec["error"] = f"denylist: {deny.get('reason')}"
+                _rewrite_manifest(path, records)
+                continue
         if dry_run:
             log.info(
                 "[dry-run] would resubmit %s@%s (%s, was %s)",
@@ -373,7 +521,10 @@ def retry_failed(
         _rewrite_manifest(path, records)
 
     if not dry_run:
-        log.info("retry: resubmitted %d row(s)", len(resubmitted))
+        log.info(
+            "retry: resubmitted %d row(s), denylist-skipped %d",
+            len(resubmitted), denylist_skipped,
+        )
     return resubmitted
 
 
@@ -495,6 +646,7 @@ def poll_and_collect(
         if r.get("status") == "submitted" and r.get("analysis_id")
     ]
     log.info("polling %d active analyses", len(active_idx))
+    denylist = load_denylist(data_dir)
 
     now = time.time()
     # last_progress: wall-clock of the most recent observed forward progress.
@@ -525,6 +677,7 @@ def poll_and_collect(
                 if STARTED_TIMEOUT and time.time() - first_seen[i] > STARTED_TIMEOUT:
                     rec["status"] = "failed"
                     rec["error"] = f"poll error past started ceiling: {e}"
+                    rec["terminal_at"] = _utcnow_iso()
                     _rewrite_manifest(path, records)
                 else:
                     still_active.append(i)
@@ -548,14 +701,20 @@ def poll_and_collect(
             if status in TERMINAL_STATUSES or status == "cancelled":
                 rec["status"] = status
                 if status in HAPPY_TERMINAL:
-                    _persist_results(client, org_id, rec, data_dir)
+                    _persist_results(client, org_id, rec, data_dir, analysis)
                 else:
                     rec["error"] = _failure_reason(client, org_id, rec, analysis)
-                    _persist_results(client, org_id, rec, data_dir)
+                    _persist_results(client, org_id, rec, data_dir, analysis)
                     log.info(
                         "analysis %s terminated status=%s: %s",
                         rec["analysis_id"], status, rec["error"],
                     )
+                    # An unresolvable commit re-fails identically on every
+                    # re-drive — denylist it so submit/retry stop re-driving it.
+                    if is_unresolvable_reason(rec.get("error")):
+                        key = (rec.get("git_url"), rec.get("snapshot_date"))
+                        if key not in denylist:
+                            denylist[key] = record_unresolvable(data_dir, rec, rec["error"])
                 # Results are persisted (and _failure_reason has already read
                 # the plugin blobs over the API), so the checkout is dead weight.
                 # Sad-terminal clones are reclaimed too: they are often partial
@@ -584,6 +743,7 @@ def poll_and_collect(
                 still_active.append(i)
             # Flush manifest after every transition so Ctrl-C never loses progress.
             if terminated:
+                rec["terminal_at"] = _utcnow_iso()
                 _rewrite_manifest(path, records)
 
         active_idx = still_active
@@ -602,6 +762,47 @@ def poll_and_collect(
     _rewrite_manifest(path, records)
     if reclaimed_bytes:
         log.info("poll complete; reclaimed %.1f MB of clones", reclaimed_bytes / 1e6)
+
+
+def poll_with_retries(
+    client: CodeClarityClient,
+    org_id: str,
+    analyzer_id: str,
+    data_dir: Path,
+    auto_retry: int = 2,
+    ignore_denylist: bool = False,
+) -> None:
+    """poll_and_collect, then up to `auto_retry` retry+poll passes.
+
+    After each convergence, sad-terminal rows are re-driven through
+    retry_failed (which honours the denylist unless ignore_denylist) and polled
+    again. Stops early once no retryable rows remain or a pass re-submits
+    nothing (everything left is denylisted or unrebuildable).
+    """
+    poll_and_collect(client, org_id, data_dir)
+    for attempt in range(1, auto_retry + 1):
+        path = _manifest_path(data_dir)
+        if not path.exists():
+            return
+        records = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        retryable = [r for r in records if r.get("status") in RETRYABLE_STATUSES]
+        if not retryable:
+            log.info("auto-retry: no retryable rows — done after %d pass(es)", attempt - 1)
+            return
+        log.info(
+            "auto-retry pass %d/%d: %d sad-terminal row(s) to re-drive",
+            attempt, auto_retry, len(retryable),
+        )
+        resubmitted = retry_failed(
+            client, org_id, analyzer_id, data_dir, ignore_denylist=ignore_denylist,
+        )
+        log.info(
+            "auto-retry pass %d/%d: resubmitted %d of %d row(s)",
+            attempt, auto_retry, len(resubmitted), len(retryable),
+        )
+        if not resubmitted:
+            return
+        poll_and_collect(client, org_id, data_dir)
 
 
 def _reclaim_for_record(org_id: str, rec: dict, active_leaves: Counter) -> int:
@@ -632,9 +833,14 @@ def _persist_results(
     org_id: str,
     rec: dict,
     data_dir: Path,
+    analysis: dict | None = None,
 ) -> None:
     out_dir = data_dir / "raw" / rec["project_id"] / rec["analysis_id"]
     out_dir.mkdir(parents=True, exist_ok=True)
+    if analysis is not None:
+        # The terminal analysis document itself — its steps carry the per-step
+        # Started_on/Ended_on stamps that collect.py turns into timing columns.
+        (out_dir / "analysis.json").write_text(json.dumps(analysis), encoding="utf-8")
     for plugin in PLUGIN_TYPES:
         try:
             blob = client.get_result(org_id, rec["project_id"], rec["analysis_id"], plugin)

@@ -144,11 +144,18 @@ to re-run and a run is resumable at any point.
    POSTs one analysis per snapshot not already in the manifest. Rows that fail
    to submit are recorded as `failed-submit`; projects/snapshots dropped
    before submission (resolution or import failure) are recorded as `skipped`
-   with the reason, so coverage accounting is never silent.
+   with the reason, so coverage accounting is never silent. Projects are
+   processed on a thread pool (`JS_VULN_SUBMIT_WORKERS`, default 8) — snapshot
+   resolution dominated the old serial submit — while manifest writes stay on
+   the main thread, so row order is deterministic. Pairs on the
+   unresolvable-commit denylist (below) are skipped with a `skipped` manifest
+   row unless `--ignore-denylist` is passed.
 
-4. **Poll until terminal**:
+4. **Poll until terminal** (then auto-retry):
    ```bash
-   python run.py poll
+   python run.py poll                    # converge, then up to 2 retry+poll passes
+   python run.py poll --auto-retry 0     # single poll pass, no re-drives
+   python run.py poll --ignore-denylist  # re-drive even denylisted pairs
    ```
    Polls all `submitted` rows with exponential backoff (10 s → 120 s),
    persists plugin results to `data/raw/{project_id}/{analysis_id}/*.json` on
@@ -166,6 +173,19 @@ to re-run and a run is resumable at any point.
    plugin's error) is captured into the manifest `error` field. Each terminal
    analysis's downloader clone is deleted once results are persisted (see
    Troubleshooting → Disk).
+   After convergence, `--auto-retry N` (default 2) re-drives the remaining
+   retryable sad-terminal rows via the retry machinery and polls again, up to
+   N passes or until nothing retryable remains — one command now covers the
+   poll → retry → poll cycle.
+   **Denylist**: `data/unresolvable_commits.jsonl` records
+   `{git_url, snapshot_date, commit, reason, recorded_at}` rows for
+   (project, snapshot) pairs whose download re-fails identically on every
+   re-drive (the downloader's `CommitUnresolvable` failure_reason, or the
+   legacy `failure at stage-0/download; no plugin result` signature — the
+   ~225-pair set that repeated across full runs). `poll` appends to it
+   automatically on such failures; `submit`/`retry` skip denylisted pairs,
+   converting them to `skipped` manifest rows, unless `--ignore-denylist` is
+   passed. Delete a line (or the file) to make a pair eligible again.
 
 5. **Retry failures** (re-drives sad-terminal rows *in place*):
    ```bash
@@ -174,6 +194,7 @@ to re-run and a run is resumable at any point.
    python run.py retry --status failed-submit   # only submission failures
    python run.py retry --date 2024-01-01        # one snapshot date (or HEAD)
    python run.py retry --project facebook/react # one project (npm_name)
+   python run.py retry --ignore-denylist        # re-drive denylisted pairs too
    ```
    Default statuses: `cancelled`, `failed`, `failed-submit`, `failure`. Each
    selected row is resubmitted with its stored snapshot (a pinned HEAD stays
@@ -217,6 +238,7 @@ edit. Summary:
 | `GITHUB_TOKEN` | **Required.** Classic PAT, `public_repo`. `GH_TOKEN` is honoured as an alias for GitHub API lookups (sample / snapshot resolution) only — **the integration setup reads `GITHUB_TOKEN` exclusively**. |
 | `JS_VULN_ORG_NAME`, `JS_VULN_ANALYZER_NAME` | Org / analyzer names provisioned on first run (defaults `js-vuln-study-2026` / `js-vuln-study-v2`). `data/setup.json` caches the provisioned IDs and **wins over these** — delete it to re-provision after renaming. |
 | `JS_VULN_POLL_TIMEOUT`, `JS_VULN_STARTED_TIMEOUT` | Client-side poll give-up rules, seconds (defaults 1200 / 86400; see Workflow step 4). |
+| `JS_VULN_SUBMIT_WORKERS` | Project-level `submit` parallelism (default 8); manifest writes stay single-threaded. |
 | `JS_VULN_CLONE_DIR` | Where the downloader's clones land on this host (default `<repo-root>/private`, correct in the devcontainer). Point at a nonexistent path to disable clone reclamation. |
 | `PG_DB_HOST/PORT/USER/PASSWORD` | Direct-Postgres fallback for provenance capture, used only when the API predates `GET /knowledge/provenance`. In dev the DB port is published on the **host only**, so this fails (expectedly) from inside a container; run_meta then records nulls. |
 

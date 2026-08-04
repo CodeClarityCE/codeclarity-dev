@@ -7,6 +7,7 @@ analysis create/get, and raw result fetch.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -48,6 +49,10 @@ class CodeClarityClient:
         )
         self._token: str | None = None
         self._token_deadline: float = 0.0
+        # The httpx.Client is thread-safe, but re-login mutates _token /
+        # _token_deadline; the lock keeps concurrent submit workers from
+        # racing a refresh (worst case without it: token torn between threads).
+        self._auth_lock = threading.Lock()
 
     def close(self) -> None:
         self._http.close()
@@ -74,9 +79,10 @@ class CodeClarityClient:
         log.info("authenticated as %s", self._email)
 
     def _auth_headers(self) -> dict[str, str]:
-        if self._token is None or time.time() >= self._token_deadline:
-            self._login()
-        return {"Authorization": f"Bearer {self._token}"}
+        with self._auth_lock:
+            if self._token is None or time.time() >= self._token_deadline:
+                self._login()
+            return {"Authorization": f"Bearer {self._token}"}
 
     def _request(
         self,

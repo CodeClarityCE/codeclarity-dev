@@ -140,6 +140,8 @@ def test_import_and_schedule_submits_pinned_head(client, resolved_head, tmp_path
     assert rows[0]["snapshot_date"] == "HEAD"  # grouping key stays HEAD
     assert rows[0]["commit_hash"] == SHA  # …but the submission is pinned
     assert rows[0]["committed_at"] == COMMITTED
+    assert rows[0]["submitted_at"]  # telemetry stamp set at submit
+    assert rows[0]["terminal_at"] is None
 
 
 def test_import_and_schedule_skips_pairs_already_in_manifest(client, resolved_head, tmp_path):
@@ -213,6 +215,178 @@ def test_import_and_schedule_records_failed_submit(client, resolved_head, tmp_pa
     assert len(pending) == 1  # failed-submit rows are returned too
 
 
+# ---- parallel submit ---------------------------------------------------------
+
+
+class DeterministicFakeClient(FakeClient):
+    """Ids derived from inputs, not call counts, so a thread-pooled run yields
+    exactly the manifest a serial run would."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_submit_projects: set[str] = set()
+
+    def import_project(self, org_id, url, name, description, integration_id=None):
+        if self.fail_import:
+            raise CodeClarityError("import boom")
+        self.imported.append(url)
+        return f"proj-{url.rsplit('/', 1)[-1]}"
+
+    def start_analysis(self, org_id, project_id, analyzer_id, branch, commit_hash=None, config=None):
+        if project_id in self.fail_submit_projects:
+            raise CodeClarityError("submit boom")
+        self.submitted.append({
+            "project_id": project_id, "branch": branch, "commit_hash": commit_hash,
+        })
+        return f"an-{project_id}-{commit_hash or branch}"
+
+
+def _grid_specs() -> list[ProjectSpec]:
+    """Six projects covering happy, dedup, denylist-free failure paths."""
+    return [
+        ProjectSpec(npm_name=f"pkg{i}", rank=i, tier="top-100",
+                    git_url=f"https://github.com/o/{repo}",
+                    github_owner="o", github_repo=repo, default_branch="main")
+        for i, repo in enumerate(["r0", "r1", "unresolvable", "nobranch", "badsubmit", "r5"])
+    ]
+
+
+@pytest.fixture
+def grid_resolver(monkeypatch):
+    """Two-snapshot grid per repo; scripted per-repo failure modes."""
+
+    def fake_resolve(owner, repo, dates=(), include_head=True):
+        if repo == "unresolvable":
+            raise RuntimeError("github down")
+        if repo == "nobranch":
+            return None, []
+        return "main", [
+            Snapshot(date="2024-01-01", commit_hash="c" * 40, committed_at=COMMITTED),
+            Snapshot(date="HEAD", commit_hash=None, committed_at=None),
+        ]
+
+    monkeypatch.setattr(orchestrator, "resolve_snapshots", fake_resolve)
+    monkeypatch.setattr(orchestrator, "resolve_head", lambda o, r, b: (SHA, COMMITTED))
+
+
+def _normalized(rows: list[dict]) -> list[dict]:
+    # submitted_at is wall-clock; everything else must match byte-for-byte.
+    return [{k: v for k, v in r.items() if k != "submitted_at"} for r in rows]
+
+
+def test_parallel_submit_produces_identical_manifest_to_serial(grid_resolver, tmp_path):
+    seeded = _mrow(status="completed", npm_name="pkg1", snapshot_date="2024-01-01",
+                   git_url="https://github.com/o/r1", commit_hash="c" * 40,
+                   project_id="proj-r1", analysis_id="an-seeded")
+    manifests: dict[int, list[dict]] = {}
+    pendings: dict[int, list] = {}
+    for workers in (1, 8):
+        data_dir = tmp_path / f"w{workers}"
+        _write_manifest(data_dir, [seeded])
+        client = DeterministicFakeClient()
+        client.fail_submit_projects = {"proj-badsubmit"}
+        pendings[workers] = orchestrator.import_and_schedule(
+            client, "org", "anlz", _grid_specs(), data_dir,
+            skip_head_only=True, max_workers=workers,
+        )
+        manifests[workers] = _read_manifest(data_dir)
+
+    assert _normalized(manifests[8]) == _normalized(manifests[1])
+    assert [r.analysis_id for r in pendings[8]] == [r.analysis_id for r in pendings[1]]
+
+    rows = manifests[8][1:]  # drop the seeded row
+    # Rows are grouped per project in sample order, snapshots in grid order.
+    assert [(r["npm_name"], r["snapshot_date"]) for r in rows] == [
+        ("pkg0", "2024-01-01"), ("pkg0", "HEAD"),
+        ("pkg1", "HEAD"),  # 2024-01-01 deduped against the seeded row
+        ("pkg2", "*"), ("pkg3", "*"),
+        ("pkg4", "2024-01-01"), ("pkg4", "HEAD"),
+        ("pkg5", "2024-01-01"), ("pkg5", "HEAD"),
+    ]
+    by_name = {(r["npm_name"], r["snapshot_date"]): r for r in rows}
+    assert by_name[("pkg0", "HEAD")]["status"] == "submitted"
+    assert by_name[("pkg0", "HEAD")]["commit_hash"] == SHA  # HEAD pinned in workers
+    assert by_name[("pkg2", "*")]["status"] == "skipped"
+    assert by_name[("pkg2", "*")]["error"].startswith("snapshot-resolution:")
+    assert by_name[("pkg3", "*")]["error"] == "no default branch / no snapshots"
+    assert by_name[("pkg4", "HEAD")]["status"] == "failed-submit"
+
+
+def test_parallel_submit_imports_each_project_once(grid_resolver, tmp_path):
+    specs = [s for s in _grid_specs() if s.github_repo in ("r0", "r1", "r5")]
+    client = DeterministicFakeClient()
+    orchestrator.import_and_schedule(
+        client, "org", "anlz", specs, tmp_path, skip_head_only=True, max_workers=8,
+    )
+    assert sorted(client.imported) == [
+        "https://github.com/o/r0", "https://github.com/o/r1", "https://github.com/o/r5",
+    ]
+
+
+# ---- denylist ----------------------------------------------------------------
+
+
+DENY_URL = "https://github.com/o/r"
+
+
+def test_import_and_schedule_skips_denylisted_pairs(client, resolved_head, tmp_path):
+    orchestrator.record_unresolvable(
+        tmp_path,
+        {"git_url": DENY_URL, "snapshot_date": "HEAD", "commit_hash": SHA},
+        "CommitUnresolvable: commit aaa in https://github.com/o/r: gone",
+    )
+    pending = orchestrator.import_and_schedule(
+        client, "org", "anlz", [_spec()], tmp_path, skip_head_only=True,
+    )
+    assert pending == []
+    assert client.submitted == []
+    (row,) = _read_manifest(tmp_path)
+    assert row["status"] == "skipped"
+    assert row["snapshot_date"] == "HEAD"  # the real date, not "*"
+    assert row["error"].startswith("denylist: CommitUnresolvable")
+
+
+def test_import_and_schedule_ignore_denylist_submits(client, resolved_head, tmp_path):
+    orchestrator.record_unresolvable(
+        tmp_path,
+        {"git_url": DENY_URL, "snapshot_date": "HEAD", "commit_hash": SHA},
+        "CommitUnresolvable: gone",
+    )
+    pending = orchestrator.import_and_schedule(
+        client, "org", "anlz", [_spec()], tmp_path,
+        skip_head_only=True, ignore_denylist=True,
+    )
+    assert len(pending) == 1
+    assert pending[0].status == "submitted"
+
+
+def test_load_denylist_round_trip_and_shape(tmp_path):
+    row = orchestrator.record_unresolvable(
+        tmp_path,
+        {"git_url": DENY_URL, "snapshot_date": "2024-01-01", "commit_hash": SHA},
+        "CommitUnresolvable: gone",
+    )
+    assert set(row) == {"git_url", "snapshot_date", "commit", "reason", "recorded_at"}
+    assert row["commit"] == SHA
+    assert row["recorded_at"]
+    loaded = orchestrator.load_denylist(tmp_path)
+    assert loaded == {(DENY_URL, "2024-01-01"): row}
+    assert orchestrator.load_denylist(tmp_path / "elsewhere") == {}
+
+
+@pytest.mark.parametrize("error,unresolvable", [
+    ("CommitUnresolvable: commit aaa in https://github.com/o/r: reference not found", True),
+    ("failure at stage-0/download; no plugin result", True),
+    ("js-sbom: UnableToClone: auth failed", False),
+    ("ongoing stall: no progress for 1200s", False),
+    ("context deadline exceeded", False),  # a timeout may succeed on retry
+    (None, False),
+    ("", False),
+])
+def test_is_unresolvable_reason(error, unresolvable):
+    assert orchestrator.is_unresolvable_reason(error) is unresolvable
+
+
 # ---- _pin_head ---------------------------------------------------------------
 
 
@@ -268,6 +442,7 @@ def test_record_skip_row_shape(tmp_path):
         "snapshot_date": "*", "commit_hash": None, "committed_at": None,
         "project_id": None, "analysis_id": None,
         "status": "skipped", "error": "why not",
+        "submitted_at": None, "terminal_at": None,
     }
     assert rec.status == "skipped"
 
@@ -349,6 +524,71 @@ def test_retry_without_manifest_warns(client, tmp_path, caplog):
     assert any("no manifest" in r.message for r in caplog.records)
 
 
+def _unresolvable_manifest(tmp_path) -> list[dict]:
+    rows = [
+        _mrow(status="failure", npm_name="a",
+              error="failure at stage-0/download; no plugin result"),
+        _mrow(status="failure", npm_name="b", snapshot_date="2024-01-01",
+              error="CommitUnresolvable: commit " + "b" * 40 + " in https://github.com/o/r: not found"),
+        _mrow(status="failed", npm_name="c", snapshot_date="2024-04-01",
+              error="ongoing stall: no progress for 1200s"),
+    ]
+    _write_manifest(tmp_path, rows)
+    return rows
+
+
+def test_retry_denylists_unresolvable_rows_in_place(client, tmp_path):
+    _unresolvable_manifest(tmp_path)
+    out = orchestrator.retry_failed(client, "org", "anlz", tmp_path)
+    assert [r.npm_name for r in out] == ["c"]  # only the stall is re-driven
+    rows = _read_manifest(tmp_path)
+    assert rows[0]["status"] == "skipped"
+    assert rows[0]["error"] == "denylist: failure at stage-0/download; no plugin result"
+    assert rows[1]["status"] == "skipped"
+    assert rows[2]["status"] == "submitted"
+    deny = orchestrator.load_denylist(tmp_path)
+    assert set(deny) == {
+        ("https://github.com/o/r", "HEAD"),
+        ("https://github.com/o/r", "2024-01-01"),
+    }
+    assert deny[("https://github.com/o/r", "HEAD")]["commit"] == SHA
+
+
+def test_retry_honours_preexisting_denylist_rows(client, tmp_path):
+    _write_manifest(tmp_path, [
+        _mrow(status="failed", error="ongoing stall: no progress for 1200s"),
+    ])
+    orchestrator.record_unresolvable(
+        tmp_path,
+        {"git_url": "https://github.com/o/r", "snapshot_date": "HEAD", "commit_hash": SHA},
+        "CommitUnresolvable: gone",
+    )
+    out = orchestrator.retry_failed(client, "org", "anlz", tmp_path)
+    assert out == []
+    assert client.submitted == []
+    (row,) = _read_manifest(tmp_path)
+    assert row["status"] == "skipped"
+    assert row["error"] == "denylist: CommitUnresolvable: gone"
+
+
+def test_retry_ignore_denylist_redrives_everything(client, tmp_path):
+    _unresolvable_manifest(tmp_path)
+    before = orchestrator.load_denylist(tmp_path)
+    out = orchestrator.retry_failed(client, "org", "anlz", tmp_path, ignore_denylist=True)
+    assert [r.npm_name for r in out] == ["a", "b", "c"]
+    assert all(r["status"] == "submitted" for r in _read_manifest(tmp_path))
+    assert orchestrator.load_denylist(tmp_path) == before == {}  # nothing recorded
+
+
+def test_retry_dry_run_never_writes_denylist(client, tmp_path):
+    before = _unresolvable_manifest(tmp_path)
+    out = orchestrator.retry_failed(client, "org", "anlz", tmp_path, dry_run=True)
+    assert out == []
+    assert client.submitted == []
+    assert _read_manifest(tmp_path) == before
+    assert orchestrator.load_denylist(tmp_path) == {}
+
+
 # ---- poll_and_collect ------------------------------------------------------------
 
 
@@ -396,10 +636,13 @@ def test_poll_happy_terminal_persists_blobs_and_reclaims_once(client, poll_env, 
     (row,) = _read_manifest(tmp_path)
     assert row["status"] == "completed"
     assert row["error"] is None
+    assert row["terminal_at"]  # stamped at the terminal transition
     out = tmp_path / "raw" / "p1" / "an-1"
     for plugin in orchestrator.PLUGIN_TYPES:
         blob = json.loads((out / f"{plugin}.json").read_text())
         assert blob["plugin"] == plugin
+    # the terminal analysis doc itself is persisted for collect's step timings
+    assert json.loads((out / "analysis.json").read_text())["status"] == "completed"
     assert poll_env.reclaims == [("p1", SHA)]  # exactly once, commit leaf
 
 
@@ -499,7 +742,28 @@ def test_poll_sad_terminal_records_failure_reason_and_reclaims(client, poll_env,
     (row,) = _read_manifest(tmp_path)
     assert row["status"] == "failure"
     assert row["error"] == "could not resolve commit"
+    assert row["terminal_at"]
     assert poll_env.reclaims == [("p1", SHA)]  # sad-terminal clones are reclaimed too
+    # not an unresolvable-commit signature -> nothing denylisted
+    assert orchestrator.load_denylist(tmp_path) == {}
+
+
+def test_poll_sad_terminal_unresolvable_commit_populates_denylist(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-1")])
+    reason = "CommitUnresolvable: commit " + SHA + " in https://github.com/o/r: not found"
+    client.scripts["an-1"] = [{"status": "failure", "failure_reason": reason, "steps": []}]
+
+    orchestrator.poll_and_collect(client, "org", tmp_path)
+
+    deny = orchestrator.load_denylist(tmp_path)
+    assert set(deny) == {("https://github.com/o/r", "HEAD")}
+    assert deny[("https://github.com/o/r", "HEAD")]["reason"] == reason
+    # polling the same failure again must not duplicate the denylist row
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-1")])
+    client.scripts["an-1"] = [{"status": "failure", "failure_reason": reason, "steps": []}]
+    orchestrator.poll_and_collect(client, "org", tmp_path)
+    lines = (tmp_path / orchestrator.DENYLIST_FILENAME).read_text().splitlines()
+    assert len([l for l in lines if l.strip()]) == 1
 
 
 def test_poll_rewrites_manifest_after_each_transition(client, poll_env, tmp_path, monkeypatch):
@@ -530,6 +794,74 @@ def test_poll_without_manifest_warns_and_returns(client, tmp_path, caplog):
     with caplog.at_level("WARNING"):
         orchestrator.poll_and_collect(client, "org", tmp_path)
     assert any("no manifest" in r.message for r in caplog.records)
+
+
+# ---- poll_with_retries -------------------------------------------------------
+
+
+def test_poll_with_retries_redrives_transient_failures(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-0")])
+    client.scripts["an-0"] = [{"status": "failure", "failure_reason": "worker crash", "steps": []}]
+    client.scripts["an-1"] = [{"status": "completed", "steps": []}]  # the re-drive
+
+    orchestrator.poll_with_retries(client, "org", "anlz", tmp_path, auto_retry=2)
+
+    (row,) = _read_manifest(tmp_path)
+    assert row["status"] == "completed"
+    assert row["analysis_id"] == "an-1"  # fresh id from the retry pass
+    assert len(client.submitted) == 1
+
+
+def test_poll_with_retries_is_bounded_by_auto_retry(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-0")])
+    for i in range(4):  # keeps failing with a non-denylist reason every pass
+        client.scripts[f"an-{i}"] = [
+            {"status": "failure", "failure_reason": "worker crash", "steps": []},
+        ]
+
+    orchestrator.poll_with_retries(client, "org", "anlz", tmp_path, auto_retry=2)
+
+    assert len(client.submitted) == 2  # exactly auto_retry re-drives, then stop
+    (row,) = _read_manifest(tmp_path)
+    assert row["status"] == "failure"
+
+
+def test_poll_with_retries_zero_passes_polls_once(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-0")])
+    client.scripts["an-0"] = [{"status": "failure", "failure_reason": "worker crash", "steps": []}]
+
+    orchestrator.poll_with_retries(client, "org", "anlz", tmp_path, auto_retry=0)
+
+    assert client.submitted == []
+    assert _read_manifest(tmp_path)[0]["status"] == "failure"
+
+
+def test_poll_with_retries_denylists_instead_of_looping(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-0")])
+    reason = "CommitUnresolvable: commit " + SHA + " in https://github.com/o/r: not found"
+    client.scripts["an-0"] = [{"status": "failure", "failure_reason": reason, "steps": []}]
+
+    orchestrator.poll_with_retries(client, "org", "anlz", tmp_path, auto_retry=5)
+
+    assert client.submitted == []  # denylisted on first failure, never re-driven
+    (row,) = _read_manifest(tmp_path)
+    assert row["status"] == "skipped"
+    assert row["error"].startswith("denylist: CommitUnresolvable")
+    assert set(orchestrator.load_denylist(tmp_path)) == {("https://github.com/o/r", "HEAD")}
+
+
+def test_poll_with_retries_ignore_denylist_keeps_redriving(client, poll_env, tmp_path):
+    _write_manifest(tmp_path, [_mrow(analysis_id="an-0")])
+    reason = "CommitUnresolvable: commit " + SHA + " in https://github.com/o/r: not found"
+    for i in range(3):
+        client.scripts[f"an-{i}"] = [{"status": "failure", "failure_reason": reason, "steps": []}]
+
+    orchestrator.poll_with_retries(
+        client, "org", "anlz", tmp_path, auto_retry=2, ignore_denylist=True,
+    )
+
+    assert len(client.submitted) == 2  # bounded by auto_retry, not the denylist
+    assert _read_manifest(tmp_path)[0]["status"] == "failure"
 
 
 # ---- _is_running / _progress_sig -------------------------------------------------

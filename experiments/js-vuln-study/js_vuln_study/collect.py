@@ -162,6 +162,48 @@ def _walk_workspaces(blob: Any) -> Iterable[tuple[str, dict]]:
                 yield name, payload
 
 
+def _duration_seconds(start: Any, end: Any) -> float | None:
+    """Seconds between two ISO timestamps; None when either is missing/invalid."""
+    try:
+        s, e = pd.Timestamp(start), pd.Timestamp(end)
+    except (ValueError, TypeError):
+        return None
+    if pd.isna(s) or pd.isna(e):
+        return None
+    return (e - s).total_seconds()
+
+
+def _step_timings(analysis: Any) -> dict[str, Any]:
+    """Flatten per-step dispatch stamps from a persisted analysis.json.
+
+    The dispatcher's Go Step struct has no JSON tags, so the steps jsonb
+    marshals as Name/Status/Started_on/Ended_on (RFC3339Nano); lowercase
+    variants are tolerated for API-written steps. Emits, per step,
+    step_<name>_started / step_<name>_ended / step_<name>_duration_s —
+    combined with the manifest's submitted_at, the downloader/queue wait
+    (first step started - submitted_at) and each plugin runtime are derivable.
+    """
+    out: dict[str, Any] = {}
+    if not isinstance(analysis, dict):
+        return out
+    for stage in (analysis.get("steps") or []):
+        if not isinstance(stage, list):
+            continue
+        for step in stage:
+            if not isinstance(step, dict):
+                continue
+            name = step.get("Name") or step.get("name")
+            if not name:
+                continue
+            col = str(name).replace("-", "_")
+            started = step.get("Started_on") or step.get("started_on") or None
+            ended = step.get("Ended_on") or step.get("ended_on") or None
+            out[f"step_{col}_started"] = started
+            out[f"step_{col}_ended"] = ended
+            out[f"step_{col}_duration_s"] = _duration_seconds(started, ended)
+    return out
+
+
 def _get_package_manager(sbom: Any) -> str | None:
     if not isinstance(sbom, dict):
         return None
@@ -253,6 +295,9 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
         sbom = _load_blob(root / "js-sbom.json")
         vfind = _load_blob(root / "vuln-finder.json")
         lic = _load_blob(root / "license-finder.json")
+        # Older runs never persisted analysis.json — _step_timings({}) is empty
+        # then, and pandas fills the timing columns with NaN for those rows.
+        analysis_doc = _load_blob(root / "analysis.json")
 
         summary = {
             "analysis_id": aid,
@@ -361,6 +406,11 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
 
         analyses_rows.append({
             **summary,
+            # Telemetry: manifest stamps (absent on pre-telemetry rows -> None)
+            # plus per-step dispatch timings from the persisted analysis doc.
+            "submitted_at": rec.get("submitted_at"),
+            "terminal_at": rec.get("terminal_at"),
+            **_step_timings(analysis_doc),
             "total_dependencies": dep_count,
             "direct_dependencies": direct_count,
             "transitive_dependencies": transitive_count,

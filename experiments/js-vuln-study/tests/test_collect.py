@@ -128,6 +128,67 @@ def test_disclosure_dates_top_level_fallback_and_empty():
     assert collect._disclosure_dates({}) == (None, None, None)
 
 
+# ---- step timings ------------------------------------------------------------
+
+# Shape of a live terminal analysis doc: the dispatcher's Go Step struct has no
+# JSON tags, so steps marshal as Name/Status/Started_on/Ended_on (RFC3339Nano).
+ANALYSIS_DOC = {
+    "id": AID,
+    "status": "completed",
+    "created_on": "2026-08-03T11:00:41.331Z",
+    "steps": [
+        [
+            {"Name": "js-sbom", "Status": "success",
+             "Started_on": "2026-08-03T11:01:04.768355005Z",
+             "Ended_on": "2026-08-03T11:01:05.861302922Z"},
+        ],
+        [
+            {"Name": "vuln-finder", "Status": "success",
+             "Started_on": "2026-08-03T11:01:22.335175638Z",
+             "Ended_on": "2026-08-03T11:01:27.503752127Z"},
+            {"Name": "license-finder", "Status": "success",
+             "Started_on": "2026-08-03T11:02:18.021660761Z",
+             "Ended_on": "2026-08-03T11:02:32.535417796Z"},
+        ],
+    ],
+}
+
+
+def test_step_timings_flattens_live_step_shape():
+    cols = collect._step_timings(ANALYSIS_DOC)
+    assert cols["step_js_sbom_started"] == "2026-08-03T11:01:04.768355005Z"
+    assert cols["step_js_sbom_ended"] == "2026-08-03T11:01:05.861302922Z"
+    assert cols["step_js_sbom_duration_s"] == pytest.approx(1.0929, abs=1e-3)
+    assert cols["step_vuln_finder_duration_s"] == pytest.approx(5.1686, abs=1e-3)
+    assert cols["step_license_finder_duration_s"] == pytest.approx(14.5138, abs=1e-3)
+
+
+def test_step_timings_tolerates_lowercase_and_missing_fields():
+    doc = {"steps": [[
+        {"name": "js-sbom", "started_on": "2026-08-03T11:01:04Z"},  # no ended_on
+        {"Status": "success"},  # no name at all -> skipped
+        "not-a-dict",
+    ], "not-a-stage"]}
+    cols = collect._step_timings(doc)
+    assert cols == {
+        "step_js_sbom_started": "2026-08-03T11:01:04Z",
+        "step_js_sbom_ended": None,
+        "step_js_sbom_duration_s": None,
+    }
+
+
+def test_step_timings_non_dict_inputs():
+    assert collect._step_timings(None) == {}
+    assert collect._step_timings([]) == {}
+    assert collect._step_timings({"steps": None}) == {}
+
+
+def test_duration_seconds_invalid_inputs():
+    assert collect._duration_seconds(None, "2026-08-03T11:01:05Z") is None
+    assert collect._duration_seconds("not a date", "2026-08-03T11:01:05Z") is None
+    assert collect._duration_seconds("2026-08-03T11:01:04Z", "2026-08-03T11:01:05Z") == 1.0
+
+
 # ---- build_tables ----------------------------------------------------------------
 
 
@@ -245,6 +306,54 @@ def test_build_tables_tolerates_missing_blobs(tmp_path):
     assert len(df) == 1
     assert df.iloc[0]["total_dependencies"] == 0
     assert df.iloc[0]["total_vulnerabilities"] == 0
+
+
+def test_build_tables_exports_step_timings_and_manifest_stamps(data_dir):
+    (data_dir / "raw" / PROJ / AID / "analysis.json").write_text(json.dumps(ANALYSIS_DOC))
+    _write_manifest(data_dir, [_row(
+        submitted_at="2026-08-03T11:00:41Z", terminal_at="2026-08-03T11:02:33Z",
+    )])
+    collect.build_tables(data_dir)
+    row = pd.read_parquet(data_dir / "tables" / "analyses.parquet").iloc[0]
+    assert row["submitted_at"] == "2026-08-03T11:00:41Z"
+    assert row["terminal_at"] == "2026-08-03T11:02:33Z"
+    assert row["step_js_sbom_started"] == "2026-08-03T11:01:04.768355005Z"
+    assert row["step_js_sbom_duration_s"] == pytest.approx(1.0929, abs=1e-3)
+    assert row["step_license_finder_ended"] == "2026-08-03T11:02:32.535417796Z"
+    # downloader/queue wait is derivable: submit -> first step dispatch
+    wait = (pd.Timestamp(row["step_js_sbom_started"]) - pd.Timestamp(row["submitted_at"]))
+    assert wait.total_seconds() == pytest.approx(23.768, abs=1e-2)
+    # the timing columns must not leak into the per-vuln/per-dep tables
+    vulns = pd.read_parquet(data_dir / "tables" / "vulns.parquet")
+    assert "step_js_sbom_started" not in vulns.columns
+    assert "submitted_at" not in vulns.columns
+
+
+def test_build_tables_tolerates_pre_telemetry_rows(data_dir):
+    # Manifest row without submitted_at/terminal_at and no analysis.json —
+    # exactly what an old run's data looks like.
+    collect.build_tables(data_dir)
+    row = pd.read_parquet(data_dir / "tables" / "analyses.parquet").iloc[0]
+    assert pd.isna(row["submitted_at"])
+    assert pd.isna(row["terminal_at"])
+    assert "step_js_sbom_started" not in row.index
+
+
+def test_build_tables_mixed_telemetry_rows(data_dir):
+    # One row with analysis.json, one completed row without: the timing columns
+    # exist and are NaN for the older row.
+    (data_dir / "raw" / PROJ / AID / "analysis.json").write_text(json.dumps(ANALYSIS_DOC))
+    aid2 = "8dd19dee-35cd-45fe-a42a-8032e5facec1"
+    (data_dir / "raw" / PROJ / aid2).mkdir(parents=True)
+    _write_manifest(data_dir, [
+        _row(submitted_at="2026-08-03T11:00:41Z", terminal_at="2026-08-03T11:02:33Z"),
+        _row(analysis_id=aid2, snapshot_date="2024-01-01"),
+    ])
+    collect.build_tables(data_dir)
+    df = pd.read_parquet(data_dir / "tables" / "analyses.parquet").set_index("analysis_id")
+    assert df.loc[AID, "step_js_sbom_duration_s"] == pytest.approx(1.0929, abs=1e-3)
+    assert pd.isna(df.loc[aid2, "step_js_sbom_duration_s"])
+    assert pd.isna(df.loc[aid2, "submitted_at"])
 
 
 # ---- coverage_report ---------------------------------------------------------

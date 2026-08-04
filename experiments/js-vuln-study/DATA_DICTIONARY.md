@@ -30,6 +30,7 @@ truth. Rows are appended by `submit`, updated in place by `poll` and `retry`
 | `analysis_id` | str \| null | CodeClarity analysis UUID. Null for `skipped` and `failed-submit` rows. |
 | `status` | str | See vocabulary below. |
 | `error` | str \| null | Failure detail for sad rows: the server's `failure_reason` (written by the downloader on unresolvable commits / download errors), a plugin `public_error`, a client-side timeout verdict, or the skip reason. |
+| `submitted_at`, `terminal_at` | str \| null | ISO-UTC telemetry stamps: when the analysis POST succeeded and when `poll` observed the terminal status. Absent (`.get`) on rows from runs predating telemetry. |
 
 ### Status vocabulary
 
@@ -45,6 +46,16 @@ truth. Rows are appended by `submit`, updated in place by `poll` and `retry`
 
 `retry` re-drives `failure` / `failed` / `cancelled` / `failed-submit` rows in
 place; `skipped` rows must go through `submit` again.
+
+## data/unresolvable_commits.jsonl
+
+Denylist of `(git_url, snapshot_date)` pairs whose historical commit is
+permanently unresolvable (the downloader's `CommitUnresolvable` failure, or the
+legacy stage-0 fallback signature). Populated automatically when `poll` or
+`retry` sees a matching sad-terminal row; consulted by `submit`/`retry`, which
+record a `skipped` manifest row instead of re-driving a clone that re-fails
+identically. Override with `--ignore-denylist`. Fields:
+`{git_url, snapshot_date, commit, reason, recorded_at}`.
 
 ## data/run_meta.jsonl and data/tables/run_meta.json
 
@@ -93,6 +104,8 @@ here — see `coverage_dropped.csv`.
 | `vulnerable_dependencies` | int | Number of **unique affected package names** — the deduplicated counterpart of `total_vulnerabilities`. |
 | `direct_vulnerabilities`, `transitive_vulnerabilities` | int | Instances split by the `direct_dependency` flag (see `vulns.parquet` caveat). Sum to `total_vulnerabilities`. |
 | `n_critical`, `n_high`, `n_medium`, `n_low`, `n_none` | int | Instances per CVSS severity class. Sum to `total_vulnerabilities` when every instance has a class. |
+| `submitted_at`, `terminal_at` | str \| null | Manifest telemetry stamps (see `manifest.jsonl`). Null for rows from runs predating telemetry. |
+| `step_<name>_started`, `step_<name>_ended`, `step_<name>_duration_s` | str/float \| null | Per-plugin-step timings (`js_sbom`, `vuln_finder`, `license_finder`, …) from the persisted analysis document. Downloader/queue wait ≈ `step_js_sbom_started − submitted_at`. Null when no `analysis.json` was persisted (pre-telemetry rows). |
 
 ## data/tables/vulns.parquet
 

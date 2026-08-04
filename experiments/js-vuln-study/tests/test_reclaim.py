@@ -209,6 +209,39 @@ def test_sweep_ignores_other_orgs(clone_tree):
     assert foreign.is_dir()
 
 
+# ---- cache dirs (downloader's shared clone cache) ---------------------------
+
+
+def test_sweep_never_touches_cache_dirs(clone_tree):
+    org_cache = clone_tree / ORG / "cache" / "github.com" / "o" / "r"
+    org_cache.mkdir(parents=True)
+    (org_cache / "pack").write_text("x" * 100)
+    projects_cache = clone_tree / ORG / "projects" / "cache"
+    projects_cache.mkdir()
+    leaf_cache = clone_tree / ORG / "projects" / PROJ / "cache"
+    leaf_cache.mkdir()
+
+    rep = reclaim.sweep(ORG, set())
+
+    assert org_cache.is_dir()  # sibling of projects/ — never walked
+    assert projects_cache.is_dir()
+    assert leaf_cache.is_dir()
+    assert rep.kept_by_reason().get("cache") == 2
+    # the cache keeps the org dir alive after everything else is pruned
+    assert (clone_tree / ORG / "cache").is_dir()
+
+
+def test_reclaim_leaf_refuses_cache(clone_tree):
+    cache = clone_tree / ORG / "projects" / PROJ / "cache"
+    cache.mkdir()
+    assert reclaim.reclaim_leaf(ORG, PROJ, "cache") == 0
+    assert cache.is_dir()
+
+
+def test_is_leaf_shaped_refuses_cache():
+    assert reclaim.is_leaf_shaped(reclaim.CACHE_DIR_NAME) is False
+
+
 # ---- in-use guard (orchestrator adapter) -----------------------------------
 
 
