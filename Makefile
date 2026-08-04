@@ -58,6 +58,18 @@ restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh config
 	@cd .cloud/scripts && sh restore-test-db.sh
 
+dump-knowledge-dated: ## Dumps the knowledge + config databases to dated files (LABEL=<label>)
+ifndef LABEL
+	$(error LABEL is not set. Usage: make dump-knowledge-dated LABEL=<label>)
+endif
+	@cd .cloud/scripts && sh dump-db-dated.sh $(LABEL)
+
+restore-knowledge-dated: ## Restores the knowledge + config databases from dated files (LABEL=<label>)
+ifndef LABEL
+	$(error LABEL is not set. Usage: make restore-knowledge-dated LABEL=<label>)
+endif
+	@cd .cloud/scripts && sh restore-knowledge-dated.sh $(LABEL)
+
 ## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
 migrate: ## Run all database migrations (api)
 	@cd api && make migrate
