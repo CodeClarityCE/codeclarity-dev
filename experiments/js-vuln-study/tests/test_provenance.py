@@ -152,6 +152,85 @@ def test_capture_survives_missing_analyzer(fake_repo, tmp_path, caplog):
     assert any("not found for read-back" in r.message for r in caplog.records)
 
 
+# ---- _knowledge_via_postgres --------------------------------------------------
+
+
+def _fake_pg8000(monkeypatch, rows_by_database):
+    """Install a fake pg8000.dbapi in sys.modules (the module is imported lazily
+    inside _knowledge_via_postgres) and return the list of executed SQL."""
+    executed = []
+
+    class FakeCursor:
+        def __init__(self, row):
+            self._row = row
+
+        def execute(self, sql):
+            executed.append(sql)
+
+        def fetchone(self):
+            return self._row
+
+    class FakeConn:
+        def __init__(self, row):
+            self._row = row
+
+        def cursor(self):
+            return FakeCursor(self._row)
+
+        def close(self):
+            pass
+
+    def connect(*, user, password, host, port, database, timeout):
+        return FakeConn(rows_by_database[database])
+
+    dbapi = SimpleNamespace(connect=connect)
+    monkeypatch.setitem(sys.modules, "pg8000", SimpleNamespace(dbapi=dbapi))
+    monkeypatch.setitem(sys.modules, "pg8000.dbapi", dbapi)
+    return executed
+
+
+def test_postgres_fallback_selects_and_reports_osv_last(monkeypatch):
+    from datetime import datetime, timezone
+
+    executed = _fake_pg8000(
+        monkeypatch,
+        {
+            "config": (
+                datetime(2026, 7, 1, tzinfo=timezone.utc),
+                "2026-07-02",
+                datetime(2026, 7, 3, tzinfo=timezone.utc),
+                datetime(2026, 8, 1, tzinfo=timezone.utc),
+            ),
+            "knowledge": (42,),
+        },
+    )
+
+    out = provenance._knowledge_via_postgres()
+
+    assert out == {
+        "knowledge_sources": {
+            "nvd": "2026-07-01T00:00:00+00:00",
+            "npm": "2026-07-02",
+            "gcve": "2026-07-03T00:00:00+00:00",
+            "osv": "2026-08-01T00:00:00+00:00",
+        },
+        "epss_rows": 42,
+    }
+    config_sql = [sql for sql in executed if "FROM config" in sql]
+    assert len(config_sql) == 1 and "osv_last" in config_sql[0]
+
+
+def test_postgres_fallback_missing_config_row_yields_nulls(monkeypatch):
+    _fake_pg8000(monkeypatch, {"config": None, "knowledge": (7,)})
+
+    out = provenance._knowledge_via_postgres()
+
+    assert out == {
+        "knowledge_sources": {"nvd": None, "npm": None, "gcve": None, "osv": None},
+        "epss_rows": 7,
+    }
+
+
 # ---- _git helpers -------------------------------------------------------------
 
 

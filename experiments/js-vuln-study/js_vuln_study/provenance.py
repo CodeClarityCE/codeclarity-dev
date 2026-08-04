@@ -140,14 +140,21 @@ def _knowledge_via_postgres() -> dict[str, Any] | None:
         return v.isoformat() if hasattr(v, "isoformat") else (v or None)
 
     try:
-        cfg = one_row("config", "SELECT nvd_last, npm_last, gcve_last FROM config LIMIT 1")
+        cfg = one_row(
+            "config", "SELECT nvd_last, npm_last, gcve_last, osv_last FROM config LIMIT 1"
+        )
         epss = one_row("knowledge", "SELECT count(*) FROM epss")
     except Exception as e:  # noqa: BLE001 — any driver/network error means "unknown"
         log.warning("direct Postgres provenance failed: %s", e)
         return None
-    nvd_last, npm_last, gcve_last = cfg if cfg else (None, None, None)
+    nvd_last, npm_last, gcve_last, osv_last = cfg if cfg else (None, None, None, None)
     return {
-        "knowledge_sources": {"nvd": iso(nvd_last), "npm": iso(npm_last), "gcve": iso(gcve_last)},
+        "knowledge_sources": {
+            "nvd": iso(nvd_last),
+            "npm": iso(npm_last),
+            "gcve": iso(gcve_last),
+            "osv": iso(osv_last),
+        },
         "epss_rows": epss[0] if epss else None,
     }
 
