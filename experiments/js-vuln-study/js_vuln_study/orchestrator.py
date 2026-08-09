@@ -95,6 +95,11 @@ class AnalysisRecord:
     # every reader must .get them.
     submitted_at: str | None = None
     terminal_at: str | None = None
+    # YYYY-MM-DD knowledge cutoff the analysis was submitted under (the
+    # vuln-finder `knowledge_asof` runtime filter — a ladder rung's dose).
+    # None means no cutoff was requested. Older manifests predate the field,
+    # so — like the telemetry stamps — every reader must .get it.
+    knowledge_asof: str | None = None
 
 
 def _manifest_path(data_dir: Path) -> Path:
@@ -381,7 +386,15 @@ def _submit_analysis(
     spec: ProjectSpec,
     branch: str,
     snap: Snapshot,
+    knowledge_asof: str | None = None,
 ) -> AnalysisRecord:
+    # knowledge_asof rides in the per-analysis plugin config (merged over the
+    # client's defaults) rather than a dedicated endpoint: vuln-finder reads it
+    # at match time to filter the knowledge DB to rows known by that date. Only
+    # sent when set, so the no-cutoff request body stays byte-identical.
+    config = (
+        {"vuln-finder": {"knowledge_asof": knowledge_asof}} if knowledge_asof else None
+    )
     try:
         analysis_id = client.start_analysis(
             org_id=org_id,
@@ -389,6 +402,7 @@ def _submit_analysis(
             analyzer_id=analyzer_id,
             branch=branch,
             commit_hash=snap.commit_hash,
+            config=config,
         )
         status = "submitted"
         err = None
@@ -411,6 +425,7 @@ def _submit_analysis(
         status=status,
         error=err,
         submitted_at=_utcnow_iso(),
+        knowledge_asof=knowledge_asof,
     )
 
 
@@ -529,9 +544,14 @@ def retry_failed(
             commit_hash=rec.get("commit_hash"),
             committed_at=rec.get("committed_at"),
         )
+        # Carry the row's knowledge cutoff into the re-submission: a rung's
+        # auto-retry (poll_with_retries) must not silently re-drive an analysis
+        # WITHOUT the cutoff its rung was scanned under. Older rows lack the
+        # field, so .get keeps them retryable.
         new_rec = _submit_analysis(
             client, org_id, rec["project_id"], analyzer_id,
             _spec_from_record(rec), rec["branch"], snap,
+            knowledge_asof=rec.get("knowledge_asof"),
         )
         records[i] = asdict(new_rec)
         resubmitted.append(new_rec)
@@ -558,6 +578,7 @@ def resubmit_frozen(
     dry_run: bool = False,
     ignore_denylist: bool = False,
     max_workers: int = SUBMIT_WORKERS,
+    knowledge_asof: str | None = None,
 ) -> list[AnalysisRecord]:
     """Re-submit a source manifest's rows commit-pinned at their archived SHAs.
 
@@ -566,8 +587,13 @@ def resubmit_frozen(
     its recorded commit_hash with snapshot_date carried over verbatim (pinned
     HEAD rows included: they submit at the archived SHA, never re-resolved) —
     while the knowledge-DB state behind this rung's data_dir fixes what it is
-    scanned AGAINST. No GitHub resolution happens at all, so a submit worker is
-    just one project's import-check + analysis POSTs.
+    scanned AGAINST. `knowledge_asof` (YYYY-MM-DD) is the runtime alternative
+    to a restored dated dump: it is passed through to vuln-finder's per-analysis
+    config so the plugin itself filters the (current) knowledge DB to that
+    date, and recorded on every submitted rung-manifest row so downstream
+    tooling can identify the rung without trusting the DB stamp. No GitHub
+    resolution happens at all, so a submit worker is just one project's
+    import-check + analysis POSTs.
 
     Selection: every source row, or happy-terminal rows only with
     only_completed; dedupe_sha collapses rows sharing (git_url, commit_hash)
@@ -703,6 +729,7 @@ def resubmit_frozen(
             )
             out.append(_submit_analysis(
                 client, org_id, project_id, analyzer_id, spec, rec["branch"], snap,
+                knowledge_asof=knowledge_asof,
             ))
         return out
 

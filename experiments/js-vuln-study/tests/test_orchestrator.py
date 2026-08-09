@@ -442,7 +442,7 @@ def test_record_skip_row_shape(tmp_path):
         "snapshot_date": "*", "commit_hash": None, "committed_at": None,
         "project_id": None, "analysis_id": None,
         "status": "skipped", "error": "why not",
-        "submitted_at": None, "terminal_at": None,
+        "submitted_at": None, "terminal_at": None, "knowledge_asof": None,
     }
     assert rec.status == "skipped"
 

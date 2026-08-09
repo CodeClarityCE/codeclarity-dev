@@ -10,9 +10,11 @@ This script aggregates the per-rung `collect` outputs into one JSON:
         [--archive data/archive-run-2026-06-snapshot] \
         [--out data/tables/ladder_dose_response.json]
 
-Per rung (sorted stalest -> freshest by the run_meta knowledge date — the OSV
-mirror stamp when present, since the ladder rebuilds OSV per rung, else the max
-parseable source stamp as in drift_decomposition): completed analyses, total
+Per rung (sorted stalest -> freshest by the run_meta knowledge date — an
+explicit `knowledge_asof` extra when present, since runtime-filtered rungs all
+share one live DB whose stamps don't identify them; else the OSV mirror stamp,
+since the dump-restore ladder rebuilds OSV per rung; else the max parseable
+source stamp as in drift_decomposition): completed analyses, total
 instances, instances on the COMMON completed-analysis subset (the
 (git_url, commit_hash) keys completed in EVERY rung — the like-for-like panel),
 severity-class and winning-source mixes on that subset, and pairwise deltas vs
@@ -64,10 +66,18 @@ def _load_run(run_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict | None]:
 
 
 def _knowledge_date(meta: dict | None) -> pd.Timestamp | None:
-    """The rung's knowledge vintage. Prefer the OSV stamp — the ladder rebuilds
-    OSV per rung while nvd/gcve/npm stay frozen at the natural dump, so the max
-    stamp would misreport every dated rung. Fall back to the max parseable
-    source stamp (drift_decomposition's proxy) when OSV is unstamped."""
+    """The rung's knowledge vintage. Prefer an explicit `knowledge_asof` (a
+    run_meta extra recorded by `resubmit-frozen --knowledge-asof`, stored
+    top-level since capture_run_meta merges extras into the record): under
+    runtime filtering the DB is NOT restored per rung, so its stamps describe
+    the shared live state, not this rung's dose — only the requested cutoff
+    does. Next prefer the OSV stamp — the dump-restore ladder rebuilds OSV per
+    rung while nvd/gcve/npm stay frozen at the natural dump, so the max stamp
+    would misreport every dated rung. Fall back to the max parseable source
+    stamp (drift_decomposition's proxy) when OSV is unstamped."""
+    asof = pd.to_datetime((meta or {}).get("knowledge_asof"), errors="coerce", utc=True)
+    if pd.notna(asof):
+        return asof
     sources = ((meta or {}).get("knowledge") or {}).get("knowledge_sources") or {}
     osv = pd.to_datetime(sources.get("osv"), errors="coerce", utc=True)
     if pd.notna(osv):

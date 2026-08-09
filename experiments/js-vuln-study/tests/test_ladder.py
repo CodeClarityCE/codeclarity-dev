@@ -42,7 +42,8 @@ def _vrow(url: str, commit: str, vid: str, dep: str, sev: str = "HIGH",
 
 def _write_rung(run_dir: Path, analyses: list[dict], vulns: list[dict],
                 sources: dict | None = None, api_sha: str = "api-A",
-                backend_sha: str = "backend-B", epss_rows: int | None = 10) -> Path:
+                backend_sha: str = "backend-B", epss_rows: int | None = 10,
+                knowledge_asof: str | None = None) -> Path:
     tables = run_dir / "tables"
     tables.mkdir(parents=True)
     pd.DataFrame(analyses, columns=["git_url", "commit_hash"]).to_parquet(
@@ -50,11 +51,13 @@ def _write_rung(run_dir: Path, analyses: list[dict], vulns: list[dict],
     pd.DataFrame(vulns, columns=list(_vrow("x", "c", "CVE-0", "d"))).to_parquet(
         tables / "vulns.parquet")
     if sources is not None:
-        json.dump(
-            {"api_sha": api_sha, "backend_sha": backend_sha,
-             "knowledge": {"knowledge_sources": sources, "epss_rows": epss_rows}},
-            open(tables / "run_meta.json", "w"),
-        )
+        meta = {"api_sha": api_sha, "backend_sha": backend_sha,
+                "knowledge": {"knowledge_sources": sources, "epss_rows": epss_rows}}
+        if knowledge_asof is not None:
+            # capture_run_meta merges extras top-level, so a runtime-filtered
+            # rung's cutoff sits beside (not inside) the "knowledge" block.
+            meta["knowledge_asof"] = knowledge_asof
+        json.dump(meta, open(tables / "run_meta.json", "w"))
     return run_dir
 
 
@@ -111,6 +114,22 @@ def test_rungs_sorted_stalest_to_freshest_by_osv_date(rungs):
     assert rungs["out"]["meta"]["freshest"].endswith("rung-fresh")
     # The frozen nvd/gcve stamps (2026-08) must NOT outrank the dated OSV stamp.
     assert rungs["out"]["rungs"][0]["knowledge_date"] == str(pd.Timestamp("2023-01-01T00:00:00Z"))
+
+
+def test_knowledge_asof_extra_outranks_osv_stamp(tmp_path):
+    # Runtime-filtered rung: the live DB's stamps describe the SHARED current
+    # state (fresh), while the requested cutoff is the rung's actual dose —
+    # labeling and ordering must follow knowledge_asof, not the stamp.
+    asof = _write_rung(tmp_path / "rung-asof", [_arow(URL1, C1)], [],
+                       sources=_osv("2026-08-01T00:00:00Z"),
+                       knowledge_asof="2023-06-01")
+    osv = _write_rung(tmp_path / "rung-osv", [_arow(URL1, C1)], [],
+                      sources=_osv("2024-01-01T00:00:00Z"))
+    out = ld.compute([osv, asof])
+    assert [Path(r["dir"]).name for r in out["rungs"]] == ["rung-asof", "rung-osv"]
+    assert out["rungs"][0]["knowledge_date"] == str(pd.Timestamp("2023-06-01", tz="UTC"))
+    # The OSV-only rung still labels from its stamp (fallback path unchanged).
+    assert out["rungs"][1]["knowledge_date"] == str(pd.Timestamp("2024-01-01T00:00:00Z"))
 
 
 def test_dateless_rung_sorts_first_with_warning(tmp_path, caplog):
@@ -226,6 +245,26 @@ def test_fidelity_compares_nearest_rung_on_shared_keys(rungs, tmp_path):
     assert f["archive_instances"] == 3
     assert f["instance_jaccard"] == pytest.approx(2 / 4)
     assert f["instance_delta_pct"] == pytest.approx(0.0)
+
+
+def test_fidelity_tolerance_works_on_knowledge_asof_label(tmp_path):
+    # A runtime-filtered rung whose cutoff lands within tolerance of the
+    # archive date must be picked as the fidelity candidate even though its
+    # live-DB OSV stamp (months fresher) would put it far outside the window.
+    rung = _write_rung(
+        tmp_path / "rung-asof",
+        [_arow(URL1, C1), _arow(URL2, C2)],
+        [_vrow(URL1, C1, "CVE-1", "lodash"),
+         _vrow(URL2, C2, "CVE-9", "debug")],
+        sources=_osv("2026-08-01T00:00:00Z"),
+        knowledge_asof="2026-06-28",  # archive nvd/gcve stamp is 2026-06-29
+    )
+    archive = _write_archive(tmp_path)
+    out = ld.compute([rung], archive_dir=archive)
+    f = out["fidelity"]
+    assert f is not None
+    assert Path(f["rung_dir"]).name == "rung-asof"
+    assert f["rung_knowledge_date"] == str(pd.Timestamp("2026-06-28", tz="UTC"))
 
 
 def test_fidelity_skipped_when_no_rung_near_archive_date(tmp_path, caplog):

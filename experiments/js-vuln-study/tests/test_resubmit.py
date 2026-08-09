@@ -96,6 +96,7 @@ class FakeClient:
     def start_analysis(self, org_id, project_id, analyzer_id, branch, commit_hash=None, config=None):
         self.submitted.append({
             "project_id": project_id, "branch": branch, "commit_hash": commit_hash,
+            "config": config,
         })
         return f"an-{project_id}-{commit_hash}"
 
@@ -182,7 +183,10 @@ def test_head_rows_submit_at_archived_sha_not_reresolved(client, source, rung):
     (row,) = head_rows
     assert row["commit_hash"] == SHA_B  # the archived SHA, snapshot_date verbatim
     assert row["submitted_at"]  # telemetry stamped
-    assert {"project_id": "proj-r1", "branch": "main", "commit_hash": SHA_B} in client.submitted
+    assert {
+        "project_id": "proj-r1", "branch": "main", "commit_hash": SHA_B,
+        "config": None,
+    } in client.submitted
 
 
 def test_committed_at_carried_over(client, source, rung):
@@ -321,6 +325,41 @@ def test_ignore_denylist_submits_anyway(client, source, rung):
         client, "org", "anlz", source, rung, ignore_denylist=True,
     )
     assert any(s["commit_hash"] == SHA_C for s in client.submitted)
+
+
+# ---- knowledge_asof plumbing ---------------------------------------------------
+
+
+def test_knowledge_asof_sent_in_config_and_recorded(client, source, rung):
+    orchestrator.resubmit_frozen(
+        client, "org", "anlz", source, rung, only_completed=True,
+        knowledge_asof="2024-06-30",
+    )
+    # Every POST carries the cutoff under the vuln-finder plugin key ONLY —
+    # the client merges it over its defaults, so js-sbom/license-finder configs
+    # must not be touched here.
+    assert client.submitted
+    assert all(
+        s["config"] == {"vuln-finder": {"knowledge_asof": "2024-06-30"}}
+        for s in client.submitted
+    )
+    rows = _read_manifest(rung)
+    sub = [r for r in rows if r["status"] == "submitted"]
+    assert sub and all(r["knowledge_asof"] == "2024-06-30" for r in sub)
+    # Source rows predate the field entirely — reading them must not crash,
+    # and every rung row (skips included) carries the key so the manifest
+    # schema stays uniform for collect/ladder tooling.
+    assert all("knowledge_asof" in r for r in rows)
+
+
+def test_without_knowledge_asof_no_config_is_sent(client, source, rung):
+    # The no-cutoff path must stay byte-identical to the pre-flag behavior:
+    # config=None on every call means the real client's request body is
+    # unchanged, and manifest rows record the null dose.
+    orchestrator.resubmit_frozen(client, "org", "anlz", source, rung)
+    assert client.submitted
+    assert all(s["config"] is None for s in client.submitted)
+    assert all(r["knowledge_asof"] is None for r in _read_manifest(rung))
 
 
 # ---- parallel determinism ----------------------------------------------------

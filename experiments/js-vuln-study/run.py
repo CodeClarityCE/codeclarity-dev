@@ -25,6 +25,7 @@ import argparse
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -195,6 +196,21 @@ def cmd_retry(args: argparse.Namespace) -> int:
     return 0
 
 
+def _iso_date(value: str) -> str:
+    """argparse type for --knowledge-asof: a strict YYYY-MM-DD day.
+
+    Validated at the CLI edge so a typo'd cutoff fails the command instead of
+    riding silently into every submitted analysis's vuln-finder config.
+    """
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"not a YYYY-MM-DD date: {value!r}"
+        ) from None
+    return value
+
+
 def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
     source = Path(args.from_manifest)
     if args.dry_run:
@@ -204,6 +220,7 @@ def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
             None, "", "", source, DATA_DIR,
             only_completed=args.only_completed, dedupe_sha=args.dedupe_sha,
             dry_run=True, ignore_denylist=args.ignore_denylist,
+            knowledge_asof=args.knowledge_asof,
         )
         return 0
     with _client() as client:
@@ -213,6 +230,7 @@ def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
             integration_id=integration_id,
             only_completed=args.only_completed, dedupe_sha=args.dedupe_sha,
             ignore_denylist=args.ignore_denylist,
+            knowledge_asof=args.knowledge_asof,
         )
         capture_run_meta(
             client, org_id, analyzer_id, DATA_DIR,
@@ -221,6 +239,10 @@ def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
                 "source_manifest": str(source),
                 "only_completed": args.only_completed,
                 "dedupe_sha": args.dedupe_sha,
+                # The rung's dose. With runtime filtering the knowledge-DB
+                # stamp no longer identifies the rung, so this is what
+                # downstream tooling (ladder_dose_response) labels rungs by.
+                "knowledge_asof": args.knowledge_asof,
             },
         )
     return 0
@@ -478,6 +500,16 @@ def main() -> int:
         help="collapse rows sharing (git_url, commit_hash) onto the first, so "
         "the same frozen tree is scanned once even when several snapshot_dates "
         "pinned to it",
+    )
+    prf.add_argument(
+        "--knowledge-asof",
+        type=_iso_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="knowledge cutoff passed to vuln-finder's per-analysis config: "
+        "the plugin filters the (current) knowledge DB to rows known by this "
+        "date at match time — the runtime alternative to restoring a dated "
+        "dump before the rung",
     )
     prf.add_argument(
         "--dry-run",

@@ -43,6 +43,7 @@ truth. Rows are appended by `submit`, updated in place by `poll` and `retry`
 | `status` | str | See vocabulary below. |
 | `error` | str \| null | Failure detail for sad rows: the server's `failure_reason` (written by the downloader on unresolvable commits / download errors), a plugin `public_error`, a client-side timeout verdict, or the skip reason. |
 | `submitted_at`, `terminal_at` | str \| null | ISO-UTC telemetry stamps: when the analysis POST succeeded and when `poll` observed the terminal status. Absent (`.get`) on rows from runs predating telemetry. |
+| `knowledge_asof` | str \| null | YYYY-MM-DD knowledge cutoff the analysis was submitted under (`resubmit-frozen --knowledge-asof`): vuln-finder drops OSV/NVD/GCVE advisories published after this day at match time. Null / absent = no cutoff (full current knowledge DB). This is a ladder rung's dose and also lands in `run_meta` extras. |
 
 ### Status vocabulary
 
