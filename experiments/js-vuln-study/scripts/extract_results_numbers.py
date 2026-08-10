@@ -82,10 +82,20 @@ def survival_day_block(vulns: pd.DataFrame, analyses: pd.DataFrame,
     for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
         s = kept[kept.severity_class.astype(str).str.upper() == sev]
         t, sv = km_curve(s.duration_days, s.event)
+        # Short-horizon tail: quarterly snapshots cannot see fixes faster than
+        # ~90 days at all, so the share of day-resolution fixes landing within
+        # 7/30/90 days is the number day resolution uniquely contributes.
+        day_fixed = s[(s.resolution == "day") & (s.event == 1)]
+        tail = {
+            f"fixed_within_{d}d_pct": float((day_fixed.duration_days <= d).mean() * 100) if len(day_fixed) else None
+            for d in (7, 30, 90)
+        }
         by_sev[sev] = {
             "n": int(len(s)),
             "n_day_resolution": int((s.resolution == "day").sum()),
             "km_median_days": float(km_median(t, sv)),
+            "n_day_fixed": int(len(day_fixed)),
+            **tail,
         }
     return {
         "intervals": int(len(ints)),

@@ -8,7 +8,7 @@ or from
 [`data/tables/run_meta.json`](data/tables/run_meta.json). Metric definitions
 are in [DATA_DICTIONARY.md](DATA_DICTIONARY.md); methodology and reproduction
 commands are in [README.md](README.md). Threats to validity are collected in
-[§14](#14-threats-to-validity); individual results reference them inline.
+[§16](#16-threats-to-validity); individual results reference them inline.
 
 ## 1. Abstract
 
@@ -22,12 +22,23 @@ license-finder) at a pinned HEAD commit and at 18 quarterly snapshots
 instances per project but a heavily concentrated distribution: the top 12
 packages account for 50% of all 16,678 instances (Gini 0.832 by package).
 Longitudinally, a balanced 49-project panel shows a roughly flat
-point-in-time mean load between 15.4 and 27.0 instances across the full
-2022–2025 series, rising to 56.6 at the final snapshot, which lies closest to
+point-in-time mean load between 15.4 and 27.0 instances from 2022 through
+early 2026, rising to 56.6 at the final snapshot, which lies closest to
 the knowledge-DB snapshot date. Findings were stress-tested with a
 four-subset sensitivity sweep and bounded by an independent-scanner
 triangulation on a 20-project subsample; all counts are conditional on this
-run's corpus and knowledge-database snapshot (§14, threats 1–2).
+run's corpus and knowledge-database snapshot (§16, threats 1–2).
+
+How conditional, we measured directly: re-scanning 1,297 commit-frozen trees
+under six advisory-knowledge cutoff dates (§14; a published-date membership
+filter over the static §3 database) yields a monotone dose-response in which
+seven-month-old knowledge misses 63.7% of instances and 2023-vintage
+knowledge 93.1% — for this pipeline on this corpus, the knowledge-snapshot
+date, not the code, dominated what the scanner reported. Lockfile-history
+mining at day resolution (§12) additionally shows the ~nine-month median
+remediation lags conceal a fast-responder tail: among disclosed
+vulnerabilities whose fix could be dated exactly, about 9% were fixed within
+a week and roughly half within a quarter.
 
 ## 2. Study design
 
@@ -61,7 +72,7 @@ use the HEAD slice only; the multi-snapshot frame feeds only the longitudinal
 
 Vulnerability counts are a function of the knowledge-database snapshot below.
 A rerun after a knowledge update counts against a different CVE universe and
-is not directly comparable (§14, threat 2).
+is not directly comparable (§16, threat 2).
 
 | Item | Value |
 |------|-------|
@@ -92,7 +103,7 @@ Two gaps in this record: the provenance endpoint does not expose a
 last-update timestamp for OSV, although OSV is the winning source for 78.3%
 of HEAD instance matches (`winning_source_head`: OSV 13,066, GCVE 3,202, NVD
 410), so the snapshot pin is incomplete for the dominant source; and the npm
-source's `"0"` sentinel means that source contributes nothing (§14, threat
+source's `"0"` sentinel means that source contributes nothing (§16, threat
 2).
 
 ## 4. Sampling and population
@@ -109,13 +120,13 @@ star order until 100 qualify.
 **Selection bias.** The root-lockfile requirement excludes popular libraries
 that deliberately do not commit a lockfile and monorepos whose packages live
 below the root. The sample therefore skews toward applications and monorepos
-with parseable root lockfiles (§14, threat 3).
+with parseable root lockfiles (§16, threat 3).
 
 **Corpus caveat.** The GitHub API in this environment is a mirror whose slug
 universe differs from public GitHub — verified directly: `react/react`
 resolves while `facebook/react` does not. Star ranks, repository identities,
 and therefore every downstream statistic characterize **this corpus**, not
-public GitHub (§14, threat 1).
+public GitHub (§16, threat 1).
 
 ## 5. Coverage
 
@@ -157,7 +168,7 @@ the recorded data does not pin down a cause. In the survival analysis (§12)
 these gaps are treated as censoring rather than as fixes; Kaplan–Meier
 estimates remain unbiased only if censoring is non-informative, which
 repository-concentrated download failures may violate. They also thin the
-longitudinal view (§14, threat 5).
+longitudinal view (§16, threat 5).
 
 ## 6. Cross-sectional results (HEAD)
 
@@ -199,7 +210,7 @@ Most systemic packages, by number of HEAD projects affected:
 | uuid | 34 |
 | ajv | 33 |
 
-These counts inherit the match-confidence caveat (§14, threat 4): a share of
+These counts inherit the match-confidence caveat (§16, threat 4): a share of
 instances carry a `MATCH_POSSIBLE_INCORRECT` flag, and §7 quantifies the
 effect of excluding them.
 
@@ -208,7 +219,7 @@ effect of excluding them.
 The headline metrics were recomputed on four subsets of the HEAD instances:
 `all`, `match_correct_only` (`conflict_flag == MATCH_CORRECT`),
 `non_withdrawn` (advisory not retracted), and `direct_only` (heuristic
-direct-dependency flag; §14, threat 7).
+direct-dependency flag; §16, threat 7).
 
 | Metric | all | match_correct_only | non_withdrawn | direct_only |
 |--------|-----|--------------------|---------------|-------------|
@@ -246,7 +257,7 @@ scored instances the median EPSS score is 0.00107 and the 90th percentile
 0.00508; 220 instances score above 0.1 and 125 above 0.5. These figures are
 prioritization context only — EPSS estimates exploitation likelihood in the
 wild for the CVE, not risk in these specific deployments, and inherits the
-knowledge-snapshot dependence of §14, threat 2.
+knowledge-snapshot dependence of §16, threat 2.
 
 ## 9. Popularity vs load (RQ-C)
 
@@ -305,7 +316,7 @@ recently disclosed advisories have had the least calendar time to be
 remediated, so an end-of-series
 increase is expected under point-in-time counting even without any change in
 project behavior. The balanced panel also over-represents long-lived
-repositories (§14, threats 3 and 5).
+repositories (§16, threats 3 and 5).
 
 ## 12. Vulnerable-version residence time (RQ-G)
 
@@ -372,6 +383,38 @@ conditions on publication-date availability (52.8% of historical rows carry
 no publication date), so it inherits the disclosure-coverage bias described
 in §11.
 
+**Day-resolution refinement (lockfile-history mining).** Quarterly snapshots
+interval-censor every duration at ~90-day resolution. To sharpen the
+event-side, `run.py mine-lag` (`js_vuln_study/remediation.py`) mined the
+exact fix commit for the event=1 intervals by binary-searching each
+project's lockfile history between the last-seen and next snapshot: 7,580
+mining units, of which 6,744 (89.0%) yielded an exact fix commit, 804 were
+ambiguous (excluded from the KM fits but counted) and 32 found no lockfile
+commits in the window. Folding the mined dates in
+(`stats.merge_day_resolution`; `survival_day_resolution` in the extractor)
+leaves the disclosed-only KM medians essentially unchanged — CRITICAL 274→269,
+HIGH 273→264, MEDIUM 274→274, LOW 295→282 days — so quarterly censoring was
+not materially biasing the medians, which sit around nine months.
+
+What day resolution uniquely adds is the short-horizon tail, invisible at
+quarterly sampling. Among disclosed-only intervals with a mined
+day-resolution fix:
+
+| Severity | n (day-fixed) | ≤7 days | ≤30 days | ≤90 days |
+|----------|---------------|---------|----------|----------|
+| CRITICAL | 278 | 9.4% | 23.0% | 41.7% |
+| HIGH | 888 | 9.5% | 29.3% | 51.9% |
+| MEDIUM | 1,057 | 8.4% | 27.3% | 48.4% |
+| LOW | 125 | 5.6% | 22.4% | 46.4% |
+
+Among disclosed intervals with a dated fix, roughly one in eleven was
+remediated within a week and about half within a quarter — a fast-responder
+tail coexisting with the ~nine-month medians. These shares condition on the
+fix being observed *and* successfully mined (n = 2,348 of 4,936 disclosed
+intervals; the rest are censored or ambiguous — over all disclosed intervals
+the ≤7-day share is ~4%), which is also why they do not contradict the ~270-day
+KM medians above (threat 11).
+
 ## 13. Independent-scanner triangulation
 
 A stratified subsample of 20 HEAD projects was re-scanned with independent
@@ -382,7 +425,7 @@ reported advisories, but — as in the archived run — none carried a CVE
 identifier in this environment, so it contributed no pairs to the CVE-level
 comparison; its findings are tallied in the `npm_audit_unmapped` column of
 `data/tables/triangulation.parquet`. CVE-level agreement therefore rests on
-osv-scanner alone, measured on the CVE-mapped slice only (§14, threat 6).
+osv-scanner alone, measured on the CVE-mapped slice only (§16, threat 6).
 
 CodeClarity vs osv-scanner Jaccard agreement, by lockfile type (per
 `triangulate.py`, agreement must be read per lockfile population; "defined /
@@ -406,9 +449,108 @@ run is attributable to knowledge-snapshot staleness rather than to scanner
 methodology. The
 residual disagreement is plausibly attributable to differences in advisory
 sourcing and alias completeness; the triangulation bounds, but does not
-eliminate, single-scanner error in the headline counts (§14, threat 6).
+eliminate, single-scanner error in the headline counts (§16, threat 6).
 
-## 14. Threats to validity
+## 14. Knowledge-staleness dose-response (commit-frozen ladder)
+
+**Design.** The archived 2026-06 run's completed analyses were deduplicated
+by (git_url, commit) into 1,341 frozen trees and re-scanned six times through
+the identical pipeline (api/backend SHAs recorded per rung and equal across
+rungs), varying only a knowledge cutoff date. The cutoff rides in each
+analysis's vuln-finder configuration (`resubmit-frozen --knowledge-asof`):
+at match time the plugin drops OSV, NVD and GCVE advisories published after
+the cutoff day, so every rung scans the same static knowledge database
+(§3 stamps, 2026-08-03) through a dated membership filter. The freshest rung
+(2026-08-03) passes through the same code path with a cutoff that postdates
+the whole database, making it the identity anchor. All comparisons below use
+the 1,297 trees completed in every rung — per-rung completions range
+1,324–1,333 of the 1,341 submitted, so the common panel loses ~3.3% of trees
+to scan failures (one deterministic js-sbom crash, threat 9; the rest
+transient download/plugin failures, which §5 shows concentrate in specific
+repositories, so the attrition is not guaranteed random with respect to
+vulnerability load). EPSS scores are frozen at the 2026-08-03 table
+throughout (threat 10).
+
+Instance counts on the common subset, against the freshest rung
+(pair-Jaccard is overlap of the distinct (dependency, vulnerability) pair
+sets, per `DATA_DICTIONARY.md`; it is a coarser metric than the
+instance-level Jaccard used in the error-bar paragraph below):
+
+| Knowledge cutoff | Instances | Δ vs fresh | Pair-Jaccard vs fresh |
+|------------------|-----------|------------|-----------------------|
+| 2026-08-03 | 508,030 | — | 1.000 |
+| 2026-06-29 | 434,826 | −14.4% | 0.932 |
+| 2026-01-01 | 184,187 | −63.7% | 0.592 |
+| 2025-01-01 | 109,763 | −78.4% | 0.444 |
+| 2024-01-01 | 65,718 | −87.1% | 0.348 |
+| 2023-01-01 | 34,941 | −93.1% | 0.263 |
+
+Identical code, identical pipeline: a scanner whose advisory knowledge is
+seven months old sees 63.7% fewer vulnerability instances; three-and-a-half
+years old, 93.1% fewer. This makes the knowledge-snapshot dependence
+observed across the two full runs (§15) causal rather than correlational,
+and dates the bulk of a fresh scan's findings to recently-published
+advisories.
+
+**Severity composition shifts with staleness.** CRITICAL instances decline
+far more slowly than the total: they are 4.4% of the fresh rung's common
+instances (22,408 of 508,030) but 14.6% of the 2023 rung's (5,088 of
+34,941). Staleness preferentially erases the long tail of recent MEDIUM/LOW
+and severity-less advisories while old CRITICALs persist — so a stale
+scanner's output looks *more* severe on average while missing most of the
+exposure.
+
+**Error bars.** Two bounds are computed in
+`data/tables/ladder_dose_response.json`. *Method fidelity*: the
+reconstructed 2026-06-29 rung vs the real archived June run on 1,328 shared
+analyses differs by +2.54% in instances (instance-set Jaccard 0.899). The
+residual decomposes into advisory-ingestion lag (advisories published
+before the cutoff that the real June database had not yet ingested — the
+filter is slightly optimistic about real-world freshness), GHSA→CVE
+identifier renames, and post-June edits to affected ranges (threat 9).
+This bound is measured at the one vintage for which a real dated run
+exists — the least stale rung; the same mechanisms plausibly grow with
+cutoff age, so reconstruction error at the older rungs is extrapolated,
+not measured. *Anchor check*: the freshest rung vs the plain (cutoff-less)
+2026-08 run on 1,276 shared analyses differs by −0.31% (Jaccard 0.933).
+This jointly bounds run-to-run pipeline nondeterminism, the platform-code
+delta between the two runs (the rungs ran on later api/backend SHAs that
+add the cutoff filter; SHAs are recorded in each run's `run_meta.json`),
+and the filter's pass-through path. Both bounds are an order of magnitude
+below the dose-response signal at the June rung; only the anchor bound
+applies uniformly.
+
+## 15. June→August drift decomposition
+
+The archived 2026-06-29 and live 2026-08-03 full runs differ by +19.4% in
+total instances (442,433 → 528,199) and +41.2% at HEAD over all completed
+HEAD scans (11,808 → 16,678; the paired-subset figures below use slightly
+smaller populations and therefore differ in the decimals).
+Pairing the runs on (npm_name, snapshot_date) — 1,403 pairs, of which all
+1,307 dated-snapshot pairs and 57 of 96 HEAD pairs scanned the same commit —
+separates knowledge drift from code drift
+(`scripts/drift_decomposition.py`):
+
+- **Same-commit (pure knowledge drift).** On the 1,364 same-commit pairs,
+  instances rose +19.6% (434,489 → 519,587); on the 57 same-commit HEAD
+  pairs, +37.5% (5,866 → 8,066). The unrestricted HEAD delta (+41.3%, 96
+  pairs) adds only ~4 points on top — five weeks of advisory publication
+  dominates five weeks of code movement.
+- **By winning source (same-commit).** GCVE +70.7% (28,623 → 48,865), NVD
+  +30.2% (12,299 → 16,019), OSV +15.5% but the largest absolute share
+  (+61,136; 393,567 → 454,703).
+- **Advisory age of new instances.** Of the 102,346 instance rows that
+  appear only in the live run's same-commit pairs, 44,951 (43.9%) cite an
+  advisory published within 30 days of the live knowledge date, versus 3.1%
+  of the live baseline — new instances are overwhelmingly driven by
+  newly-published advisories, not by re-matching of old ones. (38.3% of new
+  rows carry no parseable publication date and land in the unknown bin.)
+- **Churn.** The same-commit deltas reconcile exactly: 102,346 new minus
+  17,248 vanished instance rows; 567 new vs 395 vanished distinct
+  (vulnerability, package) pairs. Vanished rows on unchanged code measure
+  advisory withdrawal/rename churn.
+
+## 16. Threats to validity
 
 1. **Corpus provenance.** The environment's GitHub API is a mirror whose slug
    universe differs from public GitHub (verified: `react/react` resolves,
@@ -416,12 +558,14 @@ eliminate, single-scanner error in the headline counts (§14, threat 6).
    generalization to public GitHub is not claimed.
 2. **Knowledge-snapshot dependence.** Every vulnerability count is a function
    of the knowledge-DB snapshot in §3 (NVD/GCVE updated 2026-08-03). The
-   provenance endpoint does not capture OSV's last-update timestamp even
-   though OSV is the winning source for 78.3% of HEAD matches, so the
-   snapshot pin is incomplete for the dominant source; the npm source
-   (`"0"` sentinel) contributes nothing. Runs under different snapshots
-   count different CVE universes and are not directly comparable; compare
-   `run_meta.json` records first (§15).
+   provenance endpoint did not capture OSV's last-update timestamp for the
+   runs in this document even though OSV is the winning source for 78.3% of
+   HEAD matches, so their snapshot pin is incomplete for the dominant
+   source (an `osv_last` stamp has since been added and future mirror runs
+   record it); the npm source (`"0"` sentinel) contributes nothing. Runs
+   under different snapshots count different CVE universes and are not
+   directly comparable; compare `run_meta.json` records first (§17), and
+   see §14 for how large the effect is.
 3. **Selection bias.** Requiring a root `package.json` plus lockfile excludes
    libraries that do not commit lockfiles and nested-package monorepos,
    skewing the sample toward applications and root-lockfile monorepos. The
@@ -455,8 +599,28 @@ eliminate, single-scanner error in the headline counts (§14, threat 6).
    are env-overridable; see README). Corpora sampled from different
    endpoints contain different repositories, so cross-environment
    comparisons are corpus-level, not project-level.
+9. **Ladder rungs are membership filters, not dated databases.** A rung
+   (§14) drops advisories published after its cutoff from the *current*
+   database: surviving advisories keep their current content (affected
+   ranges, severity, aliases), advisories withdrawn since the cutoff are
+   not resurrected, and advisories published before the cutoff but ingested
+   later are included even though a real scanner of that date lacked them.
+   The June fidelity comparison bounds the combined effect at +2.5%
+   instances (Jaccard 0.899) — at the least stale rung only; error at older
+   rungs is unbounded by data (§14). One frozen tree (storybook@2023-01-01,
+   per the rung manifests) crashes js-sbom deterministically and is absent
+   from every rung's completed set.
+10. **EPSS is frozen across rungs.** Historical EPSS scores are overwritten
+   daily and cannot be reconstructed by filtering, so all rungs carry the
+   2026-08-03 EPSS table; the ladder measures advisory-membership staleness
+   only, and rung-level EPSS columns must not be read as dated.
+11. **Mining conditions on lockfile discoverability.** The day-resolution
+   tail (§12) is computed on intervals whose fix was minable from root
+   lockfile history (89.0% of units); fixes via lockfile migration edge
+   cases or force-pushed history are under-represented, and ambiguous mines
+   (10.6%) are excluded from the KM fits.
 
-## 15. Regeneration
+## 17. Regeneration
 
 From raw data to the numbers in this document (venv per README.md
 prerequisites; each command is resumable and de-duplicating):
@@ -469,9 +633,29 @@ python run.py poll                        # drive to terminal; safe to interrupt
 python run.py retry && python run.py poll # re-drive sad-terminal rows
 python run.py collect --no-deps           # data/tables/*.parquet + run_meta.json
 python run.py triangulate                 # data/tables/triangulation.parquet
+python run.py mine-lag                    # data/tables/remediation_events.parquet (§12)
 MPLBACKEND=Agg .venv/bin/python notebooks/analysis.py   # figures + headline cells
 .venv/bin/python notebooks/report.py      # data/report/js-vuln-study-report.pdf
 .venv/bin/python scripts/extract_results_numbers.py     # data/tables/results_numbers.json
+```
+
+The knowledge-staleness ladder (§14) re-scans the archived run's frozen
+trees once per cutoff date, then aggregates
+(`data/tables/ladder_dose_response.json`, loaded into the extractor's
+`ladder` block):
+
+```bash
+for T in 2026-08-03 2026-06-29 2026-01-01 2025-01-01 2024-01-01 2023-01-01; do
+  JS_VULN_DATA_DIR=data-ladder/rung-$T python run.py resubmit-frozen \
+    --from data/archive-run-2026-06-snapshot/manifest.jsonl \
+    --only-completed --dedupe-sha --knowledge-asof $T
+  JS_VULN_DATA_DIR=data-ladder/rung-$T python run.py poll --auto-retry 2
+  JS_VULN_DATA_DIR=data-ladder/rung-$T python run.py collect
+done
+.venv/bin/python scripts/ladder_dose_response.py \
+  --rungs 'data-ladder/rung-*' --archive data/archive-run-2026-06-snapshot \
+  --live data --out data/tables/ladder_dose_response.json
+.venv/bin/python scripts/extract_results_numbers.py   # refresh the 'ladder' block
 ```
 
 The consolidated extraction backing this document is

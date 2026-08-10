@@ -99,7 +99,8 @@ def _pair_set(vulns: pd.DataFrame) -> set[tuple]:
     return set(zip(vulns["affected_dependency"], vulns["vulnerability_id"]))
 
 
-def compute(rung_dirs: list[Path | str], archive_dir: Path | str | None = None) -> dict:
+def compute(rung_dirs: list[Path | str], archive_dir: Path | str | None = None,
+            live_dir: Path | str | None = None) -> dict:
     rungs = []
     for d in rung_dirs:
         d = Path(d)
@@ -172,6 +173,32 @@ def compute(rung_dirs: list[Path | str], archive_dir: Path | str | None = None) 
             },
         })
 
+    def _compare_runs(r: dict, o_an: pd.DataFrame, o_v: pd.DataFrame) -> dict:
+        """Shared-analyses instance comparison of a rung against another run."""
+        shared = _keys(r["analyses"]) & _keys(o_an)
+        rv = r["vulns"]
+        if len(rv):
+            rv = rv[_key_series(rv).isin(shared)]
+        rv = rv.drop_duplicates(INSTANCE_KEY)
+        ov = o_v
+        if len(ov):
+            ov = ov[_key_series(ov).isin(shared)]
+        ov = ov.drop_duplicates(INSTANCE_KEY)
+        r_ids = pd.MultiIndex.from_frame(rv[INSTANCE_KEY])
+        o_ids = pd.MultiIndex.from_frame(ov[INSTANCE_KEY])
+        n_union = len(r_ids.union(o_ids))
+        return {
+            "rung_dir": str(r["dir"]),
+            "rung_knowledge_date": str(r["knowledge_date"]),
+            "shared_analyses": len(shared),
+            "rung_only_analyses": len(_keys(r["analyses"]) - _keys(o_an)),
+            "other_only_analyses": len(_keys(o_an) - _keys(r["analyses"])),
+            "rung_instances": int(len(rv)),
+            "other_instances": int(len(ov)),
+            "instance_delta_pct": ((len(rv) - len(ov)) / len(ov) * 100) if len(ov) else None,
+            "instance_jaccard": (len(r_ids.intersection(o_ids)) / n_union) if n_union else None,
+        }
+
     fidelity = None
     if archive_dir is not None:
         a_an, a_v, a_meta = _load_run(Path(archive_dir))
@@ -183,35 +210,33 @@ def compute(rung_dirs: list[Path | str], archive_dir: Path | str | None = None) 
         ]
         if candidates:
             r = min(candidates, key=lambda r: abs(r["knowledge_date"] - a_date))
-            shared = _keys(r["analyses"]) & _keys(a_an)
-            rv = r["vulns"]
-            if len(rv):
-                rv = rv[_key_series(rv).isin(shared)]
-            rv = rv.drop_duplicates(INSTANCE_KEY)
-            av = a_v
-            if len(av):
-                av = av[_key_series(av).isin(shared)]
-            av = av.drop_duplicates(INSTANCE_KEY)
-            r_ids = pd.MultiIndex.from_frame(rv[INSTANCE_KEY])
-            a_ids = pd.MultiIndex.from_frame(av[INSTANCE_KEY])
-            n_union = len(r_ids.union(a_ids))
+            cmp = _compare_runs(r, a_an, a_v)
             fidelity = {
-                "rung_dir": str(r["dir"]),
-                "rung_knowledge_date": str(r["knowledge_date"]),
+                "rung_dir": cmp["rung_dir"],
+                "rung_knowledge_date": cmp["rung_knowledge_date"],
                 "archive_knowledge_date": str(a_date),
-                "shared_analyses": len(shared),
-                "rung_only_analyses": len(_keys(r["analyses"]) - _keys(a_an)),
-                "archive_only_analyses": len(_keys(a_an) - _keys(r["analyses"])),
-                "rung_instances": int(len(rv)),
-                "archive_instances": int(len(av)),
-                "instance_delta_pct": ((len(rv) - len(av)) / len(av) * 100) if len(av) else None,
-                "instance_jaccard": (len(r_ids.intersection(a_ids)) / n_union) if n_union else None,
+                "shared_analyses": cmp["shared_analyses"],
+                "rung_only_analyses": cmp["rung_only_analyses"],
+                "archive_only_analyses": cmp["other_only_analyses"],
+                "rung_instances": cmp["rung_instances"],
+                "archive_instances": cmp["other_instances"],
+                "instance_delta_pct": cmp["instance_delta_pct"],
+                "instance_jaccard": cmp["instance_jaccard"],
             }
         else:
             log.info(
                 "no rung within %dd of the archive knowledge date (%s) — fidelity check skipped",
                 FIDELITY_TOLERANCE_DAYS, a_date,
             )
+
+    # Reproducibility bound: the freshest rung's cutoff postdates everything
+    # the static knowledge DB contains, so against a plain (cutoff-less) run
+    # of the same trees any difference is run-to-run pipeline nondeterminism,
+    # not the filter.
+    reproducibility = None
+    if live_dir is not None:
+        l_an, l_v, _ = _load_run(Path(live_dir))
+        reproducibility = _compare_runs(freshest, l_an, l_v)
 
     return {
         "meta": {
@@ -229,6 +254,7 @@ def compute(rung_dirs: list[Path | str], archive_dir: Path | str | None = None) 
         },
         "rungs": out_rungs,
         "fidelity": fidelity,
+        "reproducibility": reproducibility,
     }
 
 
@@ -241,6 +267,11 @@ def main() -> None:
         "(relative globs resolve against the experiment root)",
     )
     ap.add_argument("--archive", type=Path, default=ROOT / "data" / "archive-run-2026-06-snapshot")
+    ap.add_argument(
+        "--live", type=Path, default=None,
+        help="data dir of a cutoff-less run of the same trees; enables the "
+        "reproducibility bound (freshest rung vs live run)",
+    )
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "tables" / "ladder_dose_response.json")
     args = ap.parse_args()
 
@@ -252,7 +283,11 @@ def main() -> None:
     if archive is None:
         log.warning("archive tables not found at %s — fidelity check skipped", args.archive)
 
-    out = compute(rung_dirs, archive_dir=archive)
+    live = args.live if args.live is not None and (args.live / "tables").is_dir() else None
+    if args.live is not None and live is None:
+        log.warning("live tables not found at %s — reproducibility bound skipped", args.live)
+
+    out = compute(rung_dirs, archive_dir=archive, live_dir=live)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     json.dump(out, open(args.out, "w"), indent=1, default=str)
     print(f"wrote {args.out}")
@@ -276,6 +311,14 @@ def main() -> None:
         print(
             f"fidelity vs archive: {f['rung_dir']} shared={f['shared_analyses']} "
             f"instances {f['rung_instances']} vs {f['archive_instances']} "
+            f"jaccard={jac}"
+        )
+    if out["reproducibility"] is not None:
+        f = out["reproducibility"]
+        jac = "-" if f["instance_jaccard"] is None else f"{f['instance_jaccard']:.3f}"
+        print(
+            f"reproducibility vs live run: {f['rung_dir']} shared={f['shared_analyses']} "
+            f"instances {f['rung_instances']} vs {f['other_instances']} "
             f"jaccard={jac}"
         )
 
