@@ -186,14 +186,17 @@ story.append(PageBreak())
 
 # --- Page 2: where the risk sits + honesty box -------------------------------
 P("Most vulnerable-version time predates disclosure", "H")
-P(f"Vulnerable versions reside in dependency trees for a long time: Kaplan-Meier median residence "
-  f"is {res_lo:.0f} to {res_hi:.0f} days depending on severity, and the ordering is not monotone "
-  f"(CRITICAL pairs disappear fastest at {res['CRITICAL']['km_median_days']:.0f} days, LOW slowest "
-  f"at {res['LOW']['km_median_days']:.0f}). But most of that time is not negligence: "
-  f"{pre_disclosure_share:.0%} of historical instance rows predate their advisory's publication, "
-  f"and another {no_date_share:.0%} carry no publication date at all. Maintainers cannot react to "
-  f"advisories that do not exist yet; the remediation clock in Figure 1 therefore starts at "
-  f"disclosure, not at first exposure.")
+P(f"Total residence of a vulnerable version in a dependency tree is a different clock from the fix "
+  f"lag in Figure 1: it starts when the version enters the tree, which is usually long before any "
+  f"advisory exists ({pre_disclosure_share:.0%} of historical instance rows predate their "
+  f"advisory's publication, and another {no_date_share:.0%} carry no publication date at all). "
+  f"On this clock, Kaplan-Meier median residence runs {res_lo:.0f} to {res_hi:.0f} days, and it "
+  f"does vary by severity (CRITICAL shortest at {res['CRITICAL']['km_median_days']:.0f} days, LOW "
+  f"longest at {res['LOW']['km_median_days']:.0f}). That is not a contradiction of finding 1: "
+  f"during most of this interval the severity label does not exist yet, and disappearance here "
+  f"includes routine version bumps and dependency removal. The gradient reflects how fast these "
+  f"packages churn anyway, while the deliberate response after disclosure (Figure 1) is flat "
+  f"across severities.")
 
 P("Popularity does not predict security", "H")
 P(f"Across the {rqc['n']} projects with dependencies, star rank shows no relationship with "
