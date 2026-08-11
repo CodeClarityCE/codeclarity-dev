@@ -636,6 +636,7 @@ python run.py triangulate                 # data/tables/triangulation.parquet
 python run.py mine-lag                    # data/tables/remediation_events.parquet (§12)
 MPLBACKEND=Agg .venv/bin/python notebooks/analysis.py   # figures + headline cells
 .venv/bin/python notebooks/report.py      # data/report/js-vuln-study-report.pdf
+.venv/bin/python notebooks/brief.py       # data/report/js-vuln-study-brief.pdf (2-page shareable)
 .venv/bin/python scripts/extract_results_numbers.py     # data/tables/results_numbers.json
 ```
 

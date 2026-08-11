@@ -36,6 +36,15 @@ dev box has no LaTeX/quarto, so it uses matplotlib (figures) + reportlab
 `analysis.py` and `report.py` compute the same numbers from the same shared
 helpers, so the notebook and the report cannot drift apart.
 
+`brief.py` renders the 2-page shareable brief (science-first: the staleness
+dose-response leads) for readers with no time. It reads only the audited
+extraction `data/tables/results_numbers.json`, never the parquet tables or
+archives, so it regenerates whenever the extractor reruns:
+
+```bash
+.venv/bin/python notebooks/brief.py     # -> data/report/js-vuln-study-brief.pdf
+```
+
 ## Shared statistics module — `js_vuln_study/stats.py`
 
 *(Landing in the current change set — until it merges, `analysis.py` and
