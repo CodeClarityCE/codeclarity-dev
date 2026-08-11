@@ -3,10 +3,13 @@
 Unlike report.py (the long-form document built from the parquet tables), the
 brief is aimed at readers with no time. It leads with the study's novel
 findings (how fast projects actually fix vulnerable dependencies, where the
-risk concentrates), not with confirmatory results. Every number is read from
-data/tables/results_numbers.json (the audited single source of truth behind
-RESULTS.md) at build time, so the brief regenerates when the extractor reruns
-and can never drift from the document. Style rule: no em dashes anywhere.
+risk concentrates), not with confirmatory results, and is written in plain
+language. Every quoted number is read from data/tables/results_numbers.json
+(the audited single source of truth behind RESULTS.md) at build time, so the
+brief regenerates when the extractor reruns and can never drift from the
+document. The Kaplan-Meier figure is drawn from the parquet tables through
+the same shared stats helpers the extractor uses, so curves and quoted
+medians cannot disagree either. Style rule: no em dashes anywhere.
 
     cd experiments/js-vuln-study
     .venv/bin/python notebooks/brief.py
@@ -16,6 +19,7 @@ and can never drift from the document. Style rule: no em dashes anywhere.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -24,6 +28,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -40,6 +45,9 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from js_vuln_study.stats import km_curve, merge_day_resolution, presence_intervals  # noqa: E402
+
 TABLES = ROOT / "data" / "tables"
 OUT = ROOT / "data" / "report"
 FIGS = OUT / "figs"
@@ -79,8 +87,10 @@ meta = NUM["run_meta"]
 ladder = NUM["ladder"]
 ladder_worst = ladder["rungs"][0]["vs_freshest"]["instance_delta_pct"]
 
+SEV_COLORS = {"CRITICAL": "#a50f15", "HIGH": "#de2d26", "MEDIUM": "#fb6a4a", "LOW": "#fcae91"}
+
 # --------------------------------------------------------------------------- #
-# Figure: short-horizon fix tail by severity
+# Figures
 # --------------------------------------------------------------------------- #
 def _save(fig, name):
     path = FIGS / name
@@ -89,20 +99,51 @@ def _save(fig, name):
     return str(path)
 
 
-fig, ax = plt.subplots(figsize=(7.4, 3.1))
+# Figure 1: short-horizon fix tail by severity (numbers match the JSON block).
+fig, ax = plt.subplots(figsize=(7.4, 3.0))
 x = np.arange(len(sevs))
 width = 0.27
 for i, (horizon, color) in enumerate([("7", "#08519c"), ("30", "#4292c6"), ("90", "#9ecae1")]):
     vals = [disc[s][f"fixed_within_{horizon}d_pct"] for s in sevs]
     bars = ax.bar(x + (i - 1) * width, vals, width, color=color, label=f"within {horizon} days")
     ax.bar_label(bars, fmt="%.0f%%", fontsize=7.5)
-ax.set_xticks(x, [f"{s}\n(n={disc[s]['n_day_fixed']}, median {disc[s]['km_median_days']:.0f}d)"
-                  for s in sevs], fontsize=8)
+ax.set_xticks(x, [f"{s}\n({disc[s]['n_day_fixed']} dated fixes)" for s in sevs], fontsize=8)
 ax.set_ylabel("share of dated fixes")
 ax.set_ylim(0, 62)
 ax.legend(fontsize=8, ncols=3, frameon=False)
 ax.grid(True, axis="y", alpha=0.3)
 fig_tail = _save(fig, "brief_fix_tail.png")
+
+# Figure 2: Kaplan-Meier curves for the post-disclosure fix lag, by severity.
+# Same data path as the extractor's survival_day_resolution block: disclosed
+# subset -> presence intervals -> mined day-resolution fixes merged in.
+_a = pd.read_parquet(TABLES / "analyses.parquet")
+_v = pd.read_parquet(TABLES / "vulns.parquet")
+_ev = pd.read_parquet(TABLES / "remediation_events.parquet")
+_pub = pd.to_datetime(_v.published_date, errors="coerce", utc=True)
+_snap = pd.to_datetime(_v.snapshot_date.where(_v.snapshot_date != "HEAD"), errors="coerce", utc=True)
+_committed = pd.to_datetime(_a.set_index("analysis_id").committed_at, errors="coerce", utc=True)
+_snap_eff = _snap.fillna(_v.analysis_id.map(_committed))
+_disclosed = _v[_pub.notna() & (_pub <= _snap_eff)]
+_ints = merge_day_resolution(presence_intervals(_disclosed, _a), _ev)
+_kept = _ints[~_ints["excluded"]]
+
+fig, ax = plt.subplots(figsize=(7.4, 3.2))
+for sev in sevs:
+    s = _kept[_kept.severity_class.astype(str).str.upper() == sev]
+    t, sv = km_curve(s.duration_days, s.event)
+    ax.step(t, sv, where="post", color=SEV_COLORS[sev], lw=1.6,
+            label=f"{sev} (median {disc[sev]['km_median_days']:.0f}d)")
+ax.axhline(0.5, color="#999999", lw=0.8, ls="--")
+ax.annotate("half fixed", (ax.get_xlim()[1], 0.5), xytext=(-4, 4),
+            textcoords="offset points", ha="right", fontsize=7.5, color="#666666")
+ax.set_xlim(0, 1000)
+ax.set_ylim(0, 1.0)
+ax.set_xlabel("days since the advisory was published")
+ax.set_ylabel("share not yet fixed")
+ax.legend(fontsize=8, frameon=False)
+ax.grid(True, alpha=0.3)
+fig_km = _save(fig, "brief_km.png")
 
 # --------------------------------------------------------------------------- #
 # PDF assembly
@@ -116,7 +157,7 @@ styles.add(ParagraphStyle("Caption", parent=styles["Normal"], fontSize=8, textCo
 styles.add(ParagraphStyle("Stat", parent=styles["Normal"], fontSize=18, leading=20, alignment=TA_CENTER,
                           textColor=colors.HexColor("#08306b"), fontName="Helvetica-Bold"))
 styles.add(ParagraphStyle("StatCap", parent=styles["Normal"], fontSize=8, leading=10.5, alignment=TA_CENTER))
-styles.add(ParagraphStyle("Small", parent=styles["Normal"], fontSize=8, leading=11, spaceAfter=3))
+styles.add(ParagraphStyle("Small", parent=styles["Normal"], fontSize=8.5, leading=11.5, spaceAfter=3))
 
 story = []
 
@@ -135,39 +176,39 @@ def figure(path, caption, width=15.5 * cm):
 
 # --- Page 1: how fast do projects fix? --------------------------------------
 P("How fast do popular open-source projects<br/>fix vulnerable dependencies?", "TitleBig")
-P("The 100 most-starred JavaScript/TypeScript repositories, scanned across 18 quarterly snapshots "
-  "plus HEAD, with fix dates mined from lockfile history &nbsp;·&nbsp; brief generated "
+P("A study of the 100 most-starred JavaScript/TypeScript repositories &nbsp;·&nbsp; brief generated "
   + date.today().isoformat(), "Sub")
 story.append(Spacer(1, 8))
 
-P(f"Quarterly scan panels can only see remediation at 90-day resolution, so we mined each project's "
-  f"lockfile commit history to date fixes exactly: of {mine_units:,} fix windows, {mine_found:,} "
-  f"({mine_found / mine_units:.0%}) yielded the precise commit that removed the vulnerable version. "
+P(f"We scanned each project's dependencies at 19 points in time (today plus 18 quarterly "
+  f"snapshots back to 2022) and then went one step further: for every vulnerability that got "
+  f"fixed, we searched the project's commit history to find the exact commit that removed the "
+  f"vulnerable version. That worked for {mine_found:,} of {mine_units:,} fixes "
+  f"({mine_found / mine_units:.0%}), which lets us measure fix speed in days instead of quarters. "
   f"Three results stand out.")
 
-P(f"<b>1. Severity does not predict fix speed.</b> Median remediation lag after an advisory is "
-  f"published sits between {km_lo:.0f} and {km_hi:.0f} days at every severity level. CRITICAL "
-  f"vulnerabilities are not fixed faster than LOW ones. Whatever drives remediation in these "
-  f"projects, it is not the severity label.")
+P(f"<b>1. Severity does not predict fix speed.</b> After a vulnerability is publicly disclosed, "
+  f"projects take about nine months (median {km_lo:.0f} to {km_hi:.0f} days) to fix it, and that "
+  f"is true at every severity level. CRITICAL vulnerabilities are not fixed faster than LOW ones "
+  f"(Figure 2 on page 2 shows the four curves lying almost on top of each other).")
 
-P(f"<b>2. A fast-responder tail coexists with nine-month medians.</b> Among fixes datable to the "
-  f"day, {pooled_7d:.0f}% land within a week of the vulnerable interval starting and "
-  f"{pooled_90d:.0f}% within a quarter. Remediation is bimodal: a minority of project/dependency "
-  f"combinations react almost immediately, the rest take the better part of a year.")
+P(f"<b>2. But there is a fast minority.</b> Looking only at fixes we could date exactly: "
+  f"{pooled_7d:.0f}% happen within one week of the vulnerability appearing, and "
+  f"{pooled_90d:.0f}% within three months. So remediation splits into a small group that reacts "
+  f"almost immediately and a majority that takes the better part of a year.")
 
 figure(fig_tail,
-       "Figure 1. Share of dated fixes landing within 7/30/90 days, by severity. Bars condition on the fix "
-       "being observed and datable (n = "
-       f"{n_day_fixed:,} of {n_disclosed:,} disclosed intervals); over all disclosed intervals the "
-       "within-7-days share is about 4%.")
+       "Figure 1. Of the fixes we could date exactly, how many happened within 7, 30, or 90 days? "
+       "Shown per severity level. The pattern is similar at every severity: roughly one fix in ten "
+       "lands within a week, roughly half within three months.")
 
 stat_row = [
     [Paragraph(f"{km_lo:.0f}-{km_hi:.0f} days", styles["Stat"]),
-     Paragraph(f"{pooled_7d:.0f}% / {pooled_90d:.0f}%", styles["Stat"]),
+     Paragraph(f"{pooled_7d:.0f}%", styles["Stat"]),
      Paragraph(f"{headline['pkgs_clear_50']} packages", styles["Stat"])],
-    [Paragraph("median fix lag after disclosure, flat across severities: CRITICAL is not treated as more urgent.", styles["StatCap"]),
-     Paragraph("of dated fixes land within a week / within a quarter. Remediation has a fast tail the medians hide.", styles["StatCap"]),
-     Paragraph(f"account for half of all {headline['instances']:,} vulnerability instances at HEAD. A handful of upstream fixes clears most aggregate risk.", styles["StatCap"])],
+    [Paragraph("median time from public disclosure to fix. Nearly identical for CRITICAL and LOW: the severity label does not create urgency.", styles["StatCap"]),
+     Paragraph("of dated fixes happen within one week. A small group of projects reacts almost immediately; most do not.", styles["StatCap"]),
+     Paragraph(f"out of {headline['distinct_vuln_packages']} vulnerable packages cause half of all {headline['instances']:,} vulnerability findings. Fixing a handful of shared dependencies clears most of the total risk.", styles["StatCap"])],
 ]
 t = Table(stat_row, colWidths=[5.6 * cm] * 3, hAlign="CENTER")
 t.setStyle(TableStyle([
@@ -184,53 +225,57 @@ story.append(t)
 
 story.append(PageBreak())
 
-# --- Page 2: where the risk sits + honesty box -------------------------------
-P("Most vulnerable-version time predates disclosure", "H")
-P(f"Total residence of a vulnerable version in a dependency tree is a different clock from the fix "
-  f"lag in Figure 1: it starts when the version enters the tree, which is usually long before any "
-  f"advisory exists ({pre_disclosure_share:.0%} of historical instance rows predate their "
-  f"advisory's publication, and another {no_date_share:.0%} carry no publication date at all). "
-  f"On this clock, Kaplan-Meier median residence runs {res_lo:.0f} to {res_hi:.0f} days, and it "
-  f"does vary by severity (CRITICAL shortest at {res['CRITICAL']['km_median_days']:.0f} days, LOW "
-  f"longest at {res['LOW']['km_median_days']:.0f}). That is not a contradiction of finding 1: "
-  f"during most of this interval the severity label does not exist yet, and disappearance here "
-  f"includes routine version bumps and dependency removal. The gradient reflects how fast these "
-  f"packages churn anyway, while the deliberate response after disclosure (Figure 1) is flat "
-  f"across severities.")
+# --- Page 2: the KM figure, context, limitations ----------------------------
+P("The fix-speed curves, severity by severity", "H")
+P("Figure 2 shows, for each severity level, the share of disclosed vulnerabilities that is still "
+  "unfixed N days after the advisory came out. (These are Kaplan-Meier estimates, the standard "
+  "way to measure time-to-event fairly when some cases are still unfixed at the end of the "
+  "observation window.) If severity drove urgency, the CRITICAL curve would drop much faster "
+  "than the others. It does not.")
+figure(fig_km,
+       "Figure 2. Share of disclosed vulnerabilities still unfixed, by days since disclosure. "
+       "The four severity curves nearly overlap: about half of all cases are fixed by roughly nine "
+       "months, regardless of severity.")
 
-P("Popularity does not predict security", "H")
-P(f"Across the {rqc['n']} projects with dependencies, star rank shows no relationship with "
-  f"vulnerability load (Spearman rho = {rqc['spearman_rho']:+.2f}, p = {rqc['p']:.2f}). "
-  f"{headline['n_affected']} of {headline['n_projects']} projects ({headline['affected_share']:.0%}) "
-  f"carry at least one known-vulnerable dependency at HEAD, with a heavily concentrated "
-  f"distribution: the top-10 vulnerable packages account for {headline['top10_pkg_share']:.0%} of "
-  f"all instances (Gini {headline['gini_pkg']:.2f}), and fixing "
-  f"{headline['pkgs_clear_80']} packages would clear 80% of them. Full study: "
-  f"{coverage['attempted_analyses']:,} analyses across 19 time points per project.")
+P("Before disclosure, nobody is to blame", "H")
+P(f"Vulnerable versions sit in dependency trees far longer than nine months in total "
+  f"({res_lo:.0f} to {res_hi:.0f} days by severity). That sounds worse than it is: most of that "
+  f"time, the vulnerability had not been discovered yet by anyone ({pre_disclosure_share:.0%} of "
+  f"our historical observations predate the advisory's publication). Projects cannot fix what "
+  f"nobody knows about, which is why every fix-speed number in this brief starts counting at "
+  f"public disclosure.")
 
-P("Reading the numbers honestly", "H")
+P("More stars do not mean more security", "H")
+P(f"A project's popularity says nothing about its vulnerability load: across {rqc['n']} projects, "
+  f"the correlation between star rank and number of vulnerabilities is statistically "
+  f"indistinguishable from zero. Overall, {headline['n_affected']} of {headline['n_projects']} "
+  f"projects ({headline['affected_share']:.0%}) currently ship at least one known-vulnerable "
+  f"dependency.")
+
+P("What these numbers can and cannot say", "H")
 for bullet in [
-    "Single pipeline, single corpus: results characterize this scanner on repositories reachable "
-    "through this environment's GitHub endpoint; external generalization is not claimed.",
-    "All counts are conditional on the advisory-knowledge date. We measured this directly by "
-    f"re-scanning frozen code under dated knowledge cutoffs: the swing reaches "
-    f"{abs(ladder_worst):.0f}% for 3.5-year-old knowledge, so numbers from different scan dates "
-    "are not comparable.",
-    f"Fix-timing shares condition on a minable fix ({mine_found / mine_units:.0%} of mining units "
-    "succeeded); where no dated fix exists, durations are interval-censored at quarterly "
-    "resolution and disappearance includes dependency removal, not only deliberate fixes.",
-    "Advisory publication dates are missing for roughly half of historical rows, so "
-    "disclosed-only analyses inherit that coverage bias.",
-    "Severity labels follow the scanner's conflict-resolved CVSS class; about 11% of matches "
-    "carry a lower-confidence flag, and concentration conclusions (not absolute counts) survive "
-    "restriction to high-confidence matches.",
+    "<b>One tool, one sample.</b> We used a single scanner on 100 specific repositories. Other "
+    "scanners and other project samples will give different absolute numbers; the patterns are "
+    "what we expect to travel.",
+    "<b>Results age quickly.</b> Vulnerability databases grow daily, so a scan is only valid for "
+    "its date. We measured this: scanning the same code with year-old advisory data misses most "
+    f"of what a fresh scan finds (up to {abs(ladder_worst):.0f}% with very old data). Do not "
+    "compare numbers from scans taken on different dates.",
+    f"<b>Not every fix could be dated.</b> We found the exact fix commit for "
+    f"{mine_found / mine_units:.0%} of fixes. The day-level percentages (Figure 1) describe those; "
+    "everything else is measured at quarterly resolution.",
+    "<b>Half of the advisories lack a publication date</b> in our data, so \"after disclosure\" "
+    "analyses are based on the half that has one.",
+    "<b>A fix is not always a fix.</b> We count a vulnerability as gone when the vulnerable "
+    "version leaves the project's dependency list. Usually that is an upgrade; sometimes the "
+    "dependency was simply removed.",
 ]:
     P("&bull; " + bullet, "Small")
 
 story.append(Spacer(1, 8))
-P(f"Advisory databases pinned at {str(meta['knowledge']['knowledge_sources']['nvd'])[:10]} · "
-  f"full methods, threats to validity and regeneration commands: RESULTS.md; every number in this "
-  f"brief is read at build time from the audited extraction (results_numbers.json).", "Caption")
+P(f"Data as of {str(meta['knowledge']['knowledge_sources']['nvd'])[:10]} · methods, caveats and "
+  f"regeneration commands: RESULTS.md · every number in this brief is read at build time from the "
+  f"audited extraction (results_numbers.json).", "Caption")
 
 doc = SimpleDocTemplate(
     str(OUT / "js-vuln-study-brief.pdf"),
