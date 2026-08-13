@@ -78,9 +78,38 @@ ASSUMED_WINDOW_COMMITS = 32
 _EVENT_COLS = [
     "npm_name", "project_id", "affected_dependency", "affected_version",
     "workspace_scope", "last_seen", "next_snapshot", "lockfile",
-    "fix_commit_sha", "fixed_at", "method", "status", "n_intervals",
-    "n_commits",
+    "fix_commit_sha", "fixed_at", "fix_kind", "fix_to_version", "method",
+    "status", "n_intervals", "n_commits",
 ]
+
+
+def classify_fix(versions_by_lockfile: dict[str, dict[str, set[str]] | None],
+                 dependency: str, vulnerable_versions: set[str]
+                 ) -> tuple[str, str | None]:
+    """Classify how a `found` fix removed the vulnerable versions, from the
+    parsed root-lockfile states at the fix commit.
+
+    `versions_by_lockfile` maps lockfile name -> {package: {versions}} (None
+    for missing/unparseable lockfiles). If the dependency still resolves in
+    any root lockfile at non-vulnerable versions the fix was an upgrade;
+    returns ("upgraded", comma-joined surviving versions). If the dependency
+    is gone from every parsed root lockfile, returns ("removed", None).
+    "removed" only means the package left the resolved dependency tree: it
+    conflates a direct dependency deliberately dropped with a transitive
+    dependency no longer pulled in because a parent was upgraded. If a
+    vulnerable version somehow still resolves (a lockfile outside the search
+    set) the row is flagged ("anomalous_still_present", all surviving
+    versions) rather than silently misclassified.
+    """
+    remaining: set[str] = set()
+    for versions in versions_by_lockfile.values():
+        if versions:
+            remaining |= versions.get(dependency, set())
+    if remaining & vulnerable_versions:
+        return "anomalous_still_present", ",".join(sorted(remaining))
+    if remaining:
+        return "upgraded", ",".join(sorted(remaining))
+    return "removed", None
 
 
 class UnparseableLockfile(Exception):
@@ -431,7 +460,21 @@ def mine_unit(unit: MiningUnit, http_api: httpx.Client, http_raw: httpx.Client,
         found = locate_fix(commits, present_at, boundary_present)
     except UnparseableLockfile as e:
         found = _result("ambiguous", "unparseable_lockfile", e.lockfile)
-    return {**base, **found, "n_commits": len(commits)}
+    fix_kind, fix_to_version = None, None
+    if found["status"] == "found":
+        # All three names, not just `names`: the dependency may resolve in a
+        # root lockfile that saw no commits inside the window. The `names`
+        # blobs are already cached from the search probes; the others are at
+        # most two extra raw fetches (usually 404 -> missing).
+        states = {
+            name: lockfile_versions_at(http_raw, cache_dir, slug,
+                                       found["fix_commit_sha"], name)[1]
+            for name in ROOT_LOCKFILES
+        }
+        fix_kind, fix_to_version = classify_fix(states, unit.dependency,
+                                                vuln_versions)
+    return {**base, **found, "fix_kind": fix_kind,
+            "fix_to_version": fix_to_version, "n_commits": len(commits)}
 
 
 # --------------------------------------------------------------------------- #

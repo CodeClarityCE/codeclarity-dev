@@ -363,6 +363,10 @@ def merge_day_resolution(intervals: pd.DataFrame, events: pd.DataFrame) -> pd.Da
       for everything else (durations untouched).
     * excluded — True for event=1 intervals whose matching events are all
       `ambiguous` (keep them out of KM fits, but count them); False otherwise.
+    * fix_kind — when the events table carries the miner's fix_kind column
+      (upgraded / removed / anomalous_still_present), day-resolution rows
+      inherit the winning event's value; everything else stays None. Absent
+      from the events table (pre-fix_kind parquets), the column is all None.
 
     When several `found` events share a key (two vulnerable version sets of
     the same dependency fixed in the same window), the LATEST fixed_at wins —
@@ -379,22 +383,25 @@ def merge_day_resolution(intervals: pd.DataFrame, events: pd.DataFrame) -> pd.Da
     out = intervals.copy()
     out["resolution"] = "quarter"
     out["excluded"] = False
+    out["fix_kind"] = None
     if out.empty or events is None or len(events) == 0:
         return out
 
     last_seen = pd.to_datetime(events["last_seen"], errors="coerce")
     fixed_at = pd.to_datetime(events["fixed_at"], errors="coerce", utc=True)
     fixed_at = fixed_at.dt.tz_localize(None).dt.normalize()
-    found: dict[tuple, pd.Timestamp] = {}
+    kinds = (events["fix_kind"] if "fix_kind" in events.columns
+             else pd.Series([None] * len(events), index=events.index))
+    found: dict[tuple, tuple[pd.Timestamp, str | None]] = {}
     ambiguous: set[tuple] = set()
-    for pid, dep, ls, status, fx in zip(
+    for pid, dep, ls, status, fx, kind in zip(
         events["project_id"], events["affected_dependency"], last_seen,
-        events["status"], fixed_at,
+        events["status"], fixed_at, kinds,
     ):
         key = (pid, dep, ls)
         if status == "found" and pd.notna(fx):
-            if key not in found or fx > found[key]:
-                found[key] = fx
+            if key not in found or fx > found[key][0]:
+                found[key] = (fx, kind if isinstance(kind, str) else None)
         elif status == "ambiguous":
             ambiguous.add(key)
 
@@ -402,10 +409,11 @@ def merge_day_resolution(intervals: pd.DataFrame, events: pd.DataFrame) -> pd.Da
         key = (out.at[idx, "project_id"], out.at[idx, "affected_dependency"],
                out.at[idx, "last_seen"])
         if key in found:
-            fx = found[key]
+            fx, kind = found[key]
             if fx >= out.at[idx, "first_seen"]:
                 out.at[idx, "duration_days"] = int((fx - out.at[idx, "first_seen"]).days)
                 out.at[idx, "resolution"] = "day"
+                out.at[idx, "fix_kind"] = kind
         elif key in ambiguous:
             out.at[idx, "excluded"] = True
     return out
@@ -440,3 +448,21 @@ def km_median(times, survival) -> float:
     survival = np.asarray(survival, dtype=float)
     hit = np.nonzero(survival <= 0.5)[0]
     return float(times[hit[0]]) if hit.size else float("nan")
+
+
+def disclosed_subset(vulns: pd.DataFrame, analyses: pd.DataFrame) -> pd.DataFrame:
+    """Rows whose advisory was published on or before the snapshot they were
+    observed at — the "disclosed" survival variant. Dated snapshots compare
+    against their date; HEAD rows against the analysed commit's committed_at
+    (mapped via analysis_id). Rows with no parseable published_date drop out.
+    Single source of truth for this filter — extract_results_numbers and the
+    cohort-comparison scripts must all cut the same subset."""
+    pub = pd.to_datetime(vulns.published_date, errors="coerce", utc=True)
+    snap = pd.to_datetime(
+        vulns.snapshot_date.where(vulns.snapshot_date != "HEAD"),
+        errors="coerce", utc=True)
+    committed = pd.to_datetime(
+        analyses.drop_duplicates("analysis_id").set_index("analysis_id").committed_at,
+        errors="coerce", utc=True)
+    snap_eff = snap.fillna(vulns.analysis_id.map(committed))
+    return vulns[pub.notna() & (pub <= snap_eff)]

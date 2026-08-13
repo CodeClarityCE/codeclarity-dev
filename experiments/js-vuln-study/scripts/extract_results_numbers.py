@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from js_vuln_study.stats import (  # noqa: E402
+    disclosed_subset,
     headline,
     km_curve,
     km_median,
@@ -95,15 +96,46 @@ def survival_day_block(vulns: pd.DataFrame, analyses: pd.DataFrame,
             "n_day_resolution": int((s.resolution == "day").sum()),
             "km_median_days": float(km_median(t, sv)),
             "n_day_fixed": int(len(day_fixed)),
+            "n_fix_upgraded": int((day_fixed.fix_kind == "upgraded").sum()),
+            "n_fix_removed": int((day_fixed.fix_kind == "removed").sum()),
             **tail,
         }
-    return {
+    out = {
         "intervals": int(len(ints)),
         "fixed": int(ints.event.sum()),
         "day_resolution": int((ints.resolution == "day").sum()),
         "excluded_ambiguous": int(ints.excluded.sum()),
         "km_by_severity": by_sev,
     }
+    day_fixed_all = kept[(kept.resolution == "day") & (kept.event == 1)]
+    if day_fixed_all.fix_kind.notna().any():
+        # Upgrade-only sensitivity: day-resolution fixes classified as
+        # dependency removals are DROPPED from the fit (not censored), so
+        # removals cannot masquerade as remediation. Quarter-resolution fixes
+        # carry no classification and stay in.
+        split = {str(k): int(n)
+                 for k, n in day_fixed_all.fix_kind.value_counts(dropna=False).items()}
+        removed_mask = (kept.resolution == "day") & (kept.event == 1) & (kept.fix_kind == "removed")
+        up = kept[~removed_mask]
+        up_sev = {}
+        for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+            s = up[up.severity_class.astype(str).str.upper() == sev]
+            t, sv = km_curve(s.duration_days, s.event)
+            day_fixed = s[(s.resolution == "day") & (s.event == 1)]
+            up_sev[sev] = {
+                "n": int(len(s)),
+                "km_median_days": float(km_median(t, sv)),
+                "n_day_fixed": int(len(day_fixed)),
+                **{
+                    f"fixed_within_{d}d_pct": float((day_fixed.duration_days <= d).mean() * 100) if len(day_fixed) else None
+                    for d in (7, 30, 90)
+                },
+            }
+        out["fix_kind"] = {
+            "day_fixed_split": split,
+            "upgrade_only_km_by_severity": up_sev,
+        }
+    return out
 
 
 def main() -> None:
@@ -187,15 +219,7 @@ def main() -> None:
         "published_after_snapshot_share": float((pub > snap).mean()),
     }
     out["survival_residence"] = survival_block(v, a)
-    pub_all = pd.to_datetime(v.published_date, errors="coerce", utc=True)
-    snap_all = pd.to_datetime(v.snapshot_date.where(v.snapshot_date != "HEAD"), errors="coerce", utc=True)
-    head_committed = pd.to_datetime(
-        v.snapshot_date.eq("HEAD").map(lambda _: None), errors="coerce", utc=True
-    )
-    is_head = v.snapshot_date.eq("HEAD")
-    committed = pd.to_datetime(a.set_index("analysis_id").committed_at, errors="coerce", utc=True)
-    snap_eff = snap_all.fillna(v.analysis_id.map(committed))
-    disclosed = v[pub_all.notna() & (pub_all <= snap_eff)]
+    disclosed = disclosed_subset(v, a)
     out["survival_disclosed"] = survival_block(disclosed, a)
 
     # Day-resolution refinement, if `python run.py mine-lag` has produced the
@@ -290,6 +314,14 @@ def main() -> None:
     ladder_path = TABLES / "ladder_dose_response.json"
     if ladder_path.exists():
         out["ladder"] = json.load(open(ladder_path))
+
+    # Passbolt cohort comparison, if scripts/passbolt_compare.py has run
+    # against data-passbolt/. Loaded verbatim — that script owns the
+    # computation; this file stays the single aggregation point RESULTS.md
+    # quotes from.
+    passbolt_path = ROOT / "data-passbolt" / "tables" / "passbolt_compare.json"
+    if passbolt_path.exists():
+        out["passbolt"] = json.load(open(passbolt_path))
 
     dest = TABLES / "results_numbers.json"
     json.dump(out, open(dest, "w"), indent=1, default=str)

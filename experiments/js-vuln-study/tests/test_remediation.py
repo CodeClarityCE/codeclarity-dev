@@ -273,6 +273,39 @@ def test_lockfile_versions_at_caches_parsed_and_missing(tmp_path):
     assert len(calls) == n_calls
 
 
+# ---- fix-kind classification ------------------------------------------------
+
+
+def test_classify_fix_upgrade():
+    states = {"yarn.lock": {"lodash": {"4.17.21"}}, "package-lock.json": None}
+    assert remediation.classify_fix(states, "lodash", {"4.17.20"}) == (
+        "upgraded", "4.17.21")
+
+
+def test_classify_fix_removed():
+    states = {"yarn.lock": {"semver": {"7.6.0"}}, "package-lock.json": None,
+              "pnpm-lock.yaml": None}
+    assert remediation.classify_fix(states, "lodash", {"4.17.20"}) == (
+        "removed", None)
+
+
+def test_classify_fix_unions_versions_across_lockfiles():
+    states = {"yarn.lock": {"lodash": {"4.17.21"}},
+              "package-lock.json": {"lodash": {"3.10.1"}}}
+    assert remediation.classify_fix(states, "lodash", {"4.17.20"}) == (
+        "upgraded", "3.10.1,4.17.21")
+
+
+def test_classify_fix_flags_still_vulnerable_as_anomalous():
+    # A vulnerable version surviving in a lockfile outside the search set is
+    # flagged rather than reported as an upgrade.
+    states = {"yarn.lock": {"lodash": {"4.17.21"}},
+              "pnpm-lock.yaml": {"lodash": {"4.17.20"}}}
+    kind, to_version = remediation.classify_fix(states, "lodash", {"4.17.20"})
+    assert kind == "anomalous_still_present"
+    assert to_version == "4.17.20,4.17.21"
+
+
 # ---- merge_day_resolution ---------------------------------------------------
 
 
@@ -344,6 +377,34 @@ def test_merge_day_resolution_no_events_is_identity_plus_columns():
     got = stats.merge_day_resolution(ints, pd.DataFrame())
     assert list(got["resolution"]) == ["quarter"]
     assert list(got["excluded"]) == [False]
+    assert list(got["fix_kind"]) == [None]
+
+
+def test_merge_day_resolution_carries_fix_kind():
+    events = pd.DataFrame([{**_event(), "fix_kind": "removed",
+                            "fix_to_version": None}])
+    got = stats.merge_day_resolution(pd.DataFrame([_interval()]), events)
+    row = got.iloc[0]
+    assert row["resolution"] == "day"
+    assert row["fix_kind"] == "removed"
+
+
+def test_merge_day_resolution_fix_kind_follows_winning_event():
+    events = pd.DataFrame([
+        {**_event(fixed_at="2024-04-10T00:00:00Z"), "fix_kind": "removed"},
+        {**_event(fixed_at="2024-05-05T00:00:00Z"), "fix_kind": "upgraded"},
+    ])
+    got = stats.merge_day_resolution(pd.DataFrame([_interval()]), events)
+    assert got.iloc[0]["fix_kind"] == "upgraded"  # latest fixed_at wins
+
+
+def test_merge_day_resolution_tolerates_events_without_fix_kind():
+    # pre-fix_kind parquets: column absent entirely
+    got = stats.merge_day_resolution(pd.DataFrame([_interval()]),
+                                     pd.DataFrame([_event()]))
+    row = got.iloc[0]
+    assert row["resolution"] == "day"
+    assert row["fix_kind"] is None
 
 
 # ---- end-to-end mining ------------------------------------------------------
@@ -408,6 +469,8 @@ def test_run_mining_end_to_end_and_resume(tmp_path, mocked_github):
     assert row["workspace_scope"] == "root"
     assert row["affected_version"] == "4.17.20"
     assert (row["last_seen"], row["next_snapshot"]) == ("2024-04-01", "2024-07-01")
+    assert row["fix_kind"] == "upgraded"
+    assert row["fix_to_version"] == "4.17.21"
     assert calls["api"] == 3  # one commit-list call per lockfile name
 
     # the mined event feeds straight back into the survival intervals

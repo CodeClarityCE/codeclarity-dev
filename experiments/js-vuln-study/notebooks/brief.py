@@ -267,8 +267,10 @@ for bullet in [
     "<b>Half of the advisories lack a publication date</b> in our data, so \"after disclosure\" "
     "analyses are based on the half that has one.",
     "<b>A fix is not always a fix.</b> We count a vulnerability as gone when the vulnerable "
-    "version leaves the project's dependency list. Usually that is an upgrade; sometimes the "
-    "dependency was simply removed.",
+    "version leaves the project's dependency list. Checking every dated fix commit shows about "
+    "three quarters are genuine upgrades and about a quarter removed the dependency instead; "
+    "counting upgrades only, higher severity is fixed somewhat faster (median 246 days for "
+    "critical vs 341 for low).",
 ]:
     P("&bull; " + bullet, "Small")
 

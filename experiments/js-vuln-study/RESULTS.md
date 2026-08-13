@@ -38,7 +38,10 @@ date, not the code, dominated what the scanner reported. Lockfile-history
 mining at day resolution (§12) additionally shows the ~nine-month median
 remediation lags conceal a fast-responder tail: among disclosed
 vulnerabilities whose fix could be dated exactly, about 9% were fixed within
-a week and roughly half within a quarter.
+a week and roughly half within a quarter. Classifying every dated fix's
+mechanism shows 23.7% were dependency removals rather than upgrades;
+restricting to genuine upgrades reveals a mild severity gradient (CRITICAL
+246-day median vs LOW 341) that the pooled medians concealed.
 
 ## 2. Study design
 
@@ -415,6 +418,29 @@ intervals; the rest are censored or ambiguous — over all disclosed intervals
 the ≤7-day share is ~4%), which is also why they do not contradict the ~270-day
 KM medians above (threat 11).
 
+**Fix mechanism: upgrade vs removal.** A vulnerable version can leave the
+lockfile because the dependency was upgraded past the vulnerable range or
+because the dependency left the resolved tree entirely. Classifying every
+mined fix commit's lockfile state (`remediation.classify_fix`; backfilled
+with `scripts/backfill_fix_kind.py`, columns `fix_kind`/`fix_to_version`)
+splits the 6,744 dated fixes into 5,141 upgrades (76.2%), 1,601 removals
+(23.7%) and 2 anomalies; on the disclosed subset the day-fixed split is
+1,875 upgrades vs 479 removals (20.4% removals). "Removed" means the package
+no longer resolves in any root lockfile: it conflates a dependency
+deliberately dropped with a transitive dependency no longer pulled in
+because a parent was upgraded, so it is an upper bound on deliberate
+removal.
+
+Dropping removal-fixes from the disclosed KM fits (they are not remediation
+of the package, `survival_day_resolution.disclosed.fix_kind` in the
+extractor) moves the medians from the flat 264-282 band to a mild monotone
+severity gradient (CRITICAL 246, HIGH 271, MEDIUM 294, LOW 341 days) and
+raises the fast tail slightly (CRITICAL ≤7d 9.4%→11.1%, ≤90d 41.7%→47.5%).
+Removals were masking the gradient: LOW/MEDIUM "fixes" are disproportionately
+dependency churn rather than targeted upgrades. The upgrade-only view is the
+fairer basis for remediation-speed claims; the pooled view remains the right
+one for exposure-time claims (the vulnerability is gone either way).
+
 ## 13. Independent-scanner triangulation
 
 A stratified subsample of 20 HEAD projects was re-scanned with independent
@@ -619,6 +645,12 @@ separates knowledge drift from code drift
    lockfile history (89.0% of units); fixes via lockfile migration edge
    cases or force-pushed history are under-represented, and ambiguous mines
    (10.6%) are excluded from the KM fits.
+12. **Fix-kind classification is lockfile-level.** `fix_kind` (§12) reads
+   the resolved tree at the fix commit only: "removed" cannot distinguish a
+   deliberately dropped direct dependency from a transitive dependency that
+   vanished when its parent was upgraded, and quarter-resolution fixes carry
+   no classification at all, so the upgrade-only sensitivity still contains
+   unclassified quarter-resolution fix events.
 
 ## 17. Regeneration
 
@@ -634,6 +666,7 @@ python run.py retry && python run.py poll # re-drive sad-terminal rows
 python run.py collect --no-deps           # data/tables/*.parquet + run_meta.json
 python run.py triangulate                 # data/tables/triangulation.parquet
 python run.py mine-lag                    # data/tables/remediation_events.parquet (§12)
+.venv/bin/python scripts/backfill_fix_kind.py           # fix_kind/fix_to_version (§12; no-op on fresh mines)
 MPLBACKEND=Agg .venv/bin/python notebooks/analysis.py   # figures + headline cells
 .venv/bin/python notebooks/report.py      # data/report/js-vuln-study-report.pdf
 .venv/bin/python notebooks/brief.py       # data/report/js-vuln-study-brief.pdf (2-page shareable)

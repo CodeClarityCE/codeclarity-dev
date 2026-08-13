@@ -4,3 +4,5 @@ data/
 __pycache__/
 .venv/
 data-ladder/
+data-passbolt/*
+!data-passbolt/sample.json
