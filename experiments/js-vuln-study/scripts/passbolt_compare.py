@@ -160,7 +160,18 @@ def _cohort_block(data_dir: Path, recency_cutoff: pd.Timestamp) -> tuple[dict, d
 def _stamp_check(base_meta: dict | None, cohort_meta: dict | None) -> dict:
     base = (base_meta or {}).get("knowledge")
     cohort = (cohort_meta or {}).get("knowledge")
-    match = base == cohort and base is not None
+
+    def _norm(k):
+        # Drop null-valued sources: the provenance endpoint gained keys (e.g.
+        # "osv": null) between runs; a source that stamps nothing on both
+        # sides carries no vintage information and must not fail the guard.
+        if not isinstance(k, dict):
+            return None
+        srcs = {n: v for n, v in (k.get("knowledge_sources") or {}).items()
+                if v not in (None, "0")}
+        return (tuple(sorted(srcs.items())), k.get("epss_rows"))
+
+    match = base is not None and _norm(base) == _norm(cohort)
     if not match:
         log.warning("knowledge stamps differ between baseline and cohort — "
                     "cross-cohort deltas include knowledge drift!\n"

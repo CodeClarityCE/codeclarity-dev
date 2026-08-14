@@ -8,7 +8,7 @@ or from
 [`data/tables/run_meta.json`](data/tables/run_meta.json). Metric definitions
 are in [DATA_DICTIONARY.md](DATA_DICTIONARY.md); methodology and reproduction
 commands are in [README.md](README.md). Threats to validity are collected in
-[§16](#16-threats-to-validity); individual results reference them inline.
+[§17](#17-threats-to-validity); individual results reference them inline.
 
 ## 1. Abstract
 
@@ -27,7 +27,7 @@ early 2026, rising to 56.6 at the final snapshot, which lies closest to
 the knowledge-DB snapshot date. Findings were stress-tested with a
 four-subset sensitivity sweep and bounded by an independent-scanner
 triangulation on a 20-project subsample; all counts are conditional on this
-run's corpus and knowledge-database snapshot (§16, threats 1–2).
+run's corpus and knowledge-database snapshot (§17, threats 1–2).
 
 How conditional, we measured directly: re-scanning 1,297 commit-frozen trees
 under six advisory-knowledge cutoff dates (§14; a published-date membership
@@ -41,7 +41,11 @@ vulnerabilities whose fix could be dated exactly, about 9% were fixed within
 a week and roughly half within a quarter. Classifying every dated fix's
 mechanism shows 23.7% were dependency removals rather than upgrades;
 restricting to genuine upgrades reveals a mild severity gradient (CRITICAL
-246-day median vs LOW 341) that the pooled medians concealed.
+246-day median vs LOW 341) that the pooled medians concealed. A three-repo
+Passbolt cohort run through the identical pipeline (§16) fixes disclosed
+vulnerable dependencies with a median lag of 15 days versus the baseline's
+271, and 12 days for 2024+ disclosures, robust to removal-fix exclusion and
+disclosure-era stratification.
 
 ## 2. Study design
 
@@ -75,7 +79,7 @@ use the HEAD slice only; the multi-snapshot frame feeds only the longitudinal
 
 Vulnerability counts are a function of the knowledge-database snapshot below.
 A rerun after a knowledge update counts against a different CVE universe and
-is not directly comparable (§16, threat 2).
+is not directly comparable (§17, threat 2).
 
 | Item | Value |
 |------|-------|
@@ -106,7 +110,7 @@ Two gaps in this record: the provenance endpoint does not expose a
 last-update timestamp for OSV, although OSV is the winning source for 78.3%
 of HEAD instance matches (`winning_source_head`: OSV 13,066, GCVE 3,202, NVD
 410), so the snapshot pin is incomplete for the dominant source; and the npm
-source's `"0"` sentinel means that source contributes nothing (§16, threat
+source's `"0"` sentinel means that source contributes nothing (§17, threat
 2).
 
 ## 4. Sampling and population
@@ -123,13 +127,13 @@ star order until 100 qualify.
 **Selection bias.** The root-lockfile requirement excludes popular libraries
 that deliberately do not commit a lockfile and monorepos whose packages live
 below the root. The sample therefore skews toward applications and monorepos
-with parseable root lockfiles (§16, threat 3).
+with parseable root lockfiles (§17, threat 3).
 
 **Corpus caveat.** The GitHub API in this environment is a mirror whose slug
 universe differs from public GitHub — verified directly: `react/react`
 resolves while `facebook/react` does not. Star ranks, repository identities,
 and therefore every downstream statistic characterize **this corpus**, not
-public GitHub (§16, threat 1).
+public GitHub (§17, threat 1).
 
 ## 5. Coverage
 
@@ -171,7 +175,7 @@ the recorded data does not pin down a cause. In the survival analysis (§12)
 these gaps are treated as censoring rather than as fixes; Kaplan–Meier
 estimates remain unbiased only if censoring is non-informative, which
 repository-concentrated download failures may violate. They also thin the
-longitudinal view (§16, threat 5).
+longitudinal view (§17, threat 5).
 
 ## 6. Cross-sectional results (HEAD)
 
@@ -213,7 +217,7 @@ Most systemic packages, by number of HEAD projects affected:
 | uuid | 34 |
 | ajv | 33 |
 
-These counts inherit the match-confidence caveat (§16, threat 4): a share of
+These counts inherit the match-confidence caveat (§17, threat 4): a share of
 instances carry a `MATCH_POSSIBLE_INCORRECT` flag, and §7 quantifies the
 effect of excluding them.
 
@@ -222,7 +226,7 @@ effect of excluding them.
 The headline metrics were recomputed on four subsets of the HEAD instances:
 `all`, `match_correct_only` (`conflict_flag == MATCH_CORRECT`),
 `non_withdrawn` (advisory not retracted), and `direct_only` (heuristic
-direct-dependency flag; §16, threat 7).
+direct-dependency flag; §17, threat 7).
 
 | Metric | all | match_correct_only | non_withdrawn | direct_only |
 |--------|-----|--------------------|---------------|-------------|
@@ -260,7 +264,7 @@ scored instances the median EPSS score is 0.00107 and the 90th percentile
 0.00508; 220 instances score above 0.1 and 125 above 0.5. These figures are
 prioritization context only — EPSS estimates exploitation likelihood in the
 wild for the CVE, not risk in these specific deployments, and inherits the
-knowledge-snapshot dependence of §16, threat 2.
+knowledge-snapshot dependence of §17, threat 2.
 
 ## 9. Popularity vs load (RQ-C)
 
@@ -319,7 +323,7 @@ recently disclosed advisories have had the least calendar time to be
 remediated, so an end-of-series
 increase is expected under point-in-time counting even without any change in
 project behavior. The balanced panel also over-represents long-lived
-repositories (§16, threats 3 and 5).
+repositories (§17, threats 3 and 5).
 
 ## 12. Vulnerable-version residence time (RQ-G)
 
@@ -451,7 +455,7 @@ reported advisories, but — as in the archived run — none carried a CVE
 identifier in this environment, so it contributed no pairs to the CVE-level
 comparison; its findings are tallied in the `npm_audit_unmapped` column of
 `data/tables/triangulation.parquet`. CVE-level agreement therefore rests on
-osv-scanner alone, measured on the CVE-mapped slice only (§16, threat 6).
+osv-scanner alone, measured on the CVE-mapped slice only (§17, threat 6).
 
 CodeClarity vs osv-scanner Jaccard agreement, by lockfile type (per
 `triangulate.py`, agreement must be read per lockfile population; "defined /
@@ -475,7 +479,7 @@ run is attributable to knowledge-snapshot staleness rather than to scanner
 methodology. The
 residual disagreement is plausibly attributable to differences in advisory
 sourcing and alias completeness; the triangulation bounds, but does not
-eliminate, single-scanner error in the headline counts (§16, threat 6).
+eliminate, single-scanner error in the headline counts (§17, threat 6).
 
 ## 14. Knowledge-staleness dose-response (commit-frozen ladder)
 
@@ -576,7 +580,66 @@ separates knowledge drift from code drift
   (vulnerability, package) pairs. Vanished rows on unchanged code measure
   advisory withdrawal/rename churn.
 
-## 16. Threats to validity
+## 16. Cohort comparison: Passbolt vs the top-100
+
+To test whether a security-focused vendor responds to disclosures faster than
+the popularity-selected baseline, three Passbolt repositories
+(`passbolt/passbolt_api`, `passbolt/passbolt_browser_extension`,
+`passbolt/passbolt_styleguide`) were run through the identical pipeline:
+same 18-date quarterly grid plus pinned HEAD, same analyzer versions, same
+knowledge snapshot (stamp equality is asserted by the comparison script),
+same shared statistics code (`presence_intervals`, `merge_day_resolution`,
+`km_curve`, `disclosed_subset`), and the same day-resolution fix-commit
+mining (222 units, 187 found = 84.2%, zero disagreements between the miner's
+native fix-kind classification and the offline backfill). All 57 analyses
+completed. Scope note: all three repos are scanned through their root npm
+lockfiles; `passbolt_api`'s Composer (PHP) dependencies are out of scope, so
+its rows cover the npm tooling side only. Numbers live in
+`data-passbolt/tables/passbolt_compare.json`, loaded verbatim into
+`results_numbers.json` under `passbolt`; figures in `data-passbolt/report/`.
+Generated by `scripts/passbolt_compare.py`.
+
+On the disclosed survival variant (intervals starting at the first snapshot
+where a vulnerability was observed with its advisory already published,
+identically in both cohorts):
+
+| Metric | Top-100 baseline | Passbolt |
+|--------|------------------|----------|
+| Projects | 98 | 3 |
+| Intervals (kept / excluded-ambiguous) | 4,738 / 198 | 58 / 15 |
+| Fixed / censored share | 2,390 / 49.6% | 54 / 6.9% |
+| Pooled KM median | 271 days | **15 days** |
+| Fixed within 7 days (of dated fixes) | 8.8% | 29.6% |
+| Fixed within 90 days (of dated fixes) | 48.9% | 92.6% |
+| Upgrade-only KM median (removals dropped) | 274 days | 12 days |
+| Disclosed 2024+ KM median | 145 days | **12 days** |
+| Disclosed pre-2024 KM median | 355 days | 21 days |
+
+The gap is robust to every guardrail applied: it survives dropping
+dependency-removal fixes (upgrade-only 12 days, with 12 of 54 dated Passbolt
+fixes being removals), it holds within each disclosure era (12 vs 145 days
+for 2024+ disclosures, 21 vs 355 for older ones, so it is not an artifact of
+Passbolt's vulnerability mix skewing recent), and it is consistent across all
+three repositories (per-repo medians 12, 16, and 18 days). Passbolt's
+recency trend also matches the claim "especially recently": 2024+ disclosures
+resolve in a median 12 days with 89% of the era's intervals fixed, and the
+2024+ KM curve reaches zero unfixed by day 55. Only 4 of Passbolt's 58 kept
+intervals were still unfixed at their last observation, versus roughly half
+of the baseline's.
+
+Honesty box for this comparison: (a) 3 repositories against 98 is a case
+study against a population, reported with exact n throughout, and
+per-severity cells are too small to fit (CRITICAL n=7, LOW n=3); (b)
+quarterly presence detection cannot see a vulnerability introduced and fixed
+within a single quarter, which undercounts fast fixes in BOTH cohorts and
+therefore biases against the very effect measured, making the gap
+conservative; (c) the excluded-ambiguous share is higher for Passbolt (15 of
+73 event intervals, 20.5%, vs 4.0% baseline), mostly lockfile-migration
+windows the miner cannot classify; (d) Passbolt HEAD trees were scanned
+eleven days after the baseline HEAD trees, against the same knowledge
+snapshot.
+
+## 17. Threats to validity
 
 1. **Corpus provenance.** The environment's GitHub API is a mirror whose slug
    universe differs from public GitHub (verified: `react/react` resolves,
@@ -590,7 +653,7 @@ separates knowledge drift from code drift
    source (an `osv_last` stamp has since been added and future mirror runs
    record it); the npm source (`"0"` sentinel) contributes nothing. Runs
    under different snapshots count different CVE universes and are not
-   directly comparable; compare `run_meta.json` records first (§17), and
+   directly comparable; compare `run_meta.json` records first (§18), and
    see §14 for how large the effect is.
 3. **Selection bias.** Requiring a root `package.json` plus lockfile excludes
    libraries that do not commit lockfiles and nested-package monorepos,
@@ -652,7 +715,7 @@ separates knowledge drift from code drift
    no classification at all, so the upgrade-only sensitivity still contains
    unclassified quarter-resolution fix events.
 
-## 17. Regeneration
+## 18. Regeneration
 
 From raw data to the numbers in this document (venv per README.md
 prerequisites; each command is resumable and de-duplicating):
@@ -671,6 +734,18 @@ MPLBACKEND=Agg .venv/bin/python notebooks/analysis.py   # figures + headline cel
 .venv/bin/python notebooks/report.py      # data/report/js-vuln-study-report.pdf
 .venv/bin/python notebooks/brief.py       # data/report/js-vuln-study-brief.pdf (2-page shareable)
 .venv/bin/python scripts/extract_results_numbers.py     # data/tables/results_numbers.json
+```
+
+The Passbolt cohort comparison (§16) runs the same pipeline in its own data
+dir and aggregates against the baseline:
+
+```bash
+JS_VULN_DATA_DIR=data-passbolt python run.py submit --snapshots  # sample.json is hand-written, committed
+JS_VULN_DATA_DIR=data-passbolt python run.py poll
+JS_VULN_DATA_DIR=data-passbolt python run.py collect --no-deps
+JS_VULN_DATA_DIR=data-passbolt python run.py mine-lag
+.venv/bin/python scripts/passbolt_compare.py   # data-passbolt/tables/passbolt_compare.json + report figures
+.venv/bin/python scripts/extract_results_numbers.py             # folds in the passbolt block
 ```
 
 The knowledge-staleness ladder (§14) re-scans the archived run's frozen

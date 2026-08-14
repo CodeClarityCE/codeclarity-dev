@@ -46,7 +46,7 @@ def _mk_cohort(tmp_path: Path, name: str, knowledge: dict) -> Path:
 
 
 def test_compute_pooled_and_recency(tmp_path):
-    k = {"nvd": "2026-08-03"}
+    k = {"knowledge_sources": {"nvd": "2026-08-03", "osv": None}, "epss_rows": 5}
     base = _mk_cohort(tmp_path, "base", k)
     cohort = _mk_cohort(tmp_path, "passbolt", k)
     got = compute(base, cohort, recency_cutoff="2024-01-01")
@@ -75,8 +75,8 @@ def test_compute_pooled_and_recency(tmp_path):
 
 
 def test_compute_flags_stamp_mismatch(tmp_path, caplog):
-    base = _mk_cohort(tmp_path, "base", {"nvd": "2026-08-03"})
-    cohort = _mk_cohort(tmp_path, "passbolt", {"nvd": "2026-09-01"})
+    base = _mk_cohort(tmp_path, "base", {"knowledge_sources": {"nvd": "2026-08-03"}, "epss_rows": 5})
+    cohort = _mk_cohort(tmp_path, "passbolt", {"knowledge_sources": {"nvd": "2026-09-01"}, "epss_rows": 5})
     with caplog.at_level(logging.WARNING):
         got = compute(base, cohort)
     assert got["meta"]["knowledge_stamps"]["match"] is False
@@ -84,8 +84,8 @@ def test_compute_flags_stamp_mismatch(tmp_path, caplog):
 
 
 def test_compute_missing_run_meta_is_mismatch(tmp_path):
-    base = _mk_cohort(tmp_path, "base", {"nvd": "2026-08-03"})
-    cohort = _mk_cohort(tmp_path, "passbolt", {"nvd": "2026-08-03"})
+    base = _mk_cohort(tmp_path, "base", {"knowledge_sources": {"nvd": "2026-08-03"}, "epss_rows": 5})
+    cohort = _mk_cohort(tmp_path, "passbolt", {"knowledge_sources": {"nvd": "2026-08-03"}, "epss_rows": 5})
     (cohort / "tables" / "run_meta.json").unlink()
     got = compute(base, cohort)
     assert got["meta"]["knowledge_stamps"]["match"] is False
