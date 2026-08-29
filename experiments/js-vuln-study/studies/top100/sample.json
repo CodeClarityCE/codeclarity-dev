@@ -1,0 +1,902 @@
+[
+  {
+    "npm_name": "freeCodeCamp/freeCodeCamp",
+    "rank": 0,
+    "tier": "top100",
+    "git_url": "https://github.com/freeCodeCamp/freeCodeCamp",
+    "github_owner": "freeCodeCamp",
+    "github_repo": "freeCodeCamp",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "openclaw/openclaw",
+    "rank": 1,
+    "tier": "top100",
+    "git_url": "https://github.com/openclaw/openclaw",
+    "github_owner": "openclaw",
+    "github_repo": "openclaw",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "nilbuild/developer-roadmap",
+    "rank": 2,
+    "tier": "top100",
+    "git_url": "https://github.com/nilbuild/developer-roadmap",
+    "github_owner": "nilbuild",
+    "github_repo": "developer-roadmap",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "react/react",
+    "rank": 3,
+    "tier": "top100",
+    "git_url": "https://github.com/react/react",
+    "github_owner": "react",
+    "github_repo": "react",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "affaan-m/ECC",
+    "rank": 4,
+    "tier": "top100",
+    "git_url": "https://github.com/affaan-m/ECC",
+    "github_owner": "affaan-m",
+    "github_repo": "ECC",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "vuejs/vue",
+    "rank": 5,
+    "tier": "top100",
+    "git_url": "https://github.com/vuejs/vue",
+    "github_owner": "vuejs",
+    "github_repo": "vue",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "n8n-io/n8n",
+    "rank": 6,
+    "tier": "top100",
+    "git_url": "https://github.com/n8n-io/n8n",
+    "github_owner": "n8n-io",
+    "github_repo": "n8n",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "trekhleb/javascript-algorithms",
+    "rank": 7,
+    "tier": "top100",
+    "git_url": "https://github.com/trekhleb/javascript-algorithms",
+    "github_owner": "trekhleb",
+    "github_repo": "javascript-algorithms",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "microsoft/vscode",
+    "rank": 8,
+    "tier": "top100",
+    "git_url": "https://github.com/microsoft/vscode",
+    "github_owner": "microsoft",
+    "github_repo": "vscode",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "Snailclimb/JavaGuide",
+    "rank": 9,
+    "tier": "top100",
+    "git_url": "https://github.com/Snailclimb/JavaGuide",
+    "github_owner": "Snailclimb",
+    "github_repo": "JavaGuide",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "langgenius/dify",
+    "rank": 10,
+    "tier": "top100",
+    "git_url": "https://github.com/langgenius/dify",
+    "github_owner": "langgenius",
+    "github_repo": "dify",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "yangshun/tech-interview-handbook",
+    "rank": 11,
+    "tier": "top100",
+    "git_url": "https://github.com/yangshun/tech-interview-handbook",
+    "github_owner": "yangshun",
+    "github_repo": "tech-interview-handbook",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "vercel/next.js",
+    "rank": 12,
+    "tier": "top100",
+    "git_url": "https://github.com/vercel/next.js",
+    "github_owner": "vercel",
+    "github_repo": "next.js",
+    "default_branch": "canary"
+  },
+  {
+    "npm_name": "clash-verge-rev/clash-verge-rev",
+    "rank": 13,
+    "tier": "top100",
+    "git_url": "https://github.com/clash-verge-rev/clash-verge-rev",
+    "github_owner": "clash-verge-rev",
+    "github_repo": "clash-verge-rev",
+    "default_branch": "dev"
+  },
+  {
+    "npm_name": "iptv-org/iptv",
+    "rank": 14,
+    "tier": "top100",
+    "git_url": "https://github.com/iptv-org/iptv",
+    "github_owner": "iptv-org",
+    "github_repo": "iptv",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "excalidraw/excalidraw",
+    "rank": 15,
+    "tier": "top100",
+    "git_url": "https://github.com/excalidraw/excalidraw",
+    "github_owner": "excalidraw",
+    "github_repo": "excalidraw",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "Chalarangelo/30-seconds-of-code",
+    "rank": 16,
+    "tier": "top100",
+    "git_url": "https://github.com/Chalarangelo/30-seconds-of-code",
+    "github_owner": "Chalarangelo",
+    "github_repo": "30-seconds-of-code",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "shadcn-ui/ui",
+    "rank": 17,
+    "tier": "top100",
+    "git_url": "https://github.com/shadcn-ui/ui",
+    "github_owner": "shadcn-ui",
+    "github_repo": "ui",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "mrdoob/three.js",
+    "rank": 18,
+    "tier": "top100",
+    "git_url": "https://github.com/mrdoob/three.js",
+    "github_owner": "mrdoob",
+    "github_repo": "three.js",
+    "default_branch": "dev"
+  },
+  {
+    "npm_name": "microsoft/TypeScript",
+    "rank": 19,
+    "tier": "top100",
+    "git_url": "https://github.com/microsoft/TypeScript",
+    "github_owner": "microsoft",
+    "github_repo": "TypeScript",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "immich-app/immich",
+    "rank": 20,
+    "tier": "top100",
+    "git_url": "https://github.com/immich-app/immich",
+    "github_owner": "immich-app",
+    "github_repo": "immich",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "axios/axios",
+    "rank": 21,
+    "tier": "top100",
+    "git_url": "https://github.com/axios/axios",
+    "github_owner": "axios",
+    "github_repo": "axios",
+    "default_branch": "v1.x"
+  },
+  {
+    "npm_name": "supabase/supabase",
+    "rank": 22,
+    "tier": "top100",
+    "git_url": "https://github.com/supabase/supabase",
+    "github_owner": "supabase",
+    "github_repo": "supabase",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "google-gemini/gemini-cli",
+    "rank": 23,
+    "tier": "top100",
+    "git_url": "https://github.com/google-gemini/gemini-cli",
+    "github_owner": "google-gemini",
+    "github_repo": "gemini-cli",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "react/create-react-app",
+    "rank": 24,
+    "tier": "top100",
+    "git_url": "https://github.com/react/create-react-app",
+    "github_owner": "react",
+    "github_repo": "create-react-app",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "angular/angular",
+    "rank": 25,
+    "tier": "top100",
+    "git_url": "https://github.com/angular/angular",
+    "github_owner": "angular",
+    "github_repo": "angular",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "mui/material-ui",
+    "rank": 26,
+    "tier": "top100",
+    "git_url": "https://github.com/mui/material-ui",
+    "github_owner": "mui",
+    "github_repo": "material-ui",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "tailwindlabs/tailwindcss",
+    "rank": 27,
+    "tier": "top100",
+    "git_url": "https://github.com/tailwindlabs/tailwindcss",
+    "github_owner": "tailwindlabs",
+    "github_repo": "tailwindcss",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "microsoft/Web-Dev-For-Beginners",
+    "rank": 28,
+    "tier": "top100",
+    "git_url": "https://github.com/microsoft/Web-Dev-For-Beginners",
+    "github_owner": "microsoft",
+    "github_repo": "Web-Dev-For-Beginners",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "puppeteer/puppeteer",
+    "rank": 29,
+    "tier": "top100",
+    "git_url": "https://github.com/puppeteer/puppeteer",
+    "github_owner": "puppeteer",
+    "github_repo": "puppeteer",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "microsoft/playwright",
+    "rank": 30,
+    "tier": "top100",
+    "git_url": "https://github.com/microsoft/playwright",
+    "github_owner": "microsoft",
+    "github_repo": "playwright",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "storybookjs/storybook",
+    "rank": 31,
+    "tier": "top100",
+    "git_url": "https://github.com/storybookjs/storybook",
+    "github_owner": "storybookjs",
+    "github_repo": "storybook",
+    "default_branch": "next"
+  },
+  {
+    "npm_name": "louislam/uptime-kuma",
+    "rank": 32,
+    "tier": "top100",
+    "git_url": "https://github.com/louislam/uptime-kuma",
+    "github_owner": "louislam",
+    "github_repo": "uptime-kuma",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "mermaid-js/mermaid",
+    "rank": 33,
+    "tier": "top100",
+    "git_url": "https://github.com/mermaid-js/mermaid",
+    "github_owner": "mermaid-js",
+    "github_repo": "mermaid",
+    "default_branch": "develop"
+  },
+  {
+    "npm_name": "modelcontextprotocol/servers",
+    "rank": 34,
+    "tier": "top100",
+    "git_url": "https://github.com/modelcontextprotocol/servers",
+    "github_owner": "modelcontextprotocol",
+    "github_repo": "servers",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "ChatGPTNextWeb/NextChat",
+    "rank": 35,
+    "tier": "top100",
+    "git_url": "https://github.com/ChatGPTNextWeb/NextChat",
+    "github_owner": "ChatGPTNextWeb",
+    "github_repo": "NextChat",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "sveltejs/svelte",
+    "rank": 36,
+    "tier": "top100",
+    "git_url": "https://github.com/sveltejs/svelte",
+    "github_owner": "sveltejs",
+    "github_repo": "svelte",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "nexu-io/open-design",
+    "rank": 37,
+    "tier": "top100",
+    "git_url": "https://github.com/nexu-io/open-design",
+    "github_owner": "nexu-io",
+    "github_repo": "open-design",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "OpenHands/OpenHands",
+    "rank": 38,
+    "tier": "top100",
+    "git_url": "https://github.com/OpenHands/OpenHands",
+    "github_owner": "OpenHands",
+    "github_repo": "OpenHands",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "earendil-works/pi",
+    "rank": 39,
+    "tier": "top100",
+    "git_url": "https://github.com/earendil-works/pi",
+    "github_owner": "earendil-works",
+    "github_repo": "pi",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "vitejs/vite",
+    "rank": 40,
+    "tier": "top100",
+    "git_url": "https://github.com/vitejs/vite",
+    "github_owner": "vitejs",
+    "github_repo": "vite",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "hoppscotch/hoppscotch",
+    "rank": 41,
+    "tier": "top100",
+    "git_url": "https://github.com/hoppscotch/hoppscotch",
+    "github_owner": "hoppscotch",
+    "github_repo": "hoppscotch",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "anuraghazra/github-readme-stats",
+    "rank": 42,
+    "tier": "top100",
+    "git_url": "https://github.com/anuraghazra/github-readme-stats",
+    "github_owner": "anuraghazra",
+    "github_repo": "github-readme-stats",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "coder/code-server",
+    "rank": 43,
+    "tier": "top100",
+    "git_url": "https://github.com/coder/code-server",
+    "github_owner": "coder",
+    "github_repo": "code-server",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "koala73/worldmonitor",
+    "rank": 44,
+    "tier": "top100",
+    "git_url": "https://github.com/koala73/worldmonitor",
+    "github_owner": "koala73",
+    "github_repo": "worldmonitor",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "Egonex-AI/Understand-Anything",
+    "rank": 45,
+    "tier": "top100",
+    "git_url": "https://github.com/Egonex-AI/Understand-Anything",
+    "github_owner": "Egonex-AI",
+    "github_repo": "Understand-Anything",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "nestjs/nest",
+    "rank": 46,
+    "tier": "top100",
+    "git_url": "https://github.com/nestjs/nest",
+    "github_owner": "nestjs",
+    "github_repo": "nest",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "grafana/grafana",
+    "rank": 47,
+    "tier": "top100",
+    "git_url": "https://github.com/grafana/grafana",
+    "github_owner": "grafana",
+    "github_repo": "grafana",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "typicode/json-server",
+    "rank": 48,
+    "tier": "top100",
+    "git_url": "https://github.com/typicode/json-server",
+    "github_owner": "typicode",
+    "github_repo": "json-server",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "paperclipai/paperclip",
+    "rank": 49,
+    "tier": "top100",
+    "git_url": "https://github.com/paperclipai/paperclip",
+    "github_owner": "paperclipai",
+    "github_repo": "paperclip",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "Eugeny/tabby",
+    "rank": 50,
+    "tier": "top100",
+    "git_url": "https://github.com/Eugeny/tabby",
+    "github_owner": "Eugeny",
+    "github_repo": "tabby",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "strapi/strapi",
+    "rank": 51,
+    "tier": "top100",
+    "git_url": "https://github.com/strapi/strapi",
+    "github_owner": "strapi",
+    "github_repo": "strapi",
+    "default_branch": "develop"
+  },
+  {
+    "npm_name": "hakimel/reveal.js",
+    "rank": 52,
+    "tier": "top100",
+    "git_url": "https://github.com/hakimel/reveal.js",
+    "github_owner": "hakimel",
+    "github_repo": "reveal.js",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "juliangarnier/anime",
+    "rank": 53,
+    "tier": "top100",
+    "git_url": "https://github.com/juliangarnier/anime",
+    "github_owner": "juliangarnier",
+    "github_repo": "anime",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "toeverything/AFFiNE",
+    "rank": 54,
+    "tier": "top100",
+    "git_url": "https://github.com/toeverything/AFFiNE",
+    "github_owner": "toeverything",
+    "github_repo": "AFFiNE",
+    "default_branch": "canary"
+  },
+  {
+    "npm_name": "chartjs/Chart.js",
+    "rank": 55,
+    "tier": "top100",
+    "git_url": "https://github.com/chartjs/Chart.js",
+    "github_owner": "chartjs",
+    "github_repo": "Chart.js",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "apache/echarts",
+    "rank": 56,
+    "tier": "top100",
+    "git_url": "https://github.com/apache/echarts",
+    "github_owner": "apache",
+    "github_repo": "echarts",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "ruvnet/ruflo",
+    "rank": 57,
+    "tier": "top100",
+    "git_url": "https://github.com/ruvnet/ruflo",
+    "github_owner": "ruvnet",
+    "github_repo": "ruflo",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "gorhill/uBlock",
+    "rank": 58,
+    "tier": "top100",
+    "git_url": "https://github.com/gorhill/uBlock",
+    "github_owner": "gorhill",
+    "github_repo": "uBlock",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "leonardomso/33-js-concepts",
+    "rank": 59,
+    "tier": "top100",
+    "git_url": "https://github.com/leonardomso/33-js-concepts",
+    "github_owner": "leonardomso",
+    "github_repo": "33-js-concepts",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "webpack/webpack",
+    "rank": 60,
+    "tier": "top100",
+    "git_url": "https://github.com/webpack/webpack",
+    "github_owner": "webpack",
+    "github_repo": "webpack",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "facebook/docusaurus",
+    "rank": 61,
+    "tier": "top100",
+    "git_url": "https://github.com/facebook/docusaurus",
+    "github_owner": "facebook",
+    "github_repo": "docusaurus",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "nocodb/nocodb",
+    "rank": 62,
+    "tier": "top100",
+    "git_url": "https://github.com/nocodb/nocodb",
+    "github_owner": "nocodb",
+    "github_repo": "nocodb",
+    "default_branch": "develop"
+  },
+  {
+    "npm_name": "Fission-AI/OpenSpec",
+    "rank": 63,
+    "tier": "top100",
+    "git_url": "https://github.com/Fission-AI/OpenSpec",
+    "github_owner": "Fission-AI",
+    "github_repo": "OpenSpec",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "socketio/socket.io",
+    "rank": 64,
+    "tier": "top100",
+    "git_url": "https://github.com/socketio/socket.io",
+    "github_owner": "socketio",
+    "github_repo": "socket.io",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "jgraph/drawio-desktop",
+    "rank": 65,
+    "tier": "top100",
+    "git_url": "https://github.com/jgraph/drawio-desktop",
+    "github_owner": "jgraph",
+    "github_repo": "drawio-desktop",
+    "default_branch": "dev"
+  },
+  {
+    "npm_name": "reduxjs/redux",
+    "rank": 66,
+    "tier": "top100",
+    "git_url": "https://github.com/reduxjs/redux",
+    "github_owner": "reduxjs",
+    "github_repo": "redux",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "withastro/astro",
+    "rank": 67,
+    "tier": "top100",
+    "git_url": "https://github.com/withastro/astro",
+    "github_owner": "withastro",
+    "github_repo": "astro",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "lodash/lodash",
+    "rank": 68,
+    "tier": "top100",
+    "git_url": "https://github.com/lodash/lodash",
+    "github_owner": "lodash",
+    "github_repo": "lodash",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "nuxt/nuxt",
+    "rank": 69,
+    "tier": "top100",
+    "git_url": "https://github.com/nuxt/nuxt",
+    "github_owner": "nuxt",
+    "github_repo": "nuxt",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "upstash/context7",
+    "rank": 70,
+    "tier": "top100",
+    "git_url": "https://github.com/upstash/context7",
+    "github_owner": "upstash",
+    "github_repo": "context7",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "jquery/jquery",
+    "rank": 71,
+    "tier": "top100",
+    "git_url": "https://github.com/jquery/jquery",
+    "github_owner": "jquery",
+    "github_repo": "jquery",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "marktext/marktext",
+    "rank": 72,
+    "tier": "top100",
+    "git_url": "https://github.com/marktext/marktext",
+    "github_owner": "marktext",
+    "github_repo": "marktext",
+    "default_branch": "develop"
+  },
+  {
+    "npm_name": "pmndrs/zustand",
+    "rank": 73,
+    "tier": "top100",
+    "git_url": "https://github.com/pmndrs/zustand",
+    "github_owner": "pmndrs",
+    "github_repo": "zustand",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "h5bp/html5-boilerplate",
+    "rank": 74,
+    "tier": "top100",
+    "git_url": "https://github.com/h5bp/html5-boilerplate",
+    "github_owner": "h5bp",
+    "github_repo": "html5-boilerplate",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "appwrite/appwrite",
+    "rank": 75,
+    "tier": "top100",
+    "git_url": "https://github.com/appwrite/appwrite",
+    "github_owner": "appwrite",
+    "github_repo": "appwrite",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "remix-run/react-router",
+    "rank": 76,
+    "tier": "top100",
+    "git_url": "https://github.com/remix-run/react-router",
+    "github_owner": "remix-run",
+    "github_repo": "react-router",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "gatsbyjs/gatsby",
+    "rank": 77,
+    "tier": "top100",
+    "git_url": "https://github.com/gatsbyjs/gatsby",
+    "github_owner": "gatsbyjs",
+    "github_repo": "gatsby",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "laurent22/joplin",
+    "rank": 78,
+    "tier": "top100",
+    "git_url": "https://github.com/laurent22/joplin",
+    "github_owner": "laurent22",
+    "github_repo": "joplin",
+    "default_branch": "dev"
+  },
+  {
+    "npm_name": "azl397985856/leetcode",
+    "rank": 79,
+    "tier": "top100",
+    "git_url": "https://github.com/azl397985856/leetcode",
+    "github_owner": "azl397985856",
+    "github_repo": "leetcode",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "makeplane/plane",
+    "rank": 80,
+    "tier": "top100",
+    "git_url": "https://github.com/makeplane/plane",
+    "github_owner": "makeplane",
+    "github_repo": "plane",
+    "default_branch": "preview"
+  },
+  {
+    "npm_name": "FlowiseAI/Flowise",
+    "rank": 81,
+    "tier": "top100",
+    "git_url": "https://github.com/FlowiseAI/Flowise",
+    "github_owner": "FlowiseAI",
+    "github_repo": "Flowise",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "TryGhost/Ghost",
+    "rank": 82,
+    "tier": "top100",
+    "git_url": "https://github.com/TryGhost/Ghost",
+    "github_owner": "TryGhost",
+    "github_repo": "Ghost",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "twentyhq/twenty",
+    "rank": 83,
+    "tier": "top100",
+    "git_url": "https://github.com/twentyhq/twenty",
+    "github_owner": "twentyhq",
+    "github_repo": "twenty",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "vuejs/core",
+    "rank": 84,
+    "tier": "top100",
+    "git_url": "https://github.com/vuejs/core",
+    "github_owner": "vuejs",
+    "github_repo": "core",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "mozilla/pdf.js",
+    "rank": 85,
+    "tier": "top100",
+    "git_url": "https://github.com/mozilla/pdf.js",
+    "github_owner": "mozilla",
+    "github_repo": "pdf.js",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "ionic-team/ionic-framework",
+    "rank": 86,
+    "tier": "top100",
+    "git_url": "https://github.com/ionic-team/ionic-framework",
+    "github_owner": "ionic-team",
+    "github_repo": "ionic-framework",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "lyswhut/lx-music-desktop",
+    "rank": 87,
+    "tier": "top100",
+    "git_url": "https://github.com/lyswhut/lx-music-desktop",
+    "github_owner": "lyswhut",
+    "github_repo": "lx-music-desktop",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "agalwood/Motrix",
+    "rank": 88,
+    "tier": "top100",
+    "git_url": "https://github.com/agalwood/Motrix",
+    "github_owner": "agalwood",
+    "github_repo": "Motrix",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "prettier/prettier",
+    "rank": 89,
+    "tier": "top100",
+    "git_url": "https://github.com/prettier/prettier",
+    "github_owner": "prettier",
+    "github_repo": "prettier",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "bmad-code-org/BMAD-METHOD",
+    "rank": 90,
+    "tier": "top100",
+    "git_url": "https://github.com/bmad-code-org/BMAD-METHOD",
+    "github_owner": "bmad-code-org",
+    "github_repo": "BMAD-METHOD",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "poteto/hiring-without-whiteboards",
+    "rank": 91,
+    "tier": "top100",
+    "git_url": "https://github.com/poteto/hiring-without-whiteboards",
+    "github_owner": "poteto",
+    "github_repo": "hiring-without-whiteboards",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "justjavac/wechat-miniapp-radar",
+    "rank": 92,
+    "tier": "top100",
+    "git_url": "https://github.com/justjavac/wechat-miniapp-radar",
+    "github_owner": "justjavac",
+    "github_repo": "wechat-miniapp-radar",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "expo/expo",
+    "rank": 93,
+    "tier": "top100",
+    "git_url": "https://github.com/expo/expo",
+    "github_owner": "expo",
+    "github_repo": "expo",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "cypress-io/cypress",
+    "rank": 94,
+    "tier": "top100",
+    "git_url": "https://github.com/cypress-io/cypress",
+    "github_owner": "cypress-io",
+    "github_repo": "cypress",
+    "default_branch": "develop"
+  },
+  {
+    "npm_name": "TanStack/query",
+    "rank": 95,
+    "tier": "top100",
+    "git_url": "https://github.com/TanStack/query",
+    "github_owner": "TanStack",
+    "github_repo": "query",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "tldraw/tldraw",
+    "rank": 96,
+    "tier": "top100",
+    "git_url": "https://github.com/tldraw/tldraw",
+    "github_owner": "tldraw",
+    "github_repo": "tldraw",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "CherryHQ/cherry-studio",
+    "rank": 97,
+    "tier": "top100",
+    "git_url": "https://github.com/CherryHQ/cherry-studio",
+    "github_owner": "CherryHQ",
+    "github_repo": "cherry-studio",
+    "default_branch": "main"
+  },
+  {
+    "npm_name": "bigskysoftware/htmx",
+    "rank": 98,
+    "tier": "top100",
+    "git_url": "https://github.com/bigskysoftware/htmx",
+    "github_owner": "bigskysoftware",
+    "github_repo": "htmx",
+    "default_branch": "master"
+  },
+  {
+    "npm_name": "iamkun/dayjs",
+    "rank": 99,
+    "tier": "top100",
+    "git_url": "https://github.com/iamkun/dayjs",
+    "github_owner": "iamkun",
+    "github_repo": "dayjs",
+    "default_branch": "dev"
+  }
+]

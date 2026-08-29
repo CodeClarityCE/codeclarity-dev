@@ -6,9 +6,7 @@
     "git_url": "https://github.com/passbolt/passbolt_api",
     "github_owner": "passbolt",
     "github_repo": "passbolt_api",
-    "default_branch": "master",
-    "npm_pkg": null,
-    "npm_downloads": null
+    "default_branch": "master"
   },
   {
     "npm_name": "passbolt/passbolt_browser_extension",
@@ -17,9 +15,7 @@
     "git_url": "https://github.com/passbolt/passbolt_browser_extension",
     "github_owner": "passbolt",
     "github_repo": "passbolt_browser_extension",
-    "default_branch": "master",
-    "npm_pkg": null,
-    "npm_downloads": null
+    "default_branch": "master"
   },
   {
     "npm_name": "passbolt/passbolt_styleguide",
@@ -28,8 +24,6 @@
     "git_url": "https://github.com/passbolt/passbolt_styleguide",
     "github_owner": "passbolt",
     "github_repo": "passbolt_styleguide",
-    "default_branch": "master",
-    "npm_pkg": null,
-    "npm_downloads": null
+    "default_branch": "master"
   }
 ]

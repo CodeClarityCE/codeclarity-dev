@@ -1,6 +1,6 @@
 """Unit tests for the shared statistics helpers.
 
-Everything here is pure numpy/pandas on hand-built frames — no API, no
+Everything here is pure numpy/pandas on hand-built frames, no API, no
 network. The presence-interval tests encode the worked example from the
 `js_vuln_study.stats` module docstring. Run with:
 cd experiments/js-vuln-study && .venv/bin/python -m pytest tests/ -q
@@ -9,16 +9,12 @@ cd experiments/js-vuln-study && .venv/bin/python -m pytest tests/ -q
 from __future__ import annotations
 
 import math
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from js_vuln_study import stats  # noqa: E402
+from js_vuln_study import stats
 
 
 # ---- gini / lorenz ----------------------------------------------------------
@@ -62,7 +58,7 @@ def test_pkgs_to_clear_toy_distribution():
 
 
 def test_pkgs_to_clear_exact_boundary_hit():
-    # The top package holds exactly 50% — share=0.5 is met by 1 package.
+    # The top package holds exactly 50%: share=0.5 is met by 1 package.
     assert stats.pkgs_to_clear([50, 30, 10, 10], 0.5) == 1
 
 
@@ -97,7 +93,7 @@ def head_pair():
         _vuln("p1", "lodash", "HIGH", "CVE-2"),
         _vuln("p1", "tar", "MEDIUM", "CVE-3"),
         _vuln("p2", "lodash", "CRITICAL", "CVE-1"),
-        # outside the analyses universe — must be dropped everywhere
+        # outside the analyses universe, must be dropped everywhere
         _vuln("ghost", "evil", "HIGH", "CVE-9"),
     ])
     return vulns, analyses
@@ -287,7 +283,7 @@ def test_presence_intervals_monthly_grid_shortens_duration_vs_quarterly_only():
     """Adding monthly 2024+ dates on top of the pre-2024 quarterly grid is
     additive: the same fix, observed through the fuller monthly grid, is
     bracketed into a much shorter (truer) window than a quarterly-only grid
-    would have reported it in — this is the whole point of the grid change,
+    would have reported it in. This is the whole point of the grid change,
     since quarterly presence detection cannot see a sub-quarter fix."""
     monthly = pd.DataFrame(_snap_rows(
         "M", "m-proj",
@@ -313,7 +309,7 @@ def test_presence_intervals_monthly_grid_shortens_duration_vs_quarterly_only():
 def test_presence_intervals_missing_monthly_snapshot_censors_via_gap():
     # The grid is derived from ALL projects' dated snapshots: project O
     # supplies 2024-03-01 (making it part of the global grid) while project G
-    # skipped that one run — a genuine coverage gap for G specifically, not
+    # skipped that one run: a genuine coverage gap for G specifically, not
     # merely an unobserved date nobody has.
     analyses = pd.DataFrame(
         _snap_rows("G", "g-proj", ["2024-01-01", "2024-02-01", "2024-04-01"])

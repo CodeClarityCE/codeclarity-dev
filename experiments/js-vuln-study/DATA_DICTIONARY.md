@@ -1,246 +1,205 @@
 # Data dictionary
 
-Column-by-column reference for every artifact the harness writes. Producers:
-`run.py submit`/`poll` maintain `data/manifest.jsonl` and `data/run_meta.jsonl`;
-`run.py collect` derives everything under `data/tables/` from them plus the raw
-plugin blobs in `data/raw/`.
+Column-by-column reference for every artifact the harness writes, under a
+study directory (e.g. `studies/top100/`). Producers: `run.py run` maintains
+`manifest.jsonl` and `run_meta.jsonl`; `run.py analyze` derives everything
+under `tables/` from them plus the raw plugin blobs in `raw/`, and renders
+`report/brief.pdf`.
 
-**Rung dirs (`data-ladder/rung-<T>/`)**: a knowledge-staleness ladder rung is
-a full data dir of exactly this layout, selected via `JS_VULN_DATA_DIR` (see
-the README's ladder section). Differences from `data/`: no `sample.json` /
-`repo_probe_cache.jsonl` (rows are populated by `run.py resubmit-frozen` from
-a source manifest, not sampled), `snapshot_date` is carried over **verbatim**
-from the source rows (with `--dedupe-sha` one arbitrary representative date
-per `(git_url, commit_hash)` tree — join cross-rung on those two columns, not
-on `snapshot_date`), and `skipped` rows may carry the reason
-`no pinned commit in source` for source rows without a `commit_hash`.
-`run_meta.jsonl` records `cmd: "resubmit-frozen"` plus the `source_manifest`
-path and the selection flags used.
+A **rung or cohort study** (`study.toml` sets `frozen_from`) has the same
+layout, minus `sample.json`: its rows are populated by `run.py run` reading
+another study's `manifest.jsonl` read-only, `snapshot_date` carried over
+verbatim from the source rows (deduped by `(git_url, commit_hash)`, so join
+cross-rung on those two columns, not on `snapshot_date`), and `skipped` rows
+may carry the reason `no pinned commit in source` for source rows without a
+`commit_hash`.
 
-Read the semantic notes, not just the column names — several fields are easy
+Read the semantic notes, not just the column names: several fields are easy
 to misread (instances vs unique packages, resolved multiset vs install set,
 heuristic flags).
 
-## data/manifest.jsonl
+## manifest.jsonl
 
-One JSON line per attempted `(project, snapshot)` pair — the run's source of
-truth. Rows are appended by `submit`, updated in place by `poll` and `retry`
-(atomic rewrite). Fields mirror `AnalysisRecord` in
-`js_vuln_study/orchestrator.py`.
+One JSON line per attempted `(project, snapshot)` pair, the run's source of
+truth. New rows are appended by `run`; an existing row is replaced in place
+(atomic whole-file rewrite) on every state transition. Fields mirror `Row`
+in `js_vuln_study/manifest.py`.
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `npm_name` | str | Canonical `owner/repo` slug — the CodeClarity project name and the join key used across all tables. (Historical name; it is *not* an npm package name.) |
-| `tier` | str | Constant `"top-100"` (kept for downstream compatibility). |
+| `npm_name` | str | Canonical `owner/repo` slug: the CodeClarity project name and the join key used across all tables. |
+| `tier` | str | The study's name (e.g. `"top100"`, `"passbolt"`). |
 | `rank` | int | 0-based star rank within the sample (0 = most-starred). |
 | `git_url` | str | Canonical GitHub URL; half of the `(git_url, snapshot_date)` dedup key. |
 | `branch` | str \| null | Default branch the analysis was submitted on. Null for `skipped` rows. |
-| `snapshot_date` | str | `"YYYY-MM-DD"` grid date, `"HEAD"`, or `"*"` — the sentinel for project-wide `skipped` rows recorded before any snapshot was known. |
-| `commit_hash` | str \| null | The exact commit analysed. **`"HEAD"` rows carry the branch-tip SHA pinned at submit time**; null only for unpinned fallback submissions (HEAD resolution failed) and `skipped` rows. |
+| `snapshot_date` | str | `"YYYY-MM-DD"` grid date, `"HEAD"`, or `"*"`, the sentinel for project-wide `skipped` rows recorded before any snapshot was known. |
+| `commit_hash` | str \| null | The exact commit analysed. `"HEAD"` rows carry the branch-tip SHA pinned at submit time; null for `skipped` rows and for a HEAD row whose resolution itself failed (which is `skipped`, not submitted unpinned). |
 | `committed_at` | str \| null | ISO commit timestamp of `commit_hash`, when known. |
-| `project_id` | str \| null | CodeClarity project UUID. Null for drops recorded before import (`skipped`). |
-| `analysis_id` | str \| null | CodeClarity analysis UUID. Null for `skipped` and `failed-submit` rows. |
-| `status` | str | See vocabulary below. |
-| `error` | str \| null | Failure detail for sad rows: the server's `failure_reason` (written by the downloader on unresolvable commits / download errors), a plugin `public_error`, a client-side timeout verdict, or the skip reason. |
-| `submitted_at`, `terminal_at` | str \| null | ISO-UTC telemetry stamps: when the analysis POST succeeded and when `poll` observed the terminal status. Absent (`.get`) on rows from runs predating telemetry. |
-| `knowledge_asof` | str \| null | YYYY-MM-DD knowledge cutoff the analysis was submitted under (`resubmit-frozen --knowledge-asof`): vuln-finder drops OSV/NVD/GCVE advisories published after this day at match time. Null / absent = no cutoff (full current knowledge DB). This is a ladder rung's dose and also lands in `run_meta` extras. |
+| `project_id` | str \| null | CodeClarity project UUID. Null for drops recorded before import. |
+| `analysis_id` | str \| null | CodeClarity analysis UUID. Null for `skipped` rows and POST failures. |
+| `state` | str | One of `pending`, `done`, `failed`, `skipped`. See below. |
+| `server_status` | str \| null | The API's raw status word for the row's last transition (e.g. `completed`, `failure`), or (for a row normalized from an older manifest) the legacy status word itself. Null for rows that never reached the server. |
+| `error` | str \| null | Failure detail for sad rows: the server's `failure_reason`, a plugin `public_error`, the client-side ceiling verdict, or the skip reason. |
+| `attempts` | int | How many times a `failed` row has been re-submitted by `retry`/`retry_one`. Retry stops once this reaches `study.toml`'s `retries`. |
+| `knowledge_asof` | str \| null | YYYY-MM-DD knowledge cutoff the analysis was submitted under: vuln-finder drops advisories published after this day at match time. Null = no cutoff (full current knowledge DB). Recorded per row so a retry can reuse the row's own cutoff rather than the study's current one. |
+| `run_id` | str \| null | The `run()` invocation that (re-)submitted this row; joins to `run_meta.jsonl`. |
+| `submitted_at`, `terminal_at` | str \| null | ISO-UTC stamps: when the POST succeeded and when `poll` observed a terminal state. |
 
-### Status vocabulary
+### State vocabulary
 
-| Status | Terminal? | Meaning |
-|--------|-----------|---------|
-| `submitted` | no | Analysis POSTed and in flight; `poll` drives it. |
-| `completed`, `success` | yes (happy) | Server finished successfully; results persisted under `data/raw/{project_id}/{analysis_id}/`. Only these rows feed the Parquet tables. |
-| `failure` | yes (sad) | Server-side terminal failure (e.g. download failure, plugin error). |
-| `failed` | yes (sad) | Server-side terminal `failed`, **or** a client-side give-up: `error` distinguishes (`ongoing stall: …`, `queued > started ceiling`, `poll error past started ceiling`). |
-| `cancelled` | yes (sad) | Cancelled server-side (e.g. by `clean`'s batch delete). |
-| `failed-submit` | yes (sad) | The analysis POST itself failed; no `analysis_id` exists. |
-| `skipped` | yes (sad) | Dropped before submission: snapshot-resolution failure, import failure, or no default branch. `snapshot_date` is `"*"` for project-wide drops. |
+| State | Meaning |
+|-------|---------|
+| `pending` | Analysis POSTed and in flight; `poll` drives it. |
+| `done` | Server finished successfully (`completed`/`success`); results persisted under `raw/{project_id}/{analysis_id}/`. Only these rows feed the Parquet tables. |
+| `failed` | Server-side terminal failure (`failure`/`failed`/`cancelled`), a POST failure (`analysis_id` is null), or a client-side ceiling give-up (`error` starts with `client ceiling:`). |
+| `skipped` | Dropped before or during submission: snapshot-resolution failure (project-wide, `snapshot_date == "*"`), HEAD-resolution failure (that row only), import failure, or (for `frozen_from` studies) no pinned commit in the source. |
 
-`retry` re-drives `failure` / `failed` / `cancelled` / `failed-submit` rows in
-place; `skipped` rows must go through `submit` again.
+An older manifest's eight-value vocabulary (`submitted`, `completed`,
+`success`, `failure`, `failed`, `cancelled`, `failed-submit`, `skipped`) is
+normalized onto these four on read (`manifest.normalize_status`), so an
+archived manifest from before this simplification still loads: `submitted`
+-> `pending`; `completed`/`success` -> `done`; `failure`/`failed`/
+`cancelled`/`failed-submit` -> `failed`; `skipped` -> `skipped`. The legacy
+word is preserved in `server_status`.
 
-## data/unresolvable_commits.jsonl
+## run_meta.jsonl and tables/run_meta.json
 
-Denylist of `(git_url, snapshot_date)` pairs whose historical commit is
-permanently unresolvable (the downloader's `CommitUnresolvable` failure, or the
-legacy stage-0 fallback signature). Populated automatically when `poll` or
-`retry` sees a matching sad-terminal row; consulted by `submit`/`retry`, which
-record a `skipped` manifest row instead of re-driving a clone that re-fails
-identically. Override with `--ignore-denylist`. Fields:
-`{git_url, snapshot_date, commit, reason, recorded_at}`.
-
-## data/run_meta.jsonl and data/tables/run_meta.json
-
-One JSON line appended per `submit`/`smoke` invocation
-(`js_vuln_study/provenance.py`); `collect` copies the **latest** record to
-`data/tables/run_meta.json` so a dataset always carries its provenance, and
-warns when records disagree on the knowledge-DB snapshot.
+One JSON line appended per `run`/`refresh-head` invocation
+(`pipeline.record_provenance`); `analyze` copies the **latest** record to
+`tables/run_meta.json` so a dataset always carries its provenance, and warns
+when records disagree on the knowledge-DB snapshot.
 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `ts` | str | ISO UTC timestamp of the invocation. |
-| `run_id` | str | Random UUID per invocation. |
+| `run_id` | str | Random UUID per invocation; matches manifest rows' `run_id`. |
 | `experiment_sha` | str \| null | Monorepo HEAD commit at run time. |
 | `experiment_dirty` | bool \| null | Whether the monorepo working tree had uncommitted changes. |
 | `api_sha`, `backend_sha` | str \| null | HEAD commits of the `api/` and `backend/` submodules. |
 | `api_version` | str \| null | `api/package.json` version. |
 | `org_id`, `analyzer_id` | str | The org/analyzer the run used. |
-| `analyzer_steps` | list \| null | The analyzer's *actual* `[[{name, version}], …]` stages, read back from the API — not the versions the client asked for. |
-| `knowledge.knowledge_sources` | dict \| null | Last-update ISO timestamp per knowledge source (null = never updated). **This is the vulnerability-data snapshot the run's counts depend on.** |
+| `analyzer_steps` | list \| null | The analyzer's *actual* `[[{name, version}], ...]` stages, read back from the API, not the versions the study asked for. |
+| `knowledge.knowledge_sources` | dict \| null | Last-update ISO timestamp per knowledge source (null = never updated). This is the vulnerability-data snapshot the run's counts depend on. |
 | `knowledge.epss_rows` | int \| null | Row count of the EPSS table at run time. 0 means `epss_score`/`epss_percentile` will be empty. |
-| `config.snapshot_dates` | list | The historical grid in effect (`snapshots.SNAPSHOT_DATES`). |
-| `config.poll_timeout`, `config.started_timeout` | int | Client poll give-up rules in effect (seconds). |
-| `cmd` | str | `"submit"` or `"smoke"`. |
-| `sample_limit`, `snapshots` | int \| null, bool | `submit` only: the `--limit` and `--snapshots` flags used. |
+| `config.snapshot_dates` | list | The grid in effect (`study.grid`, derived from `study.toml`'s `[grid]` table). |
+| `config.knowledge_asof` | str \| null | The study's configured cutoff. |
+| `cmd` | str | `"submit"` or `"refresh-head"`. |
 
-Every probe is best-effort — missing git, an older API, unreachable Postgres —
-so any field may be null (with a logged warning) rather than failing the run.
+Every probe is best-effort (missing git, an older API): any field may be
+null (with a logged warning) rather than failing the run.
 
-## data/tables/analyses.parquet
+## tables/analyses.parquet
 
-One row per **completed** `(project, snapshot)` scan (manifest status
-`completed`/`success` with persisted blobs). Failed/skipped attempts are *not*
-here — see `coverage_dropped.csv`.
+One row per **done** `(project, snapshot)` scan. Failed/skipped attempts are
+*not* here: see `coverage_dropped.csv`.
 
 | Column | Type | Meaning |
 |--------|------|---------|
-| `analysis_id`, `project_id` | str | CodeClarity UUIDs; join keys to `vulns`/`dependencies`. |
+| `analysis_id`, `project_id` | str | CodeClarity UUIDs; join keys to `vulns.parquet`. |
 | `npm_name`, `tier`, `rank`, `git_url` | | Copied from the manifest (see above). |
 | `snapshot_date` | str | Grid date or `"HEAD"`. HEAD rows carry the pinned `commit_hash`. |
 | `commit_hash`, `committed_at` | str \| null | Exact commit analysed and its timestamp. |
-| `total_dependencies` | int | Size of the **resolved dependency multiset**: every (workspace, package, version) entry in the SBOM. **NOT the active install set** — a version that appears in the lockfile universe but is not installed still counts, and many entries carry neither the direct nor the transitive flag. Use as a bloat proxy only. |
-| `direct_dependencies`, `transitive_dependencies` | int | Multiset entries flagged `Direct` / `Transitive` by js-sbom. Not mutually exclusive with each other or exhaustive of `total_dependencies`. |
-| `dev_dependencies`, `prod_dependencies` | int | Multiset entries flagged `Dev` / `Prod`. |
-| `package_manager` | str \| null | Detected by js-sbom (`NPM` / `PNPM` / `YARN`), from the lockfile present. |
-| `total_vulnerabilities` | int | **Vulnerability *instances***: one per (vulnerability id × affected dependency × workspace) finding reported by vuln-finder. The same CVE hitting two packages — or the same package in two workspaces — counts twice. Equals this analysis's row count in `vulns.parquet`. |
-| `vulnerable_dependencies` | int | Number of **unique affected package names** — the deduplicated counterpart of `total_vulnerabilities`. |
-| `direct_vulnerabilities`, `transitive_vulnerabilities` | int | Instances split by the `direct_dependency` flag (see `vulns.parquet` caveat). Sum to `total_vulnerabilities`. |
-| `n_critical`, `n_high`, `n_medium`, `n_low`, `n_none` | int | Instances per CVSS severity class. Sum to `total_vulnerabilities` when every instance has a class. |
-| `submitted_at`, `terminal_at` | str \| null | Manifest telemetry stamps (see `manifest.jsonl`). Null for rows from runs predating telemetry. |
-| `step_<name>_started`, `step_<name>_ended`, `step_<name>_duration_s` | str/float \| null | Per-plugin-step timings (`js_sbom`, `vuln_finder`, `license_finder`, …) from the persisted analysis document. Downloader/queue wait ≈ `step_js_sbom_started − submitted_at`. Null when no `analysis.json` was persisted (pre-telemetry rows). |
+| `run_id` | str \| null | The manifest row's `run_id`. |
+| `total_dependencies` | int | Size of the resolved dependency multiset: every (workspace, package, version) entry in the SBOM. Not the active install set: a version that appears in the lockfile universe but is not installed still counts. Use as a bloat proxy only. |
+| `direct_dependencies`, `transitive_dependencies` | int | Multiset entries flagged `Direct`/`Transitive` by js-sbom. Not mutually exclusive with each other or exhaustive of `total_dependencies`. |
+| `dev_dependencies`, `prod_dependencies` | int | Multiset entries flagged `Dev`/`Prod`. |
+| `package_manager` | str \| null | Detected by js-sbom (`NPM`/`PNPM`/`YARN`), from the lockfile present. |
+| `total_vulnerabilities` | int | Vulnerability *instances*: one per (vulnerability id, affected dependency, workspace) finding. Equals this analysis's row count in `vulns.parquet`. |
+| `vulnerable_dependencies` | int | Number of unique affected package names. |
+| `direct_vulnerabilities`, `transitive_vulnerabilities` | int | Instances split by the `direct_dependency` flag. Sum to `total_vulnerabilities`. |
+| `n_critical`, `n_high`, `n_medium`, `n_low`, `n_none` | int | Instances per CVSS severity class. |
 
-## data/tables/vulns.parquet
+Per-step dispatch timing columns and the per-dependency `dependencies.parquet`
+table, produced before this simplification, are no longer written: nothing
+in `results_numbers.json` or the brief reads them.
 
-One row per **vulnerability instance**: a (vulnerability id × affected
-dependency × workspace) tuple within one analysis. A project scanned at 19
-snapshots contributes up to 19 rows for a single persistent CVE — filter on
+## tables/vulns.parquet
+
+One row per **vulnerability instance**: a (vulnerability id, affected
+dependency, workspace) tuple within one analysis. A project scanned at N
+snapshots contributes up to N rows for a single persistent CVE; filter on
 `snapshot_date` before any cross-sectional statistic.
 
 | Column | Type | Meaning |
 |--------|------|---------|
-| `analysis_id` … `committed_at` | | The same nine manifest-derived columns as `analyses.parquet`. |
+| `analysis_id` ... `committed_at` | | The manifest-derived columns, same as `analyses.parquet`. |
 | `workspace` | str | SBOM workspace the finding belongs to (`.` for single-package repos). |
-| `vulnerability_id` | str | Advisory id — usually `CVE-…`, sometimes `GHSA-…`/OSV-native. |
+| `vulnerability_id` | str | Advisory id, usually `CVE-...`, sometimes `GHSA-...`/OSV-native. |
 | `affected_dependency` | str | Package name the advisory matched. |
 | `affected_version` | str | Resolved version of that package in this scan. |
-| `severity_class` | str \| null | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `NONE` (CVSS class chosen by vuln-finder's severity stage). |
+| `severity_class` | str \| null | `CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`NONE`. |
 | `severity_score` | float \| null | CVSS base score. |
 | `severity_vector` | str \| null | CVSS vector string. |
 | `impact`, `exploitability` | float \| null | CVSS sub-scores. |
-| `epss_score`, `epss_percentile` | float \| null | Exploit-prediction score/percentile, attached by vuln-finder from the knowledge DB's **EPSS table as of analysis time** (batched lookup by CVE id). Empty for analyses run before EPSS attachment landed (or against an unpopulated EPSS table — check `epss_rows` in `run_meta.json`), and for non-CVE ids, which have no EPSS row. |
-| `conflict_flag` | str \| null | Cross-source match confidence: `MATCH_CORRECT`, `MATCH_INCORRECT`, `MATCH_POSSIBLE_INCORRECT`, `NO_CONFLICT`. ~18% of matches in the 2026-06 run were `MATCH_POSSIBLE_INCORRECT`; sensitivity analyses restrict to `MATCH_CORRECT`. |
+| `epss_score`, `epss_percentile` | float \| null | Exploit-prediction score/percentile from the knowledge DB's EPSS table as of analysis time. Empty for non-CVE ids and when `epss_rows` was 0. |
+| `conflict_flag` | str \| null | Cross-source match confidence: `MATCH_CORRECT`, `MATCH_INCORRECT`, `MATCH_POSSIBLE_INCORRECT`, `NO_CONFLICT`. |
 | `winning_source` | str \| null | Which source's record won conflict resolution: `NVD`, `OSV`, `GCVE`, or `NONE`. |
-| `direct_dependency` | bool | **Heuristic flag from the SBOM** — whether the affected package is declared as a direct dependency. Not a precise install-tree measure; report descriptively only. |
-| `published_date`, `modified_date` | str \| null | Advisory publication / last-modified timestamps from the matched knowledge-DB record, with source precedence **NVD > OSV > GCVE**. |
-| `withdrawn_date` | str \| null | Withdrawal timestamp (OSV is the only source that carries it). Non-null means the advisory was retracted — consider excluding in sensitivity checks. |
+| `direct_dependency` | bool | Heuristic flag from the SBOM: whether the affected package is declared as a direct dependency. Not a precise install-tree measure. |
+| `published_date`, `modified_date` | str \| null | Advisory timestamps, source precedence NVD > OSV > GCVE. |
+| `withdrawn_date` | str \| null | Withdrawal timestamp (OSV only). Non-null means the advisory was retracted. |
 
-## data/tables/dependencies.parquet
+## tables/coverage_dropped.csv
 
-One row per entry of the **resolved dependency multiset**: a (workspace,
-package, version) tuple per analysis. Omitted when `collect --no-deps` is used
-(longitudinal runs; the per-analysis counts in `analyses.parquet` remain).
+Every attempted-but-not-`done` manifest row, so the gap between the sample
+and the tables is never silent. Columns: `npm_name`, `git_url`,
+`snapshot_date`, `state`, `server_status`, `error`, `attempts`.
 
-| Column | Type | Meaning |
-|--------|------|---------|
-| `analysis_id` … `committed_at` | | The same nine manifest-derived columns as `analyses.parquet`. |
-| `workspace` | str | SBOM workspace. |
-| `name`, `version` | str | Package name and resolved version. |
-| `package_manager` | str \| null | Same per-analysis value as `analyses.parquet`. |
-| `direct`, `transitive` | bool | js-sbom flags. Most rows are flagged **neither** — the multiset covers the whole resolved lockfile universe, not the install tree. |
-| `dev`, `prod`, `optional`, `bundled` | bool | js-sbom dependency-kind flags. |
-| `licenses` | list[str] | SPDX ids attached by js-sbom (license-finder results are not folded in here). |
+## tables/remediation_events.parquet
 
-## data/tables/coverage_dropped.csv
-
-Every attempted-but-dropped manifest row (`skipped`, `failed-submit`,
-`failure`, `failed`, `cancelled`), so the gap between the sample and the
-tables is never silent. **Columns = the manifest fields** (see above).
-`skipped`/`failed-submit` rows are de-duplicated by
-`(git_url, snapshot_date, status)` because resumed `submit` runs can re-log
-the same transient drop. The `error` column carries the concrete reason —
-including the server's `failure_reason` for download failures.
-
-## data/tables/triangulation.parquet
-
-Produced by `python run.py triangulate --n 20`: a stratified HEAD subsample
-cross-checked against independent scanners, normalized to `(package, CVE)`
-pairs. Two row types share one schema (`row_type` distinguishes them):
-`pair` rows compare two scanners; `project` rows summarize CodeClarity
-against the union of all scanners that ran.
-
-| Column | Type | Meaning |
-|---|---|---|
-| `npm_name`, `project_id`, `analysis_id`, `commit_hash` | str | The HEAD analysis the comparison ran against (lockfiles fetched at exactly `commit_hash`). |
-| `lockfile` | str | Which lockfile was scanned (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`). `npm audit` reads only npm lockfiles, so per-lockfile splits matter. |
-| `stratum` | str | Sampling stratum: vuln-load tercile × package manager. |
-| `scanners_run` | str | Comma list of scanners that produced output for this project. |
-| `npm_audit_unmapped`, `osv_unmapped` | int | Advisories the scanner reported that could not be normalized to a CVE id (excluded from set comparisons). |
-| `row_type` | str | `pair` or `project`. |
-| `pair` | str | For `pair` rows: `codeclarity_vs_npm_audit`, `codeclarity_vs_osv`, or `npm_audit_vs_osv`. |
-| `n_a`, `n_b`, `n_intersection`, `n_union`, `jaccard` | num | Set sizes and agreement for the pair (a = first-named scanner). |
-| `a_only`, `b_only` | int | Pairs found by only one side. |
-| `codeclarity_only`, `scanner_only`, `recall_vs_union` | num | For `project` rows: CodeClarity vs the union of independent scanners. |
-
-Raw per-project `(package, CVE)` sets are kept alongside in
-`triangulation_pairs.json` for auditability.
-
-## data/tables/remediation_events.parquet
-
-Produced by `python run.py mine-lag`: one row per **mining unit** — event=1
-presence intervals grouped on (project, dependency, vulnerable-version-set,
-snapshot window), so CVEs fixed by the same lockfile change are mined once.
-Each row records where in the repo's git history the vulnerable resolved
-version left the ROOT lockfile (see the README's mine-lag section for the
-search rules). `stats.merge_day_resolution` joins these back onto intervals
-on `(project_id, affected_dependency, last_seen)`.
+Produced by `run.py analyze` (mine-lag step): one row per **mining unit**,
+event=1 presence intervals grouped on (project, dependency,
+vulnerable-version-set, snapshot window), so CVEs fixed by the same lockfile
+change are mined once. Each row records where in the repo's git history the
+vulnerable resolved version left the ROOT lockfile (see the README's
+mine-lag section). `stats.merge_day_resolution` joins these back onto
+intervals on `(project_id, affected_dependency, last_seen)`.
 
 | Column | Type | Meaning |
 |---|---|---|
 | `npm_name`, `project_id` | str | The project mined. |
 | `affected_dependency` | str | The vulnerable package. |
-| `affected_version` | str | Comma-joined sorted set of the vulnerable resolved versions observed at `last_seen` (all workspaces — they resolve from the root lockfile in the common monorepo layouts). |
-| `workspace_scope` | str | Always `root`: only the repo-root lockfile is mined; a fix that only touched a workspace-local lockfile surfaces as `ambiguous`/`not_in_root_lockfile`. |
-| `last_seen`, `next_snapshot` | str | The window bounds as `YYYY-MM-DD`: last snapshot where the pair was present, next completed snapshot where it was gone (interval-censored fix window). |
+| `affected_version` | str | Comma-joined sorted set of the vulnerable resolved versions observed at `last_seen` (all workspaces). |
+| `last_seen`, `next_snapshot` | str | The window bounds as `YYYY-MM-DD`: last snapshot where the pair was present, next completed snapshot where it was gone. |
 | `lockfile` | str | Root lockfile the version was last seen in (null when it never appeared in one). |
-| `fix_commit_sha`, `fixed_at` | str | For `found` rows: the first commit at which **no occurrence** of any vulnerable version remains in the root lockfile, and its committer date (the day-resolution fix time). Null otherwise. |
-| `fix_kind` | str | For `found` rows: **how** the vulnerable versions left the lockfile at `fix_commit_sha`. `upgraded` — the dependency still resolves at non-vulnerable versions; `removed_direct` — the dependency was declared in the root `package.json` at the boundary (last-seen) commit and is no longer declared at the fix commit, i.e. deliberately dropped; `removed_transitive` — the dependency left every parsed root lockfile but was never a direct dependency at the boundary, i.e. it left because a parent package was upgraded; `removed` — the legacy unsplit value: the dependency is gone from every parsed root lockfile but the direct/transitive split is unknowable (unreadable `package.json` at either commit, or an inconsistent tree where the dependency is still declared but gone from every lockfile); `anomalous_still_present` — a vulnerable version still resolves in a lockfile outside the search set (flagged, not silently misclassified); `unknown` — backfill cache miss in `--cache-only` mode. Null for non-`found` rows and parquets mined before the column existed (backfill with `scripts/backfill_fix_kind.py`). All three `removed*` values are treated identically by every consumer (dropped together in the `upgrade_only` sensitivity, kept together as fixes in headline numbers). |
-| `fix_to_version` | str | For `upgraded` (and `anomalous_still_present`) rows: comma-joined sorted set of the versions the dependency resolves to at the fix commit. Null otherwise. |
-| `method` | str | `binary_search` / `linear_scan` (windows ≤ 6 commits — exact, detects reintroductions) for `found`; failure reason otherwise: `no_lockfile_commits`, `not_in_root_lockfile`, `still_present_at_window_end`, `non_monotonic`, `unparseable_lockfile`, `unparseable_git_url`. |
-| `status` | str | `found` (day-resolution fix located), `ambiguous` (excluded from KM by `merge_day_resolution`, but counted), `not_found` (no lockfile-touching commits in the window — the disappearance did not come from a root-lockfile change). |
-| `n_intervals` | int | Event=1 intervals this unit covers (grouped CVEs). |
-| `n_commits` | int | Candidate lockfile-touching commits in the window (union over the three root lockfile names). |
+| `fix_commit_sha`, `fixed_at` | str | For `found` rows: the first commit at which no occurrence of any vulnerable version remains in the root lockfile, and its committer date. Null otherwise. |
+| `fix_kind` | str | For `found` rows: how the vulnerable versions left the lockfile. `upgraded`: still resolves at non-vulnerable versions. `removed_direct`: declared in the root `package.json` at the boundary commit, no longer declared at the fix commit (deliberately dropped). `removed_transitive`: never a direct dependency at the boundary (left because a parent was upgraded). `removed`: the legacy unsplit value, direct/transitive split unknowable. `anomalous_still_present`: a vulnerable version still resolves in a lockfile outside the search set. All three `removed*` values are treated identically by every consumer. |
+| `fix_to_version` | str | For `upgraded` (and `anomalous_still_present`) rows: comma-joined sorted set of versions at the fix commit. Null otherwise. |
+| `method` | str | `linear_scan` (windows <= 6 commits, exact, detects reintroductions) or `binary_search` for `found`; failure reason otherwise: `no_lockfile_commits`, `not_in_root_lockfile`, `still_present_at_window_end`, `non_monotonic`, `unparseable_lockfile`, `unparseable_git_url`. |
+| `status` | str | `found` (day-resolution fix located), `ambiguous` (excluded from KM by `merge_day_resolution`, but counted), `not_found` (no lockfile-touching commits in the window). |
 
 Commit lists, parsed lockfile blobs, and per-unit results are cached under
-`data/mining_cache/` (`results.jsonl` makes the mine resumable — delete a
-line to re-mine a unit).
+`<study>/mining_cache/` (`results.jsonl` makes the mine resumable).
 
-## data/tables/ladder_dose_response.json
+## tables/triangulation.parquet (frozen)
 
-Produced by `scripts/ladder_dose_response.py` from the per-rung `tables/`
-outputs (see the README's ladder section); loaded verbatim into
-`results_numbers.json` under `ladder`. Rungs are sorted stalest → freshest by
-their run_meta knowledge date (the OSV stamp when present — the ladder
-rebuilds OSV per rung — else the max parseable source stamp).
+Independent-scanner cross-check, produced by the pre-simplification
+`triangulate.py` (RESULTS.md section 13). Not produced by this tree; if a
+copy exists from before the simplification, `numbers.build_numbers` folds
+it into `results_numbers.json`'s `triangulation` block unchanged. See
+RESULTS.md's regeneration section.
 
-| Field | Meaning |
-|-------|---------|
-| `meta.rung_dirs`, `meta.freshest` | The rung dirs in sorted order and the freshest (comparison baseline). |
-| `meta.common_analyses` | Size of the **common completed subset**: `(git_url, commit_hash)` keys completed in *every* rung — the like-for-like panel all `*_common` numbers are restricted to. |
-| `meta.sha_mismatch`, `meta.shas` | Whether `api_sha`/`backend_sha` differ across rungs (they must not — that breaks the code-held-fixed premise; warned, not fatal), plus the per-rung values. |
-| `rungs[].knowledge_date`, `rungs[].epss_rows` | The rung's knowledge vintage and EPSS row count. |
-| `rungs[].n_analyses`, `rungs[].instances_total` | Completed analyses and vulnerability instances in the rung's own tables (unrestricted). |
-| `rungs[].instances_common` | Instances on the common subset (deduplicated on the instance key) — the dose-response y-axis. |
-| `rungs[].severity_mix_common`, `rungs[].winning_source_mix_common` | Instance counts per severity class / winning source, common subset. |
-| `rungs[].vs_freshest` | `instance_delta_common` (+`_pct`) vs the freshest rung on the common subset, and `jaccard_pairs` — Jaccard of the `(affected_dependency, vulnerability_id)` pair sets. |
-| `fidelity` | Present when some rung's knowledge date is within a few days of the archive's: that rung vs the archived tables on the shared-key join (`shared_analyses`, per-side instances, `instance_delta_pct`, `instance_jaccard`) — an upper bound on how faithfully the dated rebuild reproduces the original run. Null otherwise. |
+## tables/results_numbers.json
+
+Every number RESULTS.md cites, written by `run.py analyze`
+(`js_vuln_study/numbers.py`). Top-level keys:
+
+| Key | Always present? | Content |
+|---|---|---|
+| `run_meta` | yes | Provenance subset: `knowledge`, `analyzer_steps`, `api_version`, `experiment_sha`, `api_sha`, `backend_sha`, `ts`. |
+| `coverage` | yes | Attempted/skip-marker/state counts, `grid_len` (the number of dated snapshots in the DATA, not a hard-coded constant), `balanced_panel` (projects completing every grid date), `near_balanced`, per-date completion, failure summary. |
+| `headline` | yes | `stats.headline` on the HEAD slice: prevalence, load, concentration (Gini, top packages), `pkgs_clear_50/80/90`. |
+| `sweep` | yes | `stats.sensitivity_sweep`: the headline scalars under `all`/`match_correct_only`/`non_withdrawn`/`direct_only`. |
+| `epss` | yes | EPSS coverage and distribution on the HEAD slice. |
+| `match_flags`, `winning_source_head` | yes | Value counts of `conflict_flag`/`winning_source` at HEAD. |
+| `disclosure_coverage_hist` | yes | Share of historical vuln rows with a known/future-dated publication date. |
+| `survival_residence`, `survival_disclosed` | yes | `stats.km_by_severity` over all instances / the disclosed-only subset. |
+| `survival_day_resolution` | if mining has run | Mined event counts, `stats.km_by_severity` with the day-resolution tail, `fix_kind` split and the upgrade-only KM. |
+| `rqc` | yes | Spearman correlation of star rank vs vulnerability load. |
+| `rqd` | yes | Per-package-manager project count, median dependencies, median vulnerabilities. |
+| `triangulation` | if `tables/triangulation.parquet` exists | See above (frozen). |
+| `trajectory_balanced`, `trajectory_balanced_meta` | yes | Balanced-panel point-in-time disclosed-vulnerability trajectory. |
+| `ladder`, `drift` | if `archive/*/*.json` exists | Frozen appendix blocks, loaded verbatim (RESULTS.md sections 14, 15). |
+| `cohort` | if `analyze --baseline` was passed | `numbers.compare_cohorts` output: pooled/by-severity/recency/upgrade-only/by-repo KM blocks for `baseline` and `cohort`, plus the knowledge-stamp equality check. |
+
+`balanced_panel_18` is kept as an alias of `balanced_panel` for one release;
+new code should read `balanced_panel`.

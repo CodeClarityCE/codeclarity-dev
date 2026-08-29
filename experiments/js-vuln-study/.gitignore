@@ -1,8 +1,8 @@
 .env
-data/
 *.pyc
 __pycache__/
 .venv/
-data-ladder/
-data-passbolt/*
-!data-passbolt/sample.json
+.pytest_cache/
+studies/*/*
+!studies/*/study.toml
+!studies/*/sample.json

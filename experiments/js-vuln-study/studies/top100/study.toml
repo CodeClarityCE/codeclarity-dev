@@ -1,0 +1,28 @@
+# The canonical top-100 study. sample.json is committed and its identity
+# must be preserved across runs (see RESULTS.md section 4): do not
+# regenerate it with `run.py sample` unless you are deliberately building a
+# new corpus.
+
+[study]
+name = "top100"
+sample = "sample.json"
+snapshots = true
+retries = 2
+# knowledge_asof = "2026-08-03"  # uncomment to pin every new analysis to a cutoff
+
+[grid]
+quarterly = ["2022-01-01", "2023-10-01"]
+monthly = ["2024-01-01", "2026-08-01"]
+
+[codeclarity]
+org = "js-vuln-study-top100"
+analyzer = "js-vuln-study-v2"
+
+[codeclarity.plugins]
+js-sbom = "v0.0.25-alpha"
+vuln-finder = "v0.0.25-alpha"
+license-finder = "v0.0.18-alpha"
+
+[analyze]
+recency_cutoff = "2024-01-01"
+triangulate = 0

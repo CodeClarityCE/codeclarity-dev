@@ -1,18 +1,15 @@
 """Flatten raw plugin JSON blobs into tidy Parquet tables for analysis.
 
-Three long-format tables are emitted under `data/tables/`:
+Two long-format tables are emitted under `<study>/tables/`:
 
-* `analyses.parquet`   — one row per (project, snapshot) scan with summary
-                         metrics pulled from the SBOM, vuln, patching blobs.
-* `vulns.parquet`      — one row per (analysis, vulnerability) including
-                         severity, EPSS, conflict flag, source winner.
-* `dependencies.parquet` — one row per (analysis, dependency) with
-                           package_manager, direct/transitive flags, release
-                           date, deprecated/outdated flags.
+* `analyses.parquet`: one row per completed (project, snapshot) scan, with
+  summary counts pulled from the SBOM and vuln-finder blobs.
+* `vulns.parquet`: one row per (analysis, vulnerability), including
+  severity, EPSS, conflict flag, source winner.
 
-The schemas are deliberately denormalized — joining back through `analysis_id`
-is cheap at research-dataset scale and keeps the post-processing notebooks
-simple.
+Per-dependency rows and per-step dispatch telemetry are not materialised:
+nothing downstream reads them, and the study's canonical recipe never
+produced the former even before this simplification.
 """
 
 from __future__ import annotations
@@ -24,101 +21,49 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from .config import Study
+from .manifest import normalize_status, read as read_manifest
+
 log = logging.getLogger(__name__)
 
 
-def _read_manifest(data_dir: Path) -> list[dict]:
-    path = data_dir / "manifest.jsonl"
-    if not path.exists():
-        return []
-    return [
-        json.loads(l)
-        for l in path.read_text(encoding="utf-8").splitlines()
-        if l.strip()
-    ]
-
-
-# Map every manifest status onto a coverage bucket so counts sum to the sample.
-_COVERAGE_BUCKETS = {
-    "completed": "completed",
-    "success": "completed",
-    "failure": "failed",
-    "failed": "failed",
-    "cancelled": "failed",
-    "skipped": "skipped",
-    "failed-submit": "failed-submit",
-}
-
-
-def coverage_report(data_dir: Path) -> dict[str, int]:
-    """Report true coverage from the manifest: how many (project, snapshot) pairs
-    were attempted and where they ended up. Counts sum to the manifest size so a
-    99/100-vs-100/100 gap is never silent. Returns the bucket counts.
-
-    Skip rows can be re-emitted across resumed `submit` runs (a transient GitHub
-    failure logs a fresh row each time), so they're de-duplicated by
-    (git_url, snapshot_date, status) before counting.
-    """
-    manifest = _read_manifest(data_dir)
-    seen: set[tuple] = set()
-    deduped: list[dict] = []
-    for rec in manifest:
-        if rec.get("status") in {"skipped", "failed-submit"}:
-            key = (rec.get("git_url"), rec.get("snapshot_date"), rec.get("status"))
-            if key in seen:
-                continue
-            seen.add(key)
-        deduped.append(rec)
-
+def coverage_report(study: Study) -> dict[str, int]:
+    """Bucket every manifest row by state and write coverage_dropped.csv for
+    the non-`done` rows. Counts sum to the manifest size (minus the '*'
+    skip-sentinel rows, which are pre-submission markers, not attempts)."""
+    rows = read_manifest(study.manifest_path)
     counts: dict[str, int] = {}
-    for rec in deduped:
-        bucket = _COVERAGE_BUCKETS.get(rec.get("status"), "in-flight")
-        counts[bucket] = counts.get(bucket, 0) + 1
+    for r in rows:
+        counts[r.state] = counts.get(r.state, 0) + 1
 
-    total = len(deduped)
-    assert sum(counts.values()) == total, f"coverage buckets {counts} != {total}"
-    log.info("coverage (%d attempted): %s", total, counts)
-
-    dropped = [
-        r for r in deduped
-        if r.get("status") in {"skipped", "failed-submit", "failure", "failed", "cancelled"}
-    ]
-    for r in dropped:
-        log.info(
-            "  dropped %s@%s [%s]: %s",
-            r.get("npm_name") or r.get("git_url"),
-            r.get("snapshot_date"),
-            r.get("status"),
-            r.get("error"),
-        )
+    dropped = [r for r in rows if r.state != "done"]
     if dropped:
-        tables_dir = data_dir / "tables"
+        tables_dir = study.tables_dir
         tables_dir.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(dropped).to_csv(tables_dir / "coverage_dropped.csv", index=False)
-
+        pd.DataFrame([
+            {
+                "npm_name": r.npm_name, "git_url": r.git_url, "snapshot_date": r.snapshot_date,
+                "state": r.state, "server_status": r.server_status, "error": r.error,
+                "attempts": r.attempts,
+            }
+            for r in dropped
+        ]).to_csv(tables_dir / "coverage_dropped.csv", index=False)
+    log.info("coverage (%d attempted): %s", len(rows), counts)
     return counts
 
 
-def _copy_run_meta(data_dir: Path, tables_dir: Path) -> None:
-    """Copy the latest run_meta record next to the tables so a dataset always
-    carries its provenance, and warn when the manifest mixes runs submitted
-    under differing knowledge-DB snapshots (their vuln counts aren't strictly
-    comparable). Kept deliberately coarse: >1 distinct non-null
-    knowledge_sources tuple across run_meta.jsonl triggers the warning."""
-    path = data_dir / "run_meta.jsonl"
+def _copy_run_meta(study: Study) -> None:
+    """Copy the latest run_meta record next to the tables, and warn when the
+    manifest mixes runs submitted under differing knowledge-DB snapshots."""
+    path = study.run_meta_path
     if not path.exists():
-        log.warning("no run_meta.jsonl — provenance unknown for these tables")
+        log.warning("no run_meta.jsonl - provenance unknown for these tables")
         return
-    metas = [
-        json.loads(l)
-        for l in path.read_text(encoding="utf-8").splitlines()
-        if l.strip()
-    ]
+    metas = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     if not metas:
         return
-    (tables_dir / "run_meta.json").write_text(
-        json.dumps(metas[-1], indent=2), encoding="utf-8",
-    )
+    study.tables_dir.mkdir(parents=True, exist_ok=True)
+    (study.tables_dir / "run_meta.json").write_text(json.dumps(metas[-1], indent=2), encoding="utf-8")
     snapshots = {
         tuple(sorted(ks.items()))
         for m in metas
@@ -126,9 +71,8 @@ def _copy_run_meta(data_dir: Path, tables_dir: Path) -> None:
     }
     if len(snapshots) > 1:
         log.warning(
-            "manifest spans %d distinct knowledge-DB snapshots — vuln counts are "
-            "not strictly comparable across runs (see %s)",
-            len(snapshots), path,
+            "manifest spans %d distinct knowledge-DB snapshots - vuln counts are "
+            "not strictly comparable across runs (see %s)", len(snapshots), path,
         )
 
 
@@ -140,68 +84,21 @@ def _load_blob(path: Path) -> Any:
     except json.JSONDecodeError:
         log.warning("invalid json at %s", path)
         return None
-    # The /result endpoint returns the Result entity: { id, analysis_id, plugin,
-    # result: {...}, created_on }. Unwrap the payload once if present.
-    if isinstance(raw, dict) and "result" in raw and isinstance(raw["result"], dict):
+    # The /result endpoint returns the Result entity: {id, analysis_id,
+    # plugin, result: {...}, created_on}. Unwrap the payload once if present.
+    if isinstance(raw, dict) and isinstance(raw.get("result"), dict):
         return raw["result"]
     return raw
 
 
 def _walk_workspaces(blob: Any) -> Iterable[tuple[str, dict]]:
-    """Yield (workspace_name, workspace_payload) from a plugin result blob.
-
-    All four plugins share the outer shape:
-        { "workspaces": { "<name>": { ... } }, "analysis_info": { ... } }
-    """
     if not isinstance(blob, dict):
         return
-    ws = blob.get("workspaces") or blob.get("Workspaces") or {}
+    ws = blob.get("workspaces") or {}
     if isinstance(ws, dict):
         for name, payload in ws.items():
             if isinstance(payload, dict):
                 yield name, payload
-
-
-def _duration_seconds(start: Any, end: Any) -> float | None:
-    """Seconds between two ISO timestamps; None when either is missing/invalid."""
-    try:
-        s, e = pd.Timestamp(start), pd.Timestamp(end)
-    except (ValueError, TypeError):
-        return None
-    if pd.isna(s) or pd.isna(e):
-        return None
-    return (e - s).total_seconds()
-
-
-def _step_timings(analysis: Any) -> dict[str, Any]:
-    """Flatten per-step dispatch stamps from a persisted analysis.json.
-
-    The dispatcher's Go Step struct has no JSON tags, so the steps jsonb
-    marshals as Name/Status/Started_on/Ended_on (RFC3339Nano); lowercase
-    variants are tolerated for API-written steps. Emits, per step,
-    step_<name>_started / step_<name>_ended / step_<name>_duration_s —
-    combined with the manifest's submitted_at, the downloader/queue wait
-    (first step started - submitted_at) and each plugin runtime are derivable.
-    """
-    out: dict[str, Any] = {}
-    if not isinstance(analysis, dict):
-        return out
-    for stage in (analysis.get("steps") or []):
-        if not isinstance(stage, list):
-            continue
-        for step in stage:
-            if not isinstance(step, dict):
-                continue
-            name = step.get("Name") or step.get("name")
-            if not name:
-                continue
-            col = str(name).replace("-", "_")
-            started = step.get("Started_on") or step.get("started_on") or None
-            ended = step.get("Ended_on") or step.get("ended_on") or None
-            out[f"step_{col}_started"] = started
-            out[f"step_{col}_ended"] = ended
-            out[f"step_{col}_duration_s"] = _duration_seconds(started, ended)
-    return out
 
 
 def _get_package_manager(sbom: Any) -> str | None:
@@ -212,7 +109,6 @@ def _get_package_manager(sbom: Any) -> str | None:
 
 
 def _match_vuln(v: dict, key: str) -> dict:
-    """Return the nested {source}Match.Vulnerability dict, or {}."""
     m = v.get(key)
     if isinstance(m, dict):
         vuln = m.get("Vulnerability")
@@ -222,165 +118,98 @@ def _match_vuln(v: dict, key: str) -> dict:
 
 
 def _disclosure_dates(v: dict) -> tuple[str | None, str | None, str | None]:
-    """Extract (published, modified, withdrawn) for a vulnerability.
-
-    The per-vuln dates live on the matched knowledge-DB record, not the top-level
-    object: NVDMatch.Vulnerability.{Published,LastModified}, OSVMatch.Vulnerability
-    .{published,modified,withdrawn}, GCVEMatch.Vulnerability.{datePublished,...}.
-    Prefer NVD, then OSV, then GCVE; fall back to the top-level PHP-path fields.
-    """
+    """(published, modified, withdrawn), preferring NVD, then OSV, then GCVE."""
     nvd = _match_vuln(v, "NVDMatch")
     osv = _match_vuln(v, "OSVMatch")
     gcve = _match_vuln(v, "GCVEMatch")
-
-    published = (
-        nvd.get("Published")
-        or osv.get("published") or osv.get("Published")
-        or gcve.get("datePublished") or gcve.get("DatePublished")
-        or v.get("published_date") or v.get("PublishedDate")
-    )
-    modified = (
-        nvd.get("LastModified")
-        or osv.get("modified") or osv.get("Modified")
-        or gcve.get("dateUpdated") or gcve.get("DateUpdated")
-        or v.get("modified_date") or v.get("ModifiedDate")
-    )
-    withdrawn = (
-        osv.get("withdrawn") or osv.get("Withdrawn")
-        or v.get("withdrawn_date") or v.get("WithdrawnDate")
-    )
+    published = nvd.get("Published") or osv.get("published") or gcve.get("datePublished")
+    modified = nvd.get("LastModified") or osv.get("modified") or gcve.get("dateUpdated")
+    withdrawn = osv.get("withdrawn")
     return (published or None, modified or None, withdrawn or None)
 
 
 def _count_severity_classes(rows: list[dict]) -> dict[str, int]:
-    """Count per-analysis severity classes from already-flattened vuln rows."""
     buckets = {"critical": 0, "high": 0, "medium": 0, "low": 0, "none": 0}
     for r in rows:
         sev = r.get("severity_class")
-        if not sev:
-            continue
-        key = str(sev).lower()
-        if key in buckets:
-            buckets[key] += 1
+        if sev and str(sev).lower() in buckets:
+            buckets[str(sev).lower()] += 1
     return buckets
 
 
-def build_tables(data_dir: Path, include_deps: bool = True) -> None:
-    """Flatten raw blobs into Parquet tables.
-
-    `include_deps=False` keeps the per-analysis dependency *counts* in the
-    analyses table but skips materialising the giant per-dependency rows — needed
-    for the longitudinal run, where ~18 snapshots × 100 repos (some with 100k+
-    resolved deps) would otherwise produce tens of millions of rows and OOM.
-    """
-    coverage_report(data_dir)
-    manifest = _read_manifest(data_dir)
-    raw_root = data_dir / "raw"
-    tables_dir = data_dir / "tables"
+def build_tables(study: Study) -> None:
+    """Flatten raw blobs into analyses.parquet and vulns.parquet."""
+    coverage_report(study)
+    rows = read_manifest(study.manifest_path)
+    tables_dir = study.tables_dir
     tables_dir.mkdir(parents=True, exist_ok=True)
-    _copy_run_meta(data_dir, tables_dir)
+    _copy_run_meta(study)
 
     analyses_rows: list[dict] = []
     vuln_rows: list[dict] = []
-    dep_rows: list[dict] = []
 
-    for rec in manifest:
-        if rec.get("status") not in {"completed", "success"}:
+    for rec in rows:
+        if rec.state != "done":
             continue
-        aid = rec.get("analysis_id")
-        pid = rec.get("project_id")
+        aid, pid = rec.analysis_id, rec.project_id
         if not aid or not pid:
             continue
-        root = raw_root / pid / aid
+        root = study.raw_dir / pid / aid
         sbom = _load_blob(root / "js-sbom.json")
         vfind = _load_blob(root / "vuln-finder.json")
-        lic = _load_blob(root / "license-finder.json")
-        # Older runs never persisted analysis.json — _step_timings({}) is empty
-        # then, and pandas fills the timing columns with NaN for those rows.
-        analysis_doc = _load_blob(root / "analysis.json")
 
         summary = {
-            "analysis_id": aid,
-            "project_id": pid,
-            "npm_name": rec["npm_name"],
-            "tier": rec["tier"],
-            "rank": rec["rank"],
-            "git_url": rec["git_url"],
-            "snapshot_date": rec["snapshot_date"],
-            "commit_hash": rec["commit_hash"],
-            "committed_at": rec["committed_at"],
+            "analysis_id": aid, "project_id": pid, "npm_name": rec.npm_name,
+            "tier": rec.tier, "rank": rec.rank, "git_url": rec.git_url,
+            "snapshot_date": rec.snapshot_date, "commit_hash": rec.commit_hash,
+            "committed_at": rec.committed_at,
         }
 
-        # js-sbom shape: workspaces[ws]["dependencies"][name][version] -> flags
-        # (Versions struct has no JSON tags → Go marshals fields as PascalCase.)
         pm_for_analysis = _get_package_manager(sbom)
         dep_count, direct_count, transitive_count = 0, 0, 0
         dev_count, prod_count = 0, 0
-        for ws_name, ws in _walk_workspaces(sbom):
+        for _, ws in _walk_workspaces(sbom):
             deps_by_name = ws.get("dependencies") or {}
             if not isinstance(deps_by_name, dict):
                 continue
-            for dep_name, versions in deps_by_name.items():
+            for versions in deps_by_name.values():
                 if not isinstance(versions, dict):
                     continue
-                for version, flags in versions.items():
+                for flags in versions.values():
                     if not isinstance(flags, dict):
                         continue
                     dep_count += 1
-                    direct = bool(flags.get("Direct"))
-                    transitive = bool(flags.get("Transitive"))
-                    dev = bool(flags.get("Dev"))
-                    prod = bool(flags.get("Prod"))
-                    if direct:
-                        direct_count += 1
-                    if transitive:
-                        transitive_count += 1
-                    if dev:
-                        dev_count += 1
-                    if prod:
-                        prod_count += 1
-                    if include_deps:
-                        dep_rows.append({
-                            **summary,
-                            "workspace": ws_name,
-                            "name": dep_name,
-                            "version": version,
-                            "package_manager": pm_for_analysis,
-                            "direct": direct,
-                            "transitive": transitive,
-                            "dev": dev,
-                            "prod": prod,
-                            "optional": bool(flags.get("Optional")),
-                            "bundled": bool(flags.get("Bundled")),
-                            "licenses": flags.get("Licenses") or [],
-                        })
+                    direct_count += bool(flags.get("Direct"))
+                    transitive_count += bool(flags.get("Transitive"))
+                    dev_count += bool(flags.get("Dev"))
+                    prod_count += bool(flags.get("Prod"))
 
         total_vulns, vulnerable_deps = 0, set()
         direct_vulns, transitive_vulns = 0, 0
         per_analysis_vulns: list[dict] = []
         for ws_name, ws in _walk_workspaces(vfind):
-            vulns = ws.get("Vulnerabilities") or ws.get("vulnerabilities") or []
+            vulns = ws.get("Vulnerabilities") or []
             for v in vulns:
                 if not isinstance(v, dict):
                     continue
                 total_vulns += 1
-                dep_name = v.get("AffectedDependency") or v.get("affected_dependency")
+                dep_name = v.get("AffectedDependency")
                 if dep_name:
                     vulnerable_deps.add(dep_name)
-                if v.get("DirectDependency") or v.get("direct_dependency"):
+                if v.get("DirectDependency"):
                     direct_vulns += 1
                 else:
                     transitive_vulns += 1
-                sev = (v.get("Severity") or {})
+                sev = v.get("Severity") or {}
                 epss = v.get("EPSS") or {}
                 conflict = v.get("Conflict") or {}
                 published, modified, withdrawn = _disclosure_dates(v)
                 row = {
                     **summary,
                     "workspace": ws_name,
-                    "vulnerability_id": v.get("VulnerabilityId") or v.get("vulnerability_id"),
+                    "vulnerability_id": v.get("VulnerabilityId"),
                     "affected_dependency": dep_name,
-                    "affected_version": v.get("AffectedVersion") or v.get("affected_version"),
+                    "affected_version": v.get("AffectedVersion"),
                     "severity_class": sev.get("SeverityClass"),
                     "severity_score": sev.get("Severity"),
                     "severity_vector": sev.get("Vector"),
@@ -388,11 +217,9 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
                     "exploitability": sev.get("Exploitability"),
                     "epss_score": epss.get("Score") if isinstance(epss, dict) else None,
                     "epss_percentile": epss.get("Percentile") if isinstance(epss, dict) else None,
-                    # Go Conflict struct (vuln-finder types.go) has no JSON tags,
-                    # so the fields marshal as ConflictFlag / ConflictWinner.
                     "conflict_flag": conflict.get("ConflictFlag") if isinstance(conflict, dict) else None,
                     "winning_source": conflict.get("ConflictWinner") if isinstance(conflict, dict) else None,
-                    "direct_dependency": bool(v.get("DirectDependency") or v.get("direct_dependency")),
+                    "direct_dependency": bool(v.get("DirectDependency")),
                     "published_date": published,
                     "modified_date": modified,
                     "withdrawn_date": withdrawn,
@@ -401,16 +228,9 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
                 per_analysis_vulns.append(row)
 
         severity_counts = _count_severity_classes(per_analysis_vulns)
-
-        # js-patching is temporarily disabled — known bug, data untrustworthy.
-
         analyses_rows.append({
             **summary,
-            # Telemetry: manifest stamps (absent on pre-telemetry rows -> None)
-            # plus per-step dispatch timings from the persisted analysis doc.
-            "submitted_at": rec.get("submitted_at"),
-            "terminal_at": rec.get("terminal_at"),
-            **_step_timings(analysis_doc),
+            "run_id": rec.run_id,
             "total_dependencies": dep_count,
             "direct_dependencies": direct_count,
             "transitive_dependencies": transitive_count,
@@ -430,16 +250,6 @@ def build_tables(data_dir: Path, include_deps: bool = True) -> None:
 
     analyses_df = pd.DataFrame(analyses_rows)
     vulns_df = pd.DataFrame(vuln_rows)
-
     analyses_df.to_parquet(tables_dir / "analyses.parquet", index=False)
     vulns_df.to_parquet(tables_dir / "vulns.parquet", index=False)
-    n_deps = 0
-    if include_deps:
-        deps_df = pd.DataFrame(dep_rows)
-        deps_df.to_parquet(tables_dir / "dependencies.parquet", index=False)
-        n_deps = len(deps_df)
-
-    log.info(
-        "wrote analyses=%d vulns=%d deps=%d to %s",
-        len(analyses_df), len(vulns_df), n_deps, tables_dir,
-    )
+    log.info("wrote analyses=%d vulns=%d to %s", len(analyses_df), len(vulns_df), tables_dir)

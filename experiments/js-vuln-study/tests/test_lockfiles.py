@@ -9,14 +9,11 @@ cd experiments/js-vuln-study && .venv/bin/python -m pytest tests/ -q
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from js_vuln_study import lockfiles  # noqa: E402
+from js_vuln_study import lockfiles
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "lockfiles"
 
@@ -127,5 +124,5 @@ def test_unknown_lockfile_name_raises():
 
 
 def test_root_lockfiles_matches_js_sbom_list():
-    # PackageFileFinder.go:91 — keep in sync with the plugin's walker.
+    # PackageFileFinder.go:91, kept in sync with the plugin's walker.
     assert lockfiles.ROOT_LOCKFILES == ["yarn.lock", "package-lock.json", "pnpm-lock.yaml"]

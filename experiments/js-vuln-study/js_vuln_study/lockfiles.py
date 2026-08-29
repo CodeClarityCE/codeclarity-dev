@@ -1,33 +1,33 @@
 """Minimal root-lockfile parsers: lockfile bytes -> {package: {resolved versions}}.
 
-One job only, for the remediation miner (`js_vuln_study.remediation`): given
-the raw bytes of a repository-root lockfile, return every resolved version
-each package occurs at anywhere in the file. The accepted formats mirror what
-the js-sbom plugin handles (root lockfile list from
+One job only, for the remediation miner (`js_vuln_study.miner`): given the
+raw bytes of a repository-root lockfile, return every resolved version each
+package occurs at anywhere in the file. The accepted formats mirror what the
+js-sbom plugin handles (root lockfile list from
 `backend/plugins/js-sbom/src/utils/project_finder/PackageFileFinder.go`;
 format edge cases cross-checked against its parsers):
 
-  * package-lock.json v1 — recursive `dependencies` tree — and v2/v3 — flat
-    `packages` map keyed by `node_modules/` paths (scoped and nested names
+  * package-lock.json, v1 (recursive `dependencies` tree) and v2/v3 (flat
+    `packages` map keyed by `node_modules/` paths; scoped and nested names
     are the segment after the last `node_modules/`; the `""` root and
     workspace-definition keys carry no resolved dependency).
-  * yarn.lock v1 — the custom text format (`YarnLockV1Parser.go`): entry
+  * yarn.lock v1: the custom text format (`YarnLockV1Parser.go`); entry
     headers are comma-separated `name@range` descriptors, individually
     quotable (quotes may contain commas), followed by an indented
     `version "x"` line shared by every key of the entry.
-  * yarn.lock berry (v2+) — YAML with `__metadata`, `name@npm:range`
+  * yarn.lock berry (v2+): YAML with `__metadata`, `name@npm:range`
     descriptor keys; `@workspace:` descriptors are the workspaces themselves
     and are skipped.
-  * pnpm-lock.yaml — YAML (PyYAML, added as a pinned dependency for the two
+  * pnpm-lock.yaml: YAML (PyYAML, added as a pinned dependency for the two
     YAML dialects rather than hand-parsing them); `packages` keys are
     `/name/version[_peer]` for lockfileVersion 5.x/7 and `/name@version[(peer)]`
-    for 6.x/8 (bare `name@version` in 9's `packages`/`snapshots`) — the same
-    major-version dispatch as `PNPMParser.go` — plus `importers` direct deps.
+    for 6.x/8 (bare `name@version` in 9's `packages`/`snapshots`), the same
+    major-version dispatch as `PNPMParser.go`, plus `importers` direct deps.
 
 Versions are the literal strings found in the lockfile; no semver
 normalisation. The parsers are deliberately lossy (aliased descriptors keep
-the alias name, exotic protocols are skipped) — they only answer "which
-resolved versions of package X does this root lockfile pin?" — and raise
+the alias name, exotic protocols are skipped): they only answer "which
+resolved versions of package X does this root lockfile pin?", and raise
 `LockfileParseError` on undecodable input rather than guessing.
 """
 
@@ -38,7 +38,7 @@ import re
 
 import yaml
 
-# The js-sbom root-lockfile list (PackageFileFinder.go:91) — the miner unions
+# The js-sbom root-lockfile list (PackageFileFinder.go:91): the miner unions
 # commit history across these three names to survive lockfile migrations.
 ROOT_LOCKFILES = ["yarn.lock", "package-lock.json", "pnpm-lock.yaml"]
 
@@ -111,7 +111,7 @@ def parse_package_lock(data: bytes) -> dict[str, set[str]]:
 # --------------------------------------------------------------------------- #
 
 def _split_descriptors(header: str) -> list[str]:
-    """Split a yarn entry header on commas, honouring double quotes — keys
+    """Split a yarn entry header on commas, honouring double quotes: keys
     like `"pkg@>=1.0.0 <2.0.0", pkg@^1.2.0` contain commas inside quotes."""
     keys: list[str] = []
     buf: list[str] = []
