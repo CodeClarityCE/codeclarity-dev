@@ -102,10 +102,14 @@ class CodeClarityClient:
     # ---- provisioning ------------------------------------------------------
 
     def _list_orgs(self) -> list[dict[str, Any]]:
+        # Each row is a membership record, not a flat org object: the org
+        # itself is nested under "organization" ({role, joined_on,
+        # organization: {id, name, ...}}), unlike analyzers/integrations.
         return self._request("GET", "/org", params={"page": 0, "entries_per_page": 100})["data"]
 
     def _ensure_org(self, name: str, description: str) -> str:
-        for org in self._list_orgs():
+        for membership in self._list_orgs():
+            org = membership.get("organization") or {}
             if org.get("name") == name:
                 return org["id"]
         body = {"name": name, "description": description, "color_scheme": "1"}
