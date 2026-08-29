@@ -38,6 +38,14 @@ whose last commit still carries the version => 'ambiguous'/
 root-lockfile change). No lockfile-touching commits at all => 'not_found'/
 'no_lockfile_commits'.
 
+A `classify_fix` "removed" verdict (the dependency left every root lockfile)
+is further split by `classify_removal` into 'removed_direct' (declared in the
+root package.json at the boundary commit, no longer declared at the fix
+commit — a deliberate drop) vs 'removed_transitive' (never a direct
+dependency at the boundary — it left the tree because a parent was
+upgraded). Either package.json being unreadable keeps the unsplit 'removed'
+value.
+
 Endpoints/auth reuse the existing idioms: `snapshots.GITHUB_API` +
 `triangulate.RAW_GITHUB` bases, `_auth_headers`, `_fetch`, and
 `_handle_rate_limit` backoff. Everything fetched is cached under
@@ -110,6 +118,33 @@ def classify_fix(versions_by_lockfile: dict[str, dict[str, set[str]] | None],
     if remaining:
         return "upgraded", ",".join(sorted(remaining))
     return "removed", None
+
+
+def classify_removal(deps_at_boundary: set[str] | None,
+                     deps_at_fix: set[str] | None,
+                     dependency: str) -> str:
+    """Split a `classify_fix` "removed" verdict into whether the dependency
+    was a deliberately dropped direct dependency or a transitive one that
+    left the tree because a parent was upgraded, from the root package.json's
+    direct-dependency set (`dependencies` + `devDependencies` +
+    `optionalDependencies`) at the boundary (last-seen snapshot) commit and
+    at the fix commit.
+
+    Returns "removed_direct" when the dependency was declared at the
+    boundary and is no longer declared at the fix commit; "removed_transitive"
+    when it was never a direct dependency at the boundary. Either manifest
+    being unreadable, or the dependency still being declared at the fix
+    commit despite being gone from every lockfile (an inconsistent tree,
+    e.g. an unresolved peer), is unknowable and keeps the legacy unsplit
+    "removed" value rather than guessing.
+    """
+    if deps_at_boundary is None or deps_at_fix is None:
+        return "removed"
+    if dependency in deps_at_boundary and dependency not in deps_at_fix:
+        return "removed_direct"
+    if dependency not in deps_at_boundary:
+        return "removed_transitive"
+    return "removed"
 
 
 class UnparseableLockfile(Exception):
@@ -336,6 +371,38 @@ def lockfile_versions_at(http_raw: httpx.Client, cache_dir: Path, slug: str,
     return status, versions
 
 
+def package_json_direct_deps_at(http_raw: httpx.Client, cache_dir: Path, slug: str,
+                                sha: str) -> set[str] | None:
+    """Direct dependency names (`dependencies` + `devDependencies` +
+    `optionalDependencies`) from the root package.json at `sha` — cached on
+    (slug, sha, "package.json"). None when the manifest is missing or
+    unparseable (unknowable, not "no direct deps"), same convention as
+    `lockfile_versions_at`'s missing/unparseable handling."""
+    path = _cache_file(cache_dir, "manifests", slug, sha, "package.json")
+    if path.exists():
+        payload = json.loads(path.read_text())
+        deps = payload["deps"]
+        return set(deps) if deps is not None else None
+    blob = _fetch(http_raw, f"/{slug}/{sha}/package.json")
+    deps: set[str] | None = None
+    if blob is not None:
+        try:
+            doc = json.loads(blob.decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            doc = None
+        if isinstance(doc, dict):
+            deps = set()
+            for kind in ("dependencies", "devDependencies", "optionalDependencies"):
+                block = doc.get(kind)
+                if isinstance(block, dict):
+                    deps |= {str(name) for name in block}
+    path.write_text(json.dumps({
+        "key": {"slug": slug, "sha": sha, "name": "package.json"},
+        "deps": sorted(deps) if deps is not None else None,
+    }))
+    return deps
+
+
 # --------------------------------------------------------------------------- #
 # Fix-commit search
 # --------------------------------------------------------------------------- #
@@ -436,12 +503,24 @@ def mine_unit(unit: MiningUnit, http_api: httpx.Client, http_raw: httpx.Client,
     probe_cache: dict[str, tuple[bool, str | None]] = {}
 
     def check(sha: str, lockfiles: list[str]) -> tuple[bool, str | None]:
+        # An unparseable lockfile does not, by itself, make presence at this
+        # commit unknowable: the other root lockfiles may already answer it
+        # definitively (present, or all parsed and absent). Scan every name
+        # first; only raise once no parsed lockfile settled the question AND
+        # at least one probe was unparseable — presence is genuinely unknown
+        # only then. This matters because a single unparseable blob (e.g. one
+        # lockfile-migration commit) must not poison every unit that ever
+        # probes it.
+        unparseable: str | None = None
         for name in lockfiles:
             status, versions = lockfile_versions_at(http_raw, cache_dir, slug, sha, name)
             if status == "unparseable":
-                raise UnparseableLockfile(name)
+                unparseable = unparseable or name
+                continue
             if status == "parsed" and versions.get(unit.dependency, set()) & vuln_versions:
                 return True, name
+        if unparseable is not None:
+            raise UnparseableLockfile(unparseable)
         return False, None
 
     def present_at(sha: str) -> tuple[bool, str | None]:
@@ -473,6 +552,12 @@ def mine_unit(unit: MiningUnit, http_api: httpx.Client, http_raw: httpx.Client,
         }
         fix_kind, fix_to_version = classify_fix(states, unit.dependency,
                                                 vuln_versions)
+        if fix_kind == "removed" and unit.boundary_sha:
+            deps_boundary = package_json_direct_deps_at(
+                http_raw, cache_dir, slug, unit.boundary_sha)
+            deps_fix = package_json_direct_deps_at(
+                http_raw, cache_dir, slug, found["fix_commit_sha"])
+            fix_kind = classify_removal(deps_boundary, deps_fix, unit.dependency)
     return {**base, **found, "fix_kind": fix_kind,
             "fix_to_version": fix_to_version, "n_commits": len(commits)}
 
@@ -508,6 +593,7 @@ def run_mining(data_dir: Path, out: Path, limit: int | None = None,
         print(json.dumps({"counters": counters, "budget": budget}, indent=2))
         return 0
 
+    current_keys = {u.unit_key for u in units}
     if limit:
         units = units[:limit]
     cache_dir = data_dir / "mining_cache"
@@ -546,7 +632,19 @@ def run_mining(data_dir: Path, out: Path, limit: int | None = None,
         if own_raw:
             http_raw.close()
 
-    rows = [{k: r.get(k) for k in _EVENT_COLS} for r in done.values()]
+    # results.jsonl is an append-only cache across grid changes: a unit whose
+    # key no longer derives from the current tables (grid/mining logic
+    # changed since it was mined) is a stale cache entry, not a current
+    # result, and must not leak into the parquet — a stale wide-window row
+    # can share an interval's (project_id, dep, last_seen) key with a fresh
+    # narrow-window row, and merge_day_resolution takes the LATEST fixed_at,
+    # so a stale entry can silently override a correct one.
+    stale = len(done) - sum(1 for k in done if k in current_keys)
+    if stale:
+        log.info("dropping %d stale cache entr%s not in the current unit set",
+                 stale, "y" if stale == 1 else "ies")
+    rows = [{k: r.get(k) for k in _EVENT_COLS}
+            for key, r in done.items() if key in current_keys]
     df = pd.DataFrame(rows, columns=_EVENT_COLS).sort_values(
         ["npm_name", "affected_dependency", "last_seen"], kind="stable")
     out.parent.mkdir(parents=True, exist_ok=True)

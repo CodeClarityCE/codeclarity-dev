@@ -46,6 +46,13 @@ from js_vuln_study.stats import (  # noqa: E402
 
 TABLES = ROOT / "data" / "tables"
 
+# fix_kind values that mean "the dependency left the tree" rather than "it
+# was upgraded" — dropped from the upgrade_only sensitivity in BOTH cohorts.
+# removed_direct/removed_transitive are the classify_removal split of the
+# legacy unsplit "removed" (unreadable package.json at the boundary or fix
+# commit).
+REMOVED_KINDS = ("removed", "removed_direct", "removed_transitive")
+
 
 def _jsonable(x):
     if isinstance(x, (np.integer,)):
@@ -97,7 +104,9 @@ def survival_day_block(vulns: pd.DataFrame, analyses: pd.DataFrame,
             "km_median_days": float(km_median(t, sv)),
             "n_day_fixed": int(len(day_fixed)),
             "n_fix_upgraded": int((day_fixed.fix_kind == "upgraded").sum()),
-            "n_fix_removed": int((day_fixed.fix_kind == "removed").sum()),
+            "n_fix_removed": int(day_fixed.fix_kind.isin(REMOVED_KINDS).sum()),
+            "n_fix_removed_direct": int((day_fixed.fix_kind == "removed_direct").sum()),
+            "n_fix_removed_transitive": int((day_fixed.fix_kind == "removed_transitive").sum()),
             **tail,
         }
     out = {
@@ -115,7 +124,8 @@ def survival_day_block(vulns: pd.DataFrame, analyses: pd.DataFrame,
         # carry no classification and stay in.
         split = {str(k): int(n)
                  for k, n in day_fixed_all.fix_kind.value_counts(dropna=False).items()}
-        removed_mask = (kept.resolution == "day") & (kept.event == 1) & (kept.fix_kind == "removed")
+        removed_mask = ((kept.resolution == "day") & (kept.event == 1)
+                        & kept.fix_kind.isin(REMOVED_KINDS))
         up = kept[~removed_mask]
         up_sev = {}
         for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):

@@ -3,15 +3,24 @@ parquet, from the cached lockfile blobs — no re-mining.
 
 The miner now emits both columns natively (remediation.classify_fix inside
 mine_unit); this script retro-classifies parquets mined before that change,
-and doubles as an agreement check on parquets that already carry the columns
-(zero disagreements expected, reported otherwise).
+and doubles as an agreement check on parquets that already carry the columns.
+Since the miner also now splits "removed" into "removed_direct" /
+"removed_transitive" (remediation.classify_removal), re-running this script
+against an OLDER parquet that only has the unsplit "removed" value will
+report those rows as disagreements — that's the split refining, not a bug;
+disagreements on "upgraded"/"anomalous_still_present" rows are the ones that
+indicate a real problem.
 
 For every status == "found" row, the three ROOT_LOCKFILES are read at
 fix_commit_sha via `remediation.lockfile_versions_at`. The search probes
 guaranteed those blobs are cached for every lockfile that had commits in the
 window; the remaining names are at most two raw-blob fetches per row (usually
-404 -> missing, cached afterwards), off the core-API budget. With
---cache-only, a cache miss records fix_kind="unknown" instead of fetching.
+404 -> missing, cached afterwards), off the core-API budget. A "removed"
+verdict is further split by reading the root package.json at the boundary
+(last-seen) and fix commits via `remediation.package_json_direct_deps_at`
+(cache-first, same convention). With --cache-only, a cache miss on either the
+lockfile or manifest fetch records fix_kind="unknown" (lockfile) or leaves
+the unsplit "removed" (manifest) instead of fetching.
 
     .venv/bin/python scripts/backfill_fix_kind.py [--data-dir data]
         [--cache-only] [--dry-run] [--spot-check N]
@@ -37,11 +46,46 @@ sys.path.insert(0, str(ROOT))
 
 from js_vuln_study.lockfiles import ROOT_LOCKFILES  # noqa: E402
 from js_vuln_study.remediation import (  # noqa: E402
-    _cache_file, classify_fix, lockfile_versions_at,
+    _cache_file, classify_fix, classify_removal, derive_units,
+    lockfile_versions_at, package_json_direct_deps_at,
 )
 from js_vuln_study.triangulate import RAW_GITHUB, parse_owner_repo  # noqa: E402
 
 log = logging.getLogger("backfill_fix_kind")
+
+
+def _boundary_sha_map(data_dir: Path) -> dict[str, str | None]:
+    """unit_key -> boundary_sha, re-derived offline from the current parquet
+    tables (pure computation, no API). remediation_events rows don't persist
+    boundary_sha, so this recovers it for the removal-kind split; a row whose
+    unit_key isn't found here (grid/mining changed since it was mined) gets
+    no split, same as an unreadable manifest."""
+    analyses = pd.read_parquet(data_dir / "tables" / "analyses.parquet")
+    vulns = pd.read_parquet(data_dir / "tables" / "vulns.parquet")
+    units, _ = derive_units(vulns, analyses)
+    return {u.unit_key: u.boundary_sha for u in units}
+
+
+def _row_unit_key(row) -> str:
+    versions = ",".join(sorted(str(row.affected_version).split(",")))
+    return "|".join((row.npm_name, row.affected_dependency, versions,
+                     row.last_seen, row.next_snapshot))
+
+
+def _manifest_direct_deps(slug: str, sha: str | None, cache_dir: Path,
+                          http_raw: httpx.Client | None) -> set[str] | None:
+    """package.json direct deps at `sha`, cache-first; None if unknowable
+    (missing sha, cache miss with --cache-only, or unparseable manifest)."""
+    if not sha:
+        return None
+    path = _cache_file(cache_dir, "manifests", slug, sha, "package.json")
+    if path.exists():
+        payload = json.loads(path.read_text())
+        deps = payload["deps"]
+        return set(deps) if deps is not None else None
+    if http_raw is None:
+        return None
+    return package_json_direct_deps_at(http_raw, cache_dir, slug, sha)
 
 
 def _slug_map(data_dir: Path) -> dict[str, str]:
@@ -63,7 +107,8 @@ def _slug_map(data_dir: Path) -> dict[str, str]:
 
 
 def _classify_row(row, slug: str, cache_dir: Path,
-                  http_raw: httpx.Client | None) -> tuple[str, str | None]:
+                  http_raw: httpx.Client | None,
+                  boundary_sha: str | None) -> tuple[str, str | None]:
     """(fix_kind, fix_to_version) for one found row.
 
     Cached blobs (exactly the lockfile names the search probed at the fix
@@ -71,7 +116,10 @@ def _classify_row(row, slug: str, cache_dir: Path,
     it is an upgrade and the never-probed names cannot flip that. Only an
     apparent removal needs the missing names checked, since the dependency
     could live in a lockfile that saw no commits in the window; those are
-    raw-fetched (then cached), or reported "unknown" with --cache-only."""
+    raw-fetched (then cached), or reported "unknown" with --cache-only. A
+    "removed" verdict is further split direct/transitive from the root
+    package.json's direct-dependency set at the boundary and fix commits
+    (unknown boundary_sha, or an unreadable manifest, keeps it unsplit)."""
     states: dict[str, dict[str, set[str]] | None] = {}
     missing: list[str] = []
     for name in ROOT_LOCKFILES:
@@ -94,6 +142,10 @@ def _classify_row(row, slug: str, cache_dir: Path,
             states[name] = versions
         kind, to_version = classify_fix(states, row.affected_dependency,
                                         vulnerable)
+    if kind == "removed":
+        deps_boundary = _manifest_direct_deps(slug, boundary_sha, cache_dir, http_raw)
+        deps_fix = _manifest_direct_deps(slug, row.fix_commit_sha, cache_dir, http_raw)
+        kind = classify_removal(deps_boundary, deps_fix, row.affected_dependency)
     return kind, to_version
 
 
@@ -116,6 +168,7 @@ def main() -> int:
     cache_dir = data_dir / "mining_cache"
     events = pd.read_parquet(events_path)
     slugs = _slug_map(data_dir)
+    boundary_shas = _boundary_sha_map(data_dir)
 
     had_columns = "fix_kind" in events.columns
     prior = events["fix_kind"].copy() if had_columns else None
@@ -133,7 +186,8 @@ def main() -> int:
                 to_versions.append(None)
                 continue
             slug = slugs.get(row.project_id, row.npm_name)
-            kind, to_version = _classify_row(row, slug, cache_dir, http_raw)
+            boundary_sha = boundary_shas.get(_row_unit_key(row))
+            kind, to_version = _classify_row(row, slug, cache_dir, http_raw, boundary_sha)
             kinds.append(kind)
             to_versions.append(to_version)
     finally:

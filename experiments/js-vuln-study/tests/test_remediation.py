@@ -306,6 +306,51 @@ def test_classify_fix_flags_still_vulnerable_as_anomalous():
     assert to_version == "4.17.20,4.17.21"
 
 
+# ---- removal-kind split (direct vs transitive) ------------------------------
+
+
+def test_classify_removal_direct_drop():
+    assert remediation.classify_removal({"lodash"}, set(), "lodash") == "removed_direct"
+
+
+def test_classify_removal_transitive():
+    assert remediation.classify_removal({"express"}, {"express"}, "lodash") == "removed_transitive"
+
+
+def test_classify_removal_unknown_when_manifest_unreadable():
+    assert remediation.classify_removal(None, {"express"}, "lodash") == "removed"
+    assert remediation.classify_removal({"express"}, None, "lodash") == "removed"
+
+
+def test_classify_removal_still_declared_but_gone_stays_unsplit():
+    # Declared at both ends despite being gone from every lockfile: an
+    # inconsistent tree the split cannot honestly resolve either way.
+    assert remediation.classify_removal({"lodash"}, {"lodash"}, "lodash") == "removed"
+
+
+PACKAGE_JSON_A = b'{"dependencies": {"lodash": "^4.17.15"}, "devDependencies": {"jest": "^29.0.0"}}'
+PACKAGE_JSON_B = b'{"dependencies": {}, "devDependencies": {"jest": "^29.0.0"}}'
+
+
+def test_package_json_direct_deps_at_parses_and_caches(tmp_path):
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path.endswith("c1/package.json"):
+            return httpx.Response(200, content=PACKAGE_JSON_A)
+        return httpx.Response(404)
+
+    http = httpx.Client(base_url="https://raw.test", transport=httpx.MockTransport(handler))
+    deps = remediation.package_json_direct_deps_at(http, tmp_path, "owner1/repo1", "c1")
+    assert deps == {"lodash", "jest"}
+    missing = remediation.package_json_direct_deps_at(http, tmp_path, "owner1/repo1", "c2")
+    assert missing is None
+    n_calls = len(calls)
+    assert remediation.package_json_direct_deps_at(http, tmp_path, "owner1/repo1", "c1") == {"lodash", "jest"}
+    assert len(calls) == n_calls  # cache hit, no new HTTP
+
+
 # ---- merge_day_resolution ---------------------------------------------------
 
 
@@ -486,3 +531,173 @@ def test_run_mining_end_to_end_and_resume(tmp_path, mocked_github):
     assert run_mining(data_dir, out=out, http_api=api, http_raw=raw) == 0
     assert calls == before
     assert len(pd.read_parquet(out)) == 1
+
+
+def test_run_mining_drops_stale_cache_entries_not_in_current_units(tmp_path, mocked_github):
+    """results.jsonl is append-only across grid changes; a unit_key from a
+    prior mine that no longer derives from the current tables must not reach
+    the parquet (it could otherwise mask a correct fresh result for a
+    same-interval unit under merge_day_resolution's latest-wins rule)."""
+    api, raw, calls = mocked_github
+    data_dir = make_tables(tmp_path)
+    out = data_dir / "tables" / "remediation_events.parquet"
+    cache_dir = data_dir / "mining_cache"
+    cache_dir.mkdir(parents=True)
+    stale = {
+        "unit_key": "owner1/repo1|lodash|9.9.9|2020-01-01|2020-04-01",
+        "npm_name": "owner1/repo1", "project_id": "p1",
+        "affected_dependency": "lodash", "affected_version": "9.9.9",
+        "workspace_scope": "root", "last_seen": "2020-01-01",
+        "next_snapshot": "2020-04-01", "lockfile": "yarn.lock",
+        "fix_commit_sha": "deadbeef", "fixed_at": "2020-02-01T00:00:00Z",
+        "fix_kind": "upgraded", "fix_to_version": "9.9.10",
+        "method": "linear_scan", "status": "found", "n_intervals": 1, "n_commits": 1,
+    }
+    (cache_dir / "results.jsonl").write_text(json.dumps(stale) + "\n")
+
+    assert run_mining(data_dir, out=out, http_api=api, http_raw=raw) == 0
+    df = pd.read_parquet(out)
+    assert len(df) == 1  # only the fresh unit from make_tables, stale entry dropped
+    assert "9.9.9" not in set(df["affected_version"])
+
+
+def test_mine_unit_unparseable_lockfile_does_not_block_another_lockfiles_answer(tmp_path):
+    """One unparseable lockfile at a commit must not poison the probe when
+    another root lockfile at the SAME commit already answers "present" —
+    the historical bug: check() bailed on the first unparseable name (in
+    ROOT_LOCKFILES order, yarn.lock first) before ever looking at the
+    others, even when one of them would have settled it. With the fix,
+    package-lock.json's "present" answer short-circuits before the raise, so
+    the unit resolves to the more specific still_present_at_window_end
+    instead of the overly-conservative unparseable_lockfile."""
+    GARBAGE_YARN = b"\xff\xfe not valid utf-8 \x00\x01"
+    PKG_LOCK_PRESENT = b'{"lockfileVersion": 3, "packages": {"node_modules/lodash": {"version": "4.17.20"}}}'
+
+    def api_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["path"] in ("yarn.lock", "package-lock.json"):
+            return httpx.Response(200, json=[gh_commit("c1", "2024-05-01T00:00:00Z")])
+        return httpx.Response(200, json=[])
+
+    def raw_handler(request: httpx.Request) -> httpx.Response:
+        parts = request.url.path.split("/")
+        sha, name = parts[-2], parts[-1]
+        if name == "yarn.lock":
+            return httpx.Response(200, content=GARBAGE_YARN)  # unparseable at every sha
+        if name == "package-lock.json":
+            return httpx.Response(200, content=PKG_LOCK_PRESENT) if sha == "c1" else httpx.Response(404)
+        return httpx.Response(404)
+
+    api = httpx.Client(base_url="https://gh.test", transport=httpx.MockTransport(api_handler))
+    raw = httpx.Client(base_url="https://raw.test", transport=httpx.MockTransport(raw_handler))
+    unit = MiningUnit(
+        npm_name="owner1/repo1", project_id="p1", git_url=GIT_URL,
+        dependency="lodash", versions=("4.17.20",), last_seen="2024-04-01",
+        next_snapshot="2024-07-01", since="2024-03-30T10:00:00Z",
+        until="2024-06-29T10:00:00Z", boundary_sha="snap2",
+    )
+    row = remediation.mine_unit(unit, api, raw, tmp_path)
+    assert (row["status"], row["method"]) == ("ambiguous", "still_present_at_window_end")
+    api.close()
+    raw.close()
+
+
+def test_check_raises_only_when_no_parsed_lockfile_settles_it(tmp_path):
+    """Both root lockfiles unparseable at a commit (no other lockfile ever
+    answers): presence is genuinely unknown -> ambiguous, not a crash."""
+    GARBAGE = b"\xff\xfe not valid utf-8 \x00\x01"
+
+    def api_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["path"] in ("yarn.lock", "package-lock.json"):
+            return httpx.Response(200, json=[gh_commit("c1", "2024-05-01T00:00:00Z")])
+        return httpx.Response(200, json=[])
+
+    def raw_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=GARBAGE)
+
+    api = httpx.Client(base_url="https://gh.test", transport=httpx.MockTransport(api_handler))
+    raw = httpx.Client(base_url="https://raw.test", transport=httpx.MockTransport(raw_handler))
+    unit = MiningUnit(
+        npm_name="owner1/repo1", project_id="p1", git_url=GIT_URL,
+        dependency="lodash", versions=("4.17.20",), last_seen="2024-04-01",
+        next_snapshot="2024-07-01", since="2024-03-30T10:00:00Z",
+        until="2024-06-29T10:00:00Z", boundary_sha="snap2",
+    )
+    row = remediation.mine_unit(unit, api, raw, tmp_path)
+    assert (row["status"], row["method"]) == ("ambiguous", "unparseable_lockfile")
+    api.close()
+    raw.close()
+
+
+def test_mine_unit_removal_splits_direct_from_transitive(tmp_path):
+    """lodash leaves yarn.lock entirely at the fix commit (not just a
+    version bump): mine_unit should classify it removed_direct/transitive
+    from the root package.json's direct-dependency set."""
+    YARN_NO_LODASH = b'# yarn lockfile v1\nsemver@^7.0.0:\n  version "7.6.0"\n'
+    boundary_pkg = b'{"dependencies": {"lodash": "^4.17.15"}}'  # lodash direct at boundary
+    fix_pkg = b'{"dependencies": {}}'  # dropped by the fix commit
+
+    def api_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["path"] == "yarn.lock":
+            return httpx.Response(200, json=[gh_commit("c1", "2024-05-01T00:00:00Z")])
+        return httpx.Response(200, json=[])
+
+    def raw_handler(request: httpx.Request) -> httpx.Response:
+        parts = request.url.path.split("/")
+        sha, name = parts[-2], parts[-1]
+        if name == "yarn.lock":
+            blob = {"snap2": YARN_VULNERABLE, "c1": YARN_NO_LODASH}.get(sha)
+        elif name == "package.json":
+            blob = {"snap2": boundary_pkg, "c1": fix_pkg}.get(sha)
+        else:
+            blob = None
+        return httpx.Response(200, content=blob) if blob is not None else httpx.Response(404)
+
+    api = httpx.Client(base_url="https://gh.test", transport=httpx.MockTransport(api_handler))
+    raw = httpx.Client(base_url="https://raw.test", transport=httpx.MockTransport(raw_handler))
+    unit = MiningUnit(
+        npm_name="owner1/repo1", project_id="p1", git_url=GIT_URL,
+        dependency="lodash", versions=("4.17.20",), last_seen="2024-04-01",
+        next_snapshot="2024-07-01", since="2024-03-30T10:00:00Z",
+        until="2024-06-29T10:00:00Z", boundary_sha="snap2",
+    )
+    row = remediation.mine_unit(unit, api, raw, tmp_path)
+    assert row["status"] == "found"
+    assert row["fix_kind"] == "removed_direct"
+    api.close()
+    raw.close()
+
+
+def test_mine_unit_removal_transitive_when_never_a_direct_dep(tmp_path):
+    YARN_NO_LODASH = b'# yarn lockfile v1\nsemver@^7.0.0:\n  version "7.6.0"\n'
+    boundary_pkg = b'{"dependencies": {"express": "^4.0.0"}}'  # lodash never direct
+    fix_pkg = b'{"dependencies": {"express": "^4.0.0"}}'
+
+    def api_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["path"] == "yarn.lock":
+            return httpx.Response(200, json=[gh_commit("c1", "2024-05-01T00:00:00Z")])
+        return httpx.Response(200, json=[])
+
+    def raw_handler(request: httpx.Request) -> httpx.Response:
+        parts = request.url.path.split("/")
+        sha, name = parts[-2], parts[-1]
+        if name == "yarn.lock":
+            blob = {"snap2": YARN_VULNERABLE, "c1": YARN_NO_LODASH}.get(sha)
+        elif name == "package.json":
+            blob = {"snap2": boundary_pkg, "c1": fix_pkg}.get(sha)
+        else:
+            blob = None
+        return httpx.Response(200, content=blob) if blob is not None else httpx.Response(404)
+
+    api = httpx.Client(base_url="https://gh.test", transport=httpx.MockTransport(api_handler))
+    raw = httpx.Client(base_url="https://raw.test", transport=httpx.MockTransport(raw_handler))
+    unit = MiningUnit(
+        npm_name="owner1/repo1", project_id="p1", git_url=GIT_URL,
+        dependency="lodash", versions=("4.17.20",), last_seen="2024-04-01",
+        next_snapshot="2024-07-01", since="2024-03-30T10:00:00Z",
+        until="2024-06-29T10:00:00Z", boundary_sha="snap2",
+    )
+    row = remediation.mine_unit(unit, api, raw, tmp_path)
+    assert row["status"] == "found"
+    assert row["fix_kind"] == "removed_transitive"
+    api.close()
+    raw.close()

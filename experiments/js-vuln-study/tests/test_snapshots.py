@@ -166,3 +166,27 @@ def test_auth_headers_absent_without_tokens(monkeypatch):
     headers = snapshots._auth_headers()
     assert "Authorization" not in headers
     assert headers["Accept"] == "application/vnd.github+json"
+
+
+# ---- grid shape --------------------------------------------------------------
+
+
+def test_snapshot_dates_strictly_increasing_and_valid():
+    from datetime import datetime
+
+    parsed = [datetime.strptime(d, "%Y-%m-%d") for d in snapshots.SNAPSHOT_DATES]
+    assert parsed == sorted(parsed)
+    assert len(set(parsed)) == len(parsed)
+
+
+def test_snapshot_dates_quarterly_through_2023_then_monthly():
+    dates = snapshots.SNAPSHOT_DATES
+    pre_2024 = [d for d in dates if d < "2024-01-01"]
+    assert pre_2024 == [
+        "2022-01-01", "2022-04-01", "2022-07-01", "2022-10-01",
+        "2023-01-01", "2023-04-01", "2023-07-01", "2023-10-01",
+    ]
+    monthly = [d for d in dates if d >= "2024-01-01"]
+    assert monthly[0] == "2024-01-01"
+    assert monthly[-1] == "2026-08-01"
+    assert len(monthly) == 32  # 2024-01 .. 2026-08 inclusive, every month

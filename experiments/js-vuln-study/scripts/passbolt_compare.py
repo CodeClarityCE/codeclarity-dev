@@ -64,7 +64,8 @@ CAVEATS = [
     "with the advisory already published, not at the publication instant, "
     "identically in both cohorts.",
     "upgrade_only drops day-resolution fixes classified as dependency "
-    "removals; quarter-resolution fixes carry no classification and stay in.",
+    "removals (removed_direct, removed_transitive, or the unsplit legacy "
+    "removed); quarter-resolution fixes carry no classification and stay in.",
 ]
 
 
@@ -102,9 +103,19 @@ def _km_block(df: pd.DataFrame) -> dict:
     return out
 
 
+REMOVED_KINDS = ("removed", "removed_direct", "removed_transitive")
+
+
 def _drop_removed(kept: pd.DataFrame) -> pd.DataFrame:
-    mask = (kept.resolution == "day") & (kept.event == 1) & (kept.fix_kind == "removed")
+    mask = ((kept.resolution == "day") & (kept.event == 1)
+            & kept.fix_kind.isin(REMOVED_KINDS))
     return kept[~mask]
+
+
+def _fix_kind_split(kept: pd.DataFrame) -> dict:
+    day_fixed = kept[(kept.resolution == "day") & (kept.event == 1)]
+    counts = day_fixed.fix_kind.value_counts(dropna=False)
+    return {str(k): int(n) for k, n in counts.items()}
 
 
 def _cohort_block(data_dir: Path, recency_cutoff: pd.Timestamp) -> tuple[dict, dict | None]:
@@ -131,6 +142,7 @@ def _cohort_block(data_dir: Path, recency_cutoff: pd.Timestamp) -> tuple[dict, d
             .dropna().astype(str).unique().tolist()),
         "intervals": int(len(ints)),
         "excluded_ambiguous": int(ints.excluded.sum()),
+        "fix_kind_split": _fix_kind_split(kept),
         "pooled": _km_block(kept),
         "by_severity": {
             sev: _km_block(kept[kept.severity_class.astype(str).str.upper() == sev])

@@ -2,8 +2,8 @@
 
 Primary source: GitHub's REST API (`GET /repos/{owner}/{repo}/commits`) with
 the `until` parameter. Without a token the rate limit is 60 req/h; with one
-(via `GITHUB_TOKEN`) it is 5000 req/h, which is more than enough for the 400
-project × 7 date grid the study needs.
+(via `GITHUB_TOKEN`) it is 5000 req/h, which is more than enough for the
+~100 project x ~40 date grid the study needs.
 """
 
 from __future__ import annotations
@@ -23,15 +23,26 @@ log = logging.getLogger(__name__)
 # to the canonical host, trailing slashes stripped — same contract as sample.py.
 GITHUB_API = (os.environ.get("GH_API_BASE") or "https://api.github.com").rstrip("/")
 
-# Quarterly 2022-Q1 .. 2026-Q2 — a pre-LLM baseline (2022) through today, to
-# chart vulnerability evolution. Repos that don't yet exist at a date are skipped
-# (commit_before returns None). HEAD (commit_hash = None) is appended last.
+# Quarterly 2022-Q1..2023-Q4 — a pre-LLM baseline (2022) through the start of
+# 2024 — then MONTHLY from 2024-01-01 onward: quarterly presence detection
+# cannot see a vulnerability introduced and fixed inside one quarter, which
+# undercounts fast fixers, so the recent era (where the fast-fix comparisons
+# in RESULTS.md focus) gets day-level... well, month-level resolution instead.
+# Repos that don't yet exist at a date are skipped (commit_before returns
+# None). HEAD (commit_hash = None) is appended last. `stats.presence_intervals`
+# derives its grid from the data, so the mixed quarterly/monthly cadence needs
+# no changes downstream.
 SNAPSHOT_DATES = [
     "2022-01-01", "2022-04-01", "2022-07-01", "2022-10-01",
     "2023-01-01", "2023-04-01", "2023-07-01", "2023-10-01",
-    "2024-01-01", "2024-04-01", "2024-07-01", "2024-10-01",
-    "2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01",
-    "2026-01-01", "2026-04-01",
+    "2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01",
+    "2024-05-01", "2024-06-01", "2024-07-01", "2024-08-01",
+    "2024-09-01", "2024-10-01", "2024-11-01", "2024-12-01",
+    "2025-01-01", "2025-02-01", "2025-03-01", "2025-04-01",
+    "2025-05-01", "2025-06-01", "2025-07-01", "2025-08-01",
+    "2025-09-01", "2025-10-01", "2025-11-01", "2025-12-01",
+    "2026-01-01", "2026-02-01", "2026-03-01", "2026-04-01",
+    "2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01",
 ]
 
 

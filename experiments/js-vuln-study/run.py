@@ -8,6 +8,9 @@ Subcommands:
               auto-retry sad-terminal rows (--auto-retry passes, default 2)
   retry     — re-submit sad-terminal manifest rows (failed/failure/cancelled/
               failed-submit), replacing each row in place
+  refresh-head — re-resolve and re-submit every project's HEAD analysis in
+              place, so a cross-cohort comparison's HEAD trees are scanned
+              the same day
   collect   — flatten raw blobs into Parquet tables
   triangulate — cross-check a stratified HEAD subsample against independent
               scanners (npm audit, osv-scanner)
@@ -42,6 +45,7 @@ from js_vuln_study.orchestrator import (
     import_and_schedule,
     poll_and_collect,
     poll_with_retries,
+    refresh_head,
     resubmit_frozen,
     retry_failed,
 )
@@ -166,10 +170,12 @@ def cmd_submit(args: argparse.Namespace) -> int:
             client, org_id, analyzer_id, specs, DATA_DIR,
             integration_id=integration_id, skip_head_only=not args.snapshots,
             ignore_denylist=args.ignore_denylist,
+            knowledge_asof=args.knowledge_asof,
         )
         capture_run_meta(
             client, org_id, analyzer_id, DATA_DIR,
-            extra={"cmd": "submit", "sample_limit": args.limit, "snapshots": args.snapshots},
+            extra={"cmd": "submit", "sample_limit": args.limit, "snapshots": args.snapshots,
+                  "knowledge_asof": args.knowledge_asof},
         )
     return 0
 
@@ -209,6 +215,21 @@ def _iso_date(value: str) -> str:
             f"not a YYYY-MM-DD date: {value!r}"
         ) from None
     return value
+
+
+def cmd_refresh_head(args: argparse.Namespace) -> int:
+    with _client() as client:
+        org_id, analyzer_id, _ = _ensure_setup(client)
+        refresh_head(
+            client, org_id, analyzer_id, DATA_DIR,
+            knowledge_asof=args.knowledge_asof, dry_run=args.dry_run,
+        )
+        if not args.dry_run:
+            capture_run_meta(
+                client, org_id, analyzer_id, DATA_DIR,
+                extra={"cmd": "refresh-head", "knowledge_asof": args.knowledge_asof},
+            )
+    return 0
 
 
 def cmd_resubmit_frozen(args: argparse.Namespace) -> int:
@@ -428,6 +449,16 @@ def main() -> int:
         action="store_true",
         help="also analyze the historical quarterly snapshots (default: HEAD only)",
     )
+    pu.add_argument(
+        "--knowledge-asof",
+        type=_iso_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="knowledge cutoff passed to vuln-finder's per-analysis config, "
+        "so newly-submitted snapshots (e.g. an extended date grid) are "
+        "scanned against the same knowledge vintage an earlier submit ran "
+        "under, rather than today's DB",
+    )
     add_ignore_denylist(pu)
     pu.set_defaults(func=cmd_submit)
 
@@ -474,6 +505,27 @@ def main() -> int:
     )
     add_ignore_denylist(pr)
     pr.set_defaults(func=cmd_retry)
+
+    prh = sub.add_parser(
+        "refresh-head",
+        help="re-resolve and re-submit every project's HEAD analysis in "
+        "place, so a cross-cohort comparison's HEAD trees are scanned the "
+        "same day (not appended, so the (git_url, HEAD) key stays unique)",
+    )
+    prh.add_argument(
+        "--knowledge-asof",
+        type=_iso_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="knowledge cutoff passed to vuln-finder's per-analysis config "
+        "for the refreshed analyses",
+    )
+    prh.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="log what would be refreshed without submitting anything",
+    )
+    prh.set_defaults(func=cmd_refresh_head)
 
     prf = sub.add_parser(
         "resubmit-frozen",

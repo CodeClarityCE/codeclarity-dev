@@ -74,6 +74,44 @@ def test_compute_pooled_and_recency(tmp_path):
         assert list(block["by_repo"]) == [f"{block['data_dir']}/repo"]
 
 
+def test_compute_upgrade_only_drops_every_removal_flavor(tmp_path):
+    k = {"knowledge_sources": {"nvd": "2026-08-03", "osv": None}, "epss_rows": 5}
+    base = _mk_cohort(tmp_path, "base", k)
+    cohort = _mk_cohort(tmp_path, "passbolt", k)
+    # Mine day-resolution fixes for dep0 (removed_direct), dep1
+    # (removed_transitive), dep2 (legacy unsplit removed) — all should drop
+    # from upgrade_only in both cohorts, and all three should show up
+    # distinctly in fix_kind_split.
+    events = pd.DataFrame([
+        {"npm_name": f"{name}/repo", "project_id": "p1", "affected_dependency": dep,
+         "affected_version": "1.0.0", "workspace_scope": "root",
+         "last_seen": "2024-04-01", "next_snapshot": "2024-07-01",
+         "lockfile": "yarn.lock", "fix_commit_sha": f"fix-{dep}",
+         "fixed_at": "2024-04-20T00:00:00Z", "method": "linear_scan",
+         "status": "found", "fix_kind": kind, "fix_to_version": None}
+        for name in ("base", "passbolt")
+        for dep, kind in [("dep0", "removed_direct"), ("dep1", "removed_transitive"),
+                          ("dep2", "removed")]
+    ])
+    (base / "tables" / "remediation_events.parquet").parent.mkdir(exist_ok=True)
+    events[events.npm_name == "base/repo"].to_parquet(
+        base / "tables" / "remediation_events.parquet", index=False)
+    events[events.npm_name == "passbolt/repo"].to_parquet(
+        cohort / "tables" / "remediation_events.parquet", index=False)
+
+    got = compute(base, cohort, recency_cutoff="2024-01-01")
+    for side in ("baseline", "cohort"):
+        block = got[side]
+        assert block["fix_kind_split"] == {
+            "removed_direct": 1, "removed_transitive": 1, "removed": 1,
+        }
+        assert block["upgrade_only"]["n_removed_dropped"] == 3
+        # the 3 removed intervals are gone from upgrade_only's pooled n but
+        # the other 9 (unaffected deps) stay
+        assert block["upgrade_only"]["pooled"]["n"] == 9
+        assert block["pooled"]["n"] == 12
+
+
 def test_compute_flags_stamp_mismatch(tmp_path, caplog):
     base = _mk_cohort(tmp_path, "base", {"knowledge_sources": {"nvd": "2026-08-03"}, "epss_rows": 5})
     cohort = _mk_cohort(tmp_path, "passbolt", {"knowledge_sources": {"nvd": "2026-09-01"}, "epss_rows": 5})

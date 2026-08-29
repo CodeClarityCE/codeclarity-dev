@@ -144,6 +144,26 @@ def test_import_and_schedule_submits_pinned_head(client, resolved_head, tmp_path
     assert rows[0]["terminal_at"] is None
 
 
+def test_import_and_schedule_threads_knowledge_asof_into_config(resolved_head, tmp_path):
+    class ConfigCapturingClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.configs: list[dict | None] = []
+
+        def start_analysis(self, org_id, project_id, analyzer_id, branch, commit_hash=None, config=None):
+            self.configs.append(config)
+            return super().start_analysis(org_id, project_id, analyzer_id, branch, commit_hash, config)
+
+    c = ConfigCapturingClient()
+    orchestrator.import_and_schedule(
+        c, "org", "anlz", [_spec()], tmp_path, skip_head_only=True,
+        knowledge_asof="2026-08-03",
+    )
+    assert c.configs == [{"vuln-finder": {"knowledge_asof": "2026-08-03"}}]
+    (row,) = _read_manifest(tmp_path)
+    assert row["knowledge_asof"] == "2026-08-03"
+
+
 def test_import_and_schedule_skips_pairs_already_in_manifest(client, resolved_head, tmp_path):
     _write_manifest(tmp_path, [_mrow(status="completed")])
     pending = orchestrator.import_and_schedule(
@@ -587,6 +607,85 @@ def test_retry_dry_run_never_writes_denylist(client, tmp_path):
     assert client.submitted == []
     assert _read_manifest(tmp_path) == before
     assert orchestrator.load_denylist(tmp_path) == {}
+
+
+# ---- refresh_head -----------------------------------------------------------
+
+
+NEW_SHA = "b" * 40
+NEW_COMMITTED = "2026-08-28T00:00:00Z"
+
+
+@pytest.fixture
+def resolved_new_head(monkeypatch):
+    """resolve_head -> a NEW sha, distinct from any row's recorded commit_hash
+    — so a test can tell a refreshed row apart from an untouched one."""
+    calls = []
+
+    def fake_resolve_head(owner, repo, branch):
+        calls.append((owner, repo, branch))
+        return NEW_SHA, NEW_COMMITTED
+
+    monkeypatch.setattr(orchestrator, "resolve_head", fake_resolve_head)
+    return calls
+
+
+def _refresh_manifest(tmp_path: Path) -> list[dict]:
+    rows = [
+        _mrow(npm_name="a", status="completed", commit_hash=SHA),
+        _mrow(npm_name="b", status="completed", snapshot_date="2024-01-01",
+             commit_hash="c" * 40),  # not HEAD — must stay untouched
+        _mrow(npm_name="c", status="skipped", project_id=None, branch=None,
+             analysis_id=None, commit_hash=None),  # unrebuildable
+    ]
+    _write_manifest(tmp_path, rows)
+    return rows
+
+
+def test_refresh_head_replaces_head_rows_in_place(client, resolved_new_head, tmp_path):
+    before = _refresh_manifest(tmp_path)
+    out = orchestrator.refresh_head(client, "org", "anlz", tmp_path)
+    assert [r.npm_name for r in out] == ["a"]
+    rows = _read_manifest(tmp_path)
+    assert len(rows) == len(before)  # replaced, never appended
+    assert [r["npm_name"] for r in rows] == ["a", "b", "c"]
+    refreshed = rows[0]
+    assert refreshed["snapshot_date"] == "HEAD"
+    assert refreshed["commit_hash"] == NEW_SHA
+    assert refreshed["committed_at"] == NEW_COMMITTED
+    assert refreshed["status"] == "submitted"
+    assert refreshed["analysis_id"] == "an-1"
+    assert rows[1]["commit_hash"] == "c" * 40  # non-HEAD row untouched
+    assert rows[2]["status"] == "skipped"      # unrebuildable row untouched
+
+
+def test_refresh_head_carries_knowledge_asof(client, resolved_new_head, tmp_path):
+    _refresh_manifest(tmp_path)
+    orchestrator.refresh_head(client, "org", "anlz", tmp_path, knowledge_asof="2026-08-03")
+    (row,) = [r for r in _read_manifest(tmp_path) if r["npm_name"] == "a"]
+    assert row["knowledge_asof"] == "2026-08-03"
+
+
+def test_refresh_head_dry_run_submits_nothing(client, resolved_new_head, tmp_path):
+    before = _refresh_manifest(tmp_path)
+    out = orchestrator.refresh_head(client, "org", "anlz", tmp_path, dry_run=True)
+    assert out == []
+    assert client.submitted == []
+    assert _read_manifest(tmp_path) == before
+
+
+def test_refresh_head_skips_rows_without_project_or_branch(client, resolved_new_head, tmp_path, caplog):
+    _refresh_manifest(tmp_path)
+    with caplog.at_level("WARNING"):
+        out = orchestrator.refresh_head(client, "org", "anlz", tmp_path)
+    assert [r.npm_name for r in out] == ["a"]  # "c" skipped, no crash
+    assert any("no project_id/branch" in r.message for r in caplog.records)
+
+
+def test_refresh_head_without_manifest_warns(client, tmp_path, caplog):
+    with caplog.at_level("WARNING"):
+        assert orchestrator.refresh_head(client, "org", "anlz", tmp_path) == []
+    assert any("no manifest at" in r.message for r in caplog.records)
 
 
 # ---- poll_and_collect ------------------------------------------------------------

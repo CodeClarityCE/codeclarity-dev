@@ -283,6 +283,54 @@ def test_presence_intervals_reappearing_pair_yields_two_intervals():
     assert df.iloc[1]["first_seen"] == pd.Timestamp("2024-03-01")
 
 
+def test_presence_intervals_monthly_grid_shortens_duration_vs_quarterly_only():
+    """Adding monthly 2024+ dates on top of the pre-2024 quarterly grid is
+    additive: the same fix, observed through the fuller monthly grid, is
+    bracketed into a much shorter (truer) window than a quarterly-only grid
+    would have reported it in — this is the whole point of the grid change,
+    since quarterly presence detection cannot see a sub-quarter fix."""
+    monthly = pd.DataFrame(_snap_rows(
+        "M", "m-proj",
+        ["2023-10-01", "2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
+    ))
+    quarterly_only = pd.DataFrame(_snap_rows(
+        "M", "m-proj", ["2023-10-01", "2024-01-01", "2024-04-01"],
+    ))
+    vulns = pd.DataFrame([
+        _pres("M", "2023-10-01", "CVE-FAST", "left-pad"),
+        _pres("M", "2024-01-01", "CVE-FAST", "left-pad"),
+        # absent from 2024-02-01 onward in the monthly view; the quarterly
+        # view has no 02-01/03-01 rows at all, so it can't see that.
+    ])
+    fast_monthly = stats.presence_intervals(vulns, monthly).set_index("vulnerability_id").loc["CVE-FAST"]
+    fast_quarterly = stats.presence_intervals(vulns, quarterly_only).set_index("vulnerability_id").loc["CVE-FAST"]
+    assert int(fast_monthly["event"]) == int(fast_quarterly["event"]) == 1
+    assert int(fast_monthly["duration_days"]) == 123   # 2023-10-01 -> 2024-02-01
+    assert int(fast_quarterly["duration_days"]) == 183  # 2023-10-01 -> 2024-04-01 (2024 is a leap year)
+    assert fast_monthly["duration_days"] < fast_quarterly["duration_days"]
+
+
+def test_presence_intervals_missing_monthly_snapshot_censors_via_gap():
+    # The grid is derived from ALL projects' dated snapshots: project O
+    # supplies 2024-03-01 (making it part of the global grid) while project G
+    # skipped that one run — a genuine coverage gap for G specifically, not
+    # merely an unobserved date nobody has.
+    analyses = pd.DataFrame(
+        _snap_rows("G", "g-proj", ["2024-01-01", "2024-02-01", "2024-04-01"])
+        + _snap_rows("O", "o-proj", ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"])
+    )
+    vulns = pd.DataFrame([
+        _pres("G", "2024-01-01", "CVE-GAP", "x"),
+        _pres("G", "2024-02-01", "CVE-GAP", "x"),
+        # absent at 2024-04-01, but the missed 03-01 run means the true fix
+        # window is unobserved, not confirmed absent right after 02-01.
+    ])
+    df = stats.presence_intervals(vulns, analyses).set_index("vulnerability_id")
+    gap = df.loc["CVE-GAP"]
+    assert int(gap["event"]) == 0  # censored, not counted as fixed at 02-01
+    assert gap["last_seen"] == pd.Timestamp("2024-02-01")
+
+
 def test_presence_intervals_empty_inputs():
     empty_v = pd.DataFrame(columns=[
         "project_id", "snapshot_date", "vulnerability_id",

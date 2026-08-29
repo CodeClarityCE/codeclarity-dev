@@ -46,7 +46,12 @@ from reportlab.platypus import (
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from js_vuln_study.stats import km_curve, merge_day_resolution, presence_intervals  # noqa: E402
+from js_vuln_study.stats import (  # noqa: E402
+    disclosed_subset,
+    km_curve,
+    merge_day_resolution,
+    presence_intervals,
+)
 
 TABLES = ROOT / "data" / "tables"
 OUT = ROOT / "data" / "report"
@@ -86,6 +91,12 @@ meta = NUM["run_meta"]
 
 ladder = NUM["ladder"]
 ladder_worst = ladder["rungs"][0]["vs_freshest"]["instance_delta_pct"]
+
+up_sev = day["disclosed"]["fix_kind"]["upgrade_only_km_by_severity"]
+up_crit = up_sev["CRITICAL"]["km_median_days"]
+up_low = up_sev["LOW"]["km_median_days"]
+
+passbolt = NUM.get("passbolt")
 
 SEV_COLORS = {"CRITICAL": "#a50f15", "HIGH": "#de2d26", "MEDIUM": "#fb6a4a", "LOW": "#fcae91"}
 
@@ -144,6 +155,39 @@ ax.set_ylabel("share not yet fixed")
 ax.legend(fontsize=8, frameon=False)
 ax.grid(True, alpha=0.3)
 fig_km = _save(fig, "brief_km.png")
+
+# Figure 3 (optional): Passbolt cohort vs the top-100 baseline, pooled KM,
+# through scripts/passbolt_compare.py's exact data path (disclosed subset ->
+# presence intervals -> mined day-resolution fixes merged in), so the curve
+# cannot disagree with the quoted medians in NUM["passbolt"].
+fig_passbolt = None
+if passbolt is not None:
+    def _kept_for(data_dir: Path) -> pd.DataFrame:
+        aa = pd.read_parquet(data_dir / "tables" / "analyses.parquet")
+        vv = pd.read_parquet(data_dir / "tables" / "vulns.parquet")
+        ee = pd.read_parquet(data_dir / "tables" / "remediation_events.parquet")
+        dd = disclosed_subset(vv, aa)
+        ii = merge_day_resolution(presence_intervals(dd, aa), ee)
+        return ii[~ii["excluded"]]
+
+    _base_kept = _kept_for(TABLES.parent)
+    _cohort_kept = _kept_for(ROOT / "data-passbolt")
+
+    fig, ax = plt.subplots(figsize=(7.4, 3.0))
+    for label, df, color in [
+        (f"top-100 baseline (n={len(_base_kept)})", _base_kept, "#08519c"),
+        (f"Passbolt (n={len(_cohort_kept)})", _cohort_kept, "#de2d26"),
+    ]:
+        t, sv = km_curve(df.duration_days, df.event)
+        ax.step(t, sv, where="post", color=color, lw=1.8, label=label)
+    ax.axhline(0.5, color="#999999", lw=0.8, ls="--")
+    ax.set_xlim(0, 1000)
+    ax.set_ylim(0, 1.0)
+    ax.set_xlabel("days since first post-disclosure observation")
+    ax.set_ylabel("share not yet fixed")
+    ax.legend(fontsize=8, frameon=False)
+    ax.grid(True, alpha=0.3)
+    fig_passbolt = _save(fig, "brief_passbolt_km.png")
 
 # --------------------------------------------------------------------------- #
 # PDF assembly
@@ -237,13 +281,25 @@ figure(fig_km,
        "The four severity curves nearly overlap: about half of all cases are fixed by roughly nine "
        "months, regardless of severity.")
 
-P("Before disclosure, nobody is to blame", "H")
-P(f"Vulnerable versions sit in dependency trees far longer than nine months in total "
-  f"({res_lo:.0f} to {res_hi:.0f} days by severity). That sounds worse than it is: most of that "
-  f"time, the vulnerability had not been discovered yet by anyone ({pre_disclosure_share:.0%} of "
-  f"our historical observations predate the advisory's publication). Projects cannot fix what "
-  f"nobody knows about, which is why every fix-speed number in this brief starts counting at "
-  f"public disclosure.")
+if fig_passbolt is not None:
+    _p = passbolt["cohort"]["pooled"]["km_median_days"]
+    _b = passbolt["baseline"]["pooled"]["km_median_days"]
+    _p_recent = passbolt["cohort"]["recency"]["disclosed_on_or_after"]["km_median_days"]
+    _b_recent = passbolt["baseline"]["recency"]["disclosed_on_or_after"]["km_median_days"]
+    _cutoff = passbolt["meta"]["recency_cutoff"]
+    P("Security-focused teams patch much faster", "H")
+    P(f"The pattern above is a population average. Passbolt, a security-focused open-source "
+      f"password manager, fixes disclosed vulnerabilities in a median of {_p:.0f} days across its "
+      f"three main repositories (api, browser extension, styleguide), against {_b:.0f} days for the "
+      f"top-100 baseline on the identical pipeline. The gap is not shrinking: for vulnerabilities "
+      f"disclosed on or after {_cutoff}, Passbolt's median drops to {_p_recent:.0f} days while the "
+      f"baseline stays at {_b_recent:.0f}. It holds up when dependency-removal fixes are excluded "
+      f"and within every disclosure era, so it is not an artifact of what got disclosed when.")
+    figure(fig_passbolt,
+           f"Figure 3. Passbolt vs the top-100 baseline, share of disclosed vulnerabilities still "
+           f"unfixed by days since disclosure. Passbolt is 3 repositories against {passbolt['baseline']['n_projects']} "
+           f"baseline projects, reported with its n throughout; the gap is a case study, not a "
+           f"population claim.")
 
 P("More stars do not mean more security", "H")
 P(f"A project's popularity says nothing about its vulnerability load: across {rqc['n']} projects, "
@@ -266,11 +322,17 @@ for bullet in [
     "everything else is measured at quarterly resolution.",
     "<b>Half of the advisories lack a publication date</b> in our data, so \"after disclosure\" "
     "analyses are based on the half that has one.",
+    f"<b>Before disclosure, nobody is to blame.</b> Vulnerable versions sit in dependency trees far "
+    f"longer than nine months in total ({res_lo:.0f} to {res_hi:.0f} days by severity), but most of "
+    f"that time the vulnerability had not been discovered yet by anyone "
+    f"({pre_disclosure_share:.0%} of our historical observations predate the advisory's "
+    f"publication), so every fix-speed number above starts counting at public disclosure instead.",
     "<b>A fix is not always a fix.</b> We count a vulnerability as gone when the vulnerable "
     "version leaves the project's dependency list. Checking every dated fix commit shows about "
-    "three quarters are genuine upgrades and about a quarter removed the dependency instead; "
-    "counting upgrades only, higher severity is fixed somewhat faster (median 246 days for "
-    "critical vs 341 for low).",
+    "three quarters are genuine upgrades and about a quarter removed the dependency instead "
+    "(split further into deliberately-dropped direct dependencies vs. transitive deps that left "
+    f"because a parent was upgraded); counting upgrades only, higher severity is fixed somewhat "
+    f"faster (median {up_crit:.0f} days for critical vs {up_low:.0f} for low).",
 ]:
     P("&bull; " + bullet, "Small")
 

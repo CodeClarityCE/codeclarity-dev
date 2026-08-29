@@ -285,6 +285,7 @@ def import_and_schedule(
     skip_head_only: bool = False,
     ignore_denylist: bool = False,
     max_workers: int = SUBMIT_WORKERS,
+    knowledge_asof: str | None = None,
 ) -> list[AnalysisRecord]:
     """Import each project and kick off one analysis per snapshot.
 
@@ -292,6 +293,13 @@ def import_and_schedule(
     bound and dominated the old serial submit); the manifest stays single-writer
     — workers only build records, the main thread appends them in project order,
     so the output is byte-identical to a serial run.
+
+    `knowledge_asof` (YYYY-MM-DD), when set, is passed through to every
+    submitted analysis's vuln-finder config: the plugin filters the (current)
+    knowledge DB to rows known by that date at match time. Use it to submit
+    NEW snapshots (e.g. an extended date grid) against the same knowledge
+    vintage an earlier `submit` ran under, so the two runs stay comparable —
+    see resubmit_frozen's docstring for the same runtime-filter rationale.
 
     Returns the list of in-flight analysis records (status='submitted' or 'failed-submit').
     """
@@ -340,7 +348,8 @@ def import_and_schedule(
                 continue
             if snap.date == "HEAD" and snap.commit_hash is None:
                 snap = _pin_head(spec, branch, snap)
-            out.append(_submit_analysis(client, org_id, project_id, analyzer_id, spec, branch, snap))
+            out.append(_submit_analysis(client, org_id, project_id, analyzer_id, spec, branch, snap,
+                                        knowledge_asof=knowledge_asof))
         return out
 
     pending: list[AnalysisRecord] = []
@@ -564,6 +573,84 @@ def retry_failed(
             len(resubmitted), denylist_skipped,
         )
     return resubmitted
+
+
+def refresh_head(
+    client: CodeClarityClient,
+    org_id: str,
+    analyzer_id: str,
+    data_dir: Path,
+    knowledge_asof: str | None = None,
+    dry_run: bool = False,
+) -> list[AnalysisRecord]:
+    """Re-resolve and re-submit every project's HEAD analysis, in place.
+
+    A cross-cohort comparison (e.g. Passbolt vs the top-100 baseline) needs
+    both sides' HEAD trees scanned on the same day — otherwise a gap between
+    the two HEAD scan dates is knowledge-DB drift wearing a "recency" costume.
+    This re-pins each project's HEAD to today's tip SHA (via `resolve_head`,
+    same as a fresh submit's `_pin_head`) and re-submits it, REPLACING the
+    manifest row in place — never appended — so the (git_url, "HEAD") dedupe
+    key stays unique; `snapshot_entries`/`presence_intervals` drop_duplicates
+    on (project_id, snapshot_date), so a second HEAD row would silently
+    shadow the first rather than erroring; `collect` walks the manifest by
+    row, not by key, so a duplicate would also double-count.
+
+    Only rows with a recorded project_id/branch can be rebuilt (mirrors
+    retry_failed's guard); rows with none (never-imported skips) are left
+    untouched — re-run `submit` for those.  The superseded HEAD's raw blobs
+    under data/raw/ are NOT deleted (a monthly 2026-08-01 snapshot covers
+    near-equivalent ground once the extended grid runs); orphan cleanup is
+    out of scope here.
+
+    dry_run logs what would be re-submitted without writing anything.
+    Returns the re-submitted records (empty on dry_run).
+    """
+    path = _manifest_path(data_dir)
+    if not path.exists():
+        log.warning("no manifest at %s", path)
+        return []
+    records = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    selected = [i for i, r in enumerate(records) if r.get("snapshot_date") == "HEAD"]
+    log.info("refresh-head: %d of %d manifest rows are HEAD", len(selected), len(records))
+
+    refreshed: list[AnalysisRecord] = []
+    for i in selected:
+        rec = records[i]
+        if not rec.get("project_id") or not rec.get("branch"):
+            log.warning(
+                "cannot refresh-head %s (status=%s): no project_id/branch recorded",
+                rec.get("npm_name"), rec.get("status"),
+            )
+            continue
+        spec = _spec_from_record(rec)
+        try:
+            head = resolve_head(spec.github_owner, spec.github_repo, rec["branch"])
+        except Exception as e:  # noqa: BLE001 — log and move to the next project
+            log.warning("HEAD resolution errored for %s@%s: %s", rec["git_url"], rec["branch"], e)
+            continue
+        if head is None:
+            log.warning("could not resolve HEAD sha for %s@%s; skipping refresh",
+                        rec["git_url"], rec["branch"])
+            continue
+        sha, committed_at = head
+        if dry_run:
+            log.info("[dry-run] would refresh-head %s -> %s (was %s)",
+                     rec["npm_name"], sha[:12], (rec.get("commit_hash") or "?")[:12])
+            continue
+        snap = Snapshot(date="HEAD", commit_hash=sha, committed_at=committed_at)
+        new_rec = _submit_analysis(
+            client, org_id, rec["project_id"], analyzer_id, spec, rec["branch"], snap,
+            knowledge_asof=knowledge_asof,
+        )
+        records[i] = asdict(new_rec)
+        refreshed.append(new_rec)
+        # Flush after every replacement so Ctrl-C never double-submits a row.
+        _rewrite_manifest(path, records)
+
+    if not dry_run:
+        log.info("refresh-head: refreshed %d of %d HEAD row(s)", len(refreshed), len(selected))
+    return refreshed
 
 
 def resubmit_frozen(

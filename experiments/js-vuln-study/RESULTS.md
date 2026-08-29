@@ -639,6 +639,21 @@ windows the miner cannot classify; (d) Passbolt HEAD trees were scanned
 eleven days after the baseline HEAD trees, against the same knowledge
 snapshot.
 
+The numbers above are from the run described; a set of hardening changes
+landed after it and are not yet reflected here pending a re-run (§18 has the
+updated regeneration commands): the snapshot grid gained monthly dates from
+2024-01-01 onward (was quarterly throughout, so sub-quarter fixes were
+invisible), `fix_kind: "removed"` is now split into `removed_direct` and
+`removed_transitive` (`js_vuln_study/remediation.py::classify_removal`, from
+the root `package.json`'s direct-dependency set), a bug that let one
+unparseable lockfile blob block a definitive answer from another root
+lockfile at the same commit was fixed (targeting caveat (c) above), and
+`run.py refresh-head` re-scans both cohorts' HEADs the same day (targeting
+caveat (d)). `upgrade_only` and every other consumer treat all three
+`removed*` values identically, so the headline comparison's shape is not
+expected to change materially, but the exact figures in the table above will
+shift once the re-run completes.
+
 ## 17. Threats to validity
 
 1. **Corpus provenance.** The environment's GitHub API is a mirror whose slug
@@ -737,15 +752,31 @@ MPLBACKEND=Agg .venv/bin/python notebooks/analysis.py   # figures + headline cel
 ```
 
 The Passbolt cohort comparison (§16) runs the same pipeline in its own data
-dir and aggregates against the baseline:
+dir and aggregates against the baseline. The snapshot grid is quarterly
+through 2023 and monthly from 2024-01-01 onward (`SNAPSHOT_DATES` in
+`js_vuln_study/snapshots.py`), so a re-run against the current codebase
+submits 22 new dated snapshots per repo beyond the original 18. When
+extending an already-scanned data dir with new dates, pin `--knowledge-asof`
+to the ORIGINAL run's knowledge stamp (from that dir's `run_meta.json`) so
+the new snapshots are scanned against the same knowledge vintage as the old
+ones. Otherwise a gap between the grid extension date and the original scan
+date shows up as spurious events, not genuine fix activity. Both cohorts'
+HEAD analyses should also be refreshed the same day (`run.py refresh-head`),
+so a HEAD-vs-HEAD comparison isn't contaminated by one side being scanned
+days apart from the other:
 
 ```bash
-JS_VULN_DATA_DIR=data-passbolt python run.py submit --snapshots  # sample.json is hand-written, committed
+JS_VULN_DATA_DIR=data-passbolt python run.py submit --snapshots --knowledge-asof <original-stamp>  # sample.json is hand-written, committed
+python run.py refresh-head --knowledge-asof <original-stamp>                    # baseline HEADs, same day
+JS_VULN_DATA_DIR=data-passbolt python run.py refresh-head --knowledge-asof <original-stamp>
 JS_VULN_DATA_DIR=data-passbolt python run.py poll
 JS_VULN_DATA_DIR=data-passbolt python run.py collect --no-deps
 JS_VULN_DATA_DIR=data-passbolt python run.py mine-lag
+.venv/bin/python scripts/backfill_fix_kind.py --data-dir data              # splits removed -> removed_direct/removed_transitive
+.venv/bin/python scripts/backfill_fix_kind.py --data-dir data-passbolt
 .venv/bin/python scripts/passbolt_compare.py   # data-passbolt/tables/passbolt_compare.json + report figures
 .venv/bin/python scripts/extract_results_numbers.py             # folds in the passbolt block
+.venv/bin/python notebooks/brief.py            # folds the Passbolt KM figure + medians into the 2-page brief
 ```
 
 The knowledge-staleness ladder (§14) re-scans the archived run's frozen
