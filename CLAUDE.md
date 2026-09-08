@@ -74,18 +74,9 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 
-### Migrations (API / TypeORM)
+Migration workflow: see `.claude/rules/database-migrations.md`.
 
-- `cd api && pnpm migration:generate src/migrations/MigrationName` - Generate from entity changes
-- `cd api && pnpm migration:create src/migrations/MigrationName` - Create empty migration
-- `cd api && pnpm migration:run` / `migration:revert` / `migration:show`
-- `cd api && ./generate-migrations.sh` - Generate initial migrations from dev schema
-
-## Production Deployment
-
-- `cd deployment && make update` - Full update with latest containers
-- `cd deployment && make setup-database` - New install (restore dumps + run migrations)
-- `cd deployment && make migrate-existing` - Existing DB (apply migrations only)
+Production deployment: see `deployment/CLAUDE.md`.
 
 ## License
 
