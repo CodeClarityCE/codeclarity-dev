@@ -78,6 +78,9 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer:v1.25.2-p0
     restart: always
+    ports:
+      # Published for host-side CLI tooling (e.g. `make knowledge-update`)
+      - 127.0.0.1:6433:6432
     environment:
       - DB_HOST=db
       - DB_PORT=5432
