@@ -35,6 +35,16 @@ allowBuilds:
   "@nestjs/core": false   # donate-notice script — non-functional, blocked
   "@percy/core": false    # downloads a bundled Chromium — only needed for visual regression; opt in when running stryker/percy
   "@scarf/scarf": false   # telemetry — never allowed
+  protobufjs: false       # transitive under the already-blocked @percy/core; its postinstall only prints version-scheme warnings
+
+# @nestjs/platform-fastify pins fastify as an exact direct dependency (11.2.3
+# pins 5.11.3), so without this the tree carries two fastify copies and the
+# instance that actually serves requests is the older one. 5.11.3 is affected
+# by GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing under trustProxy, patched in
+# 5.12.1). Mirrored in api/.cloud/docker/pnpm-workspace.yaml for the standalone
+# container build; keep both in sync with the fastify pin in api/package.json.
+overrides:
+  fastify: 5.12.3
 
 auditConfig:
   ignoreCves: []
