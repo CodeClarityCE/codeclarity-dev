@@ -1,3 +1,8 @@
+---
+paths:
+  - "backend/**"
+---
+
 # Backend Architecture
 
 ## Core Services (`backend/services/`)
