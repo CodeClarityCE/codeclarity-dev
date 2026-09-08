@@ -4,8 +4,10 @@ Every quoted number is read from `<study>/tables/results_numbers.json` at
 build time, so the brief can never drift from `numbers.build_numbers`'s
 output. Figures are drawn from the parquet tables through the same shared
 `stats` helpers `numbers.py` uses (never re-implemented inline), so curves
-and quoted medians cannot disagree either. The ladder and cohort sections are
-optional: the brief builds without them, just shorter. Style rule: no em
+and quoted medians cannot disagree either. `study` is always the cohort the
+brief is about; `baseline_study` is the other study its `cohort` block was
+compared against. The ladder and cohort sections are optional: the brief
+builds without them, just shorter. Style rule: no em
 dashes anywhere.
 """
 
@@ -106,7 +108,7 @@ def _kept_for(study: Study) -> pd.DataFrame:
     return ints[~ints["excluded"]]
 
 
-def build(study: Study, cohort_study: Study | None = None) -> Path:
+def build(study: Study, baseline_study: Study | None = None) -> Path:
     numbers_path = study.tables_dir / "results_numbers.json"
     num = json.loads(numbers_path.read_text(encoding="utf-8"))
 
@@ -131,6 +133,7 @@ def build(study: Study, cohort_study: Study | None = None) -> Path:
     styles.add(ParagraphStyle("TitleBig", parent=styles["Title"], fontSize=17, spaceAfter=4))
     styles.add(ParagraphStyle("Sub", parent=styles["Normal"], fontSize=9.5, textColor=colors.grey, alignment=TA_CENTER))
     styles.add(ParagraphStyle("H", parent=styles["Heading2"], fontSize=12, textColor=colors.HexColor("#08306b"), spaceBefore=10, spaceAfter=4))
+    styles.add(ParagraphStyle("HCohort", parent=styles["H"], spaceBefore=4))
     styles.add(ParagraphStyle("Body", parent=styles["Normal"], fontSize=9.5, leading=13, spaceAfter=5))
     styles.add(ParagraphStyle("Caption", parent=styles["Normal"], fontSize=8, textColor=colors.grey, alignment=TA_CENTER, spaceAfter=8))
     styles.add(ParagraphStyle("Stat", parent=styles["Normal"], fontSize=18, leading=20, alignment=TA_CENTER, textColor=colors.HexColor("#08306b"), fontName="Helvetica-Bold"))
@@ -182,6 +185,11 @@ def build(study: Study, cohort_study: Study | None = None) -> Path:
         P(f"<b>2. But there is a fast minority.</b> Looking only at fixes we could date exactly: "
           f"{pooled_7d:.0f}% happen within one week, and {pooled_90d:.0f}% within three months.")
 
+        P(f"<b>3. Vulnerability exposure is concentrated in a handful of packages.</b> Just "
+          f"{headline['pkgs_clear_50']} of {headline['distinct_vuln_packages']} vulnerable packages "
+          f"cause half of all {headline['instances']:,} findings ({headline['top10_pkg_share']:.0%} of "
+          f"findings come from the top 10 packages alone).")
+
         figure(_fig_fix_tail(disc, figs_dir),
                "Figure 1. Of the fixes we could date exactly, how many happened within 7, 30, or "
                "90 days? Shown per severity level.")
@@ -216,24 +224,30 @@ def build(study: Study, cohort_study: Study | None = None) -> Path:
         figure(_fig_km(kept, disc, figs_dir),
                "Figure 2. Share of disclosed vulnerabilities still unfixed, by days since disclosure.")
 
-        if cohort is not None and cohort_study is not None:
+        if cohort is not None and baseline_study is not None:
             _p = cohort["cohort"]["pooled"]["km_median_days"]
             _b = cohort["baseline"]["pooled"]["km_median_days"]
             _p_recent = cohort["cohort"]["recency"]["disclosed_on_or_after"]["km_median_days"]
             _b_recent = cohort["baseline"]["recency"]["disclosed_on_or_after"]["km_median_days"]
             _cutoff = cohort["meta"]["recency_cutoff"]
+            _n_cohort = cohort["cohort"]["n_projects"]
             _n_base = cohort["baseline"]["n_projects"]
-            P(f"Cohort comparison: {cohort_study.name}", "H")
+            P(f"Cohort comparison: {study.name}", "HCohort")
             if _p is not None and _b is not None:
-                P(f"{cohort_study.name} fixes disclosed vulnerabilities in a median of {_p:.0f} days "
-                  f"across {cohort['cohort']['n_projects']} repositories, against {_b:.0f} days for "
-                  f"the baseline on the identical pipeline. For vulnerabilities disclosed on or after "
-                  f"{_cutoff}, the gap is {_p_recent:.0f} vs {_b_recent:.0f} days." if _p_recent is not None and _b_recent is not None else "")
+                txt = (f"{study.name} fixes disclosed vulnerabilities in a median of {_p:.0f} days "
+                       f"across {_n_cohort} repositories, against {_b:.0f} days for the "
+                       f"{baseline_study.name} baseline on the identical pipeline.")
+                if _p_recent is not None and _b_recent is not None:
+                    txt += (f" For vulnerabilities disclosed on or after {_cutoff}, the gap is "
+                            f"{_p_recent:.0f} vs {_b_recent:.0f} days.")
+                P(txt)
+            story.append(Spacer(1, 6))
             figure(
-                _fig_cohort(_kept_for(study), _kept_for(cohort_study), cohort_study.name, study.name, figs_dir),
-                f"Figure 3. {cohort_study.name} vs the {study.name} baseline, share of disclosed "
-                f"vulnerabilities still unfixed by days since disclosure. Cohort n={cohort['cohort']['n_projects']} "
-                f"vs baseline n={_n_base}; reported with n throughout, a case study rather than a population claim.",
+                _fig_cohort(_kept_for(baseline_study), kept, study.name, baseline_study.name, figs_dir),
+                f"Figure 3. {study.name} (n={_n_cohort}) vs the {baseline_study.name} baseline "
+                f"(n={_n_base}), share of disclosed vulnerabilities still unfixed by days since "
+                f"disclosure. A case study, not a population claim.",
+                width=10.5 * cm,
             )
 
         P("More stars do not mean more security", "H")
@@ -245,26 +259,18 @@ def build(study: Study, cohort_study: Study | None = None) -> Path:
 
         P("What these numbers can and cannot say", "H")
         bullets = [
-            "<b>One tool, one sample.</b> We used a single scanner on a specific set of "
-            "repositories. Other scanners and samples will give different absolute numbers; the "
-            "patterns are what we expect to travel.",
-            "<b>Results age quickly.</b> Vulnerability databases grow daily, so a scan is only "
-            "valid for its date. Do not compare numbers from scans taken on different dates.",
-            (
-                f"<b>Not every fix could be dated.</b> We found the exact fix commit for "
-                f"{mine_found_pct:.0%} of fixes; everything else is measured at the snapshot's "
-                f"resolution."
-            ) if mine_units else "",
             "<b>Half of the advisories lack a publication date</b> in our data, so \"after "
             "disclosure\" analyses are based on the half that has one.",
             "<b>A fix is not always a fix.</b> We count a vulnerability as gone when the "
             "vulnerable version leaves the project's dependency list, which conflates a genuine "
             "upgrade with the dependency being dropped entirely.",
+            "<b>Results age quickly.</b> Vulnerability databases grow daily, so a scan is only "
+            "valid for its date. Do not compare numbers from scans taken on different dates.",
         ]
         if ladder is not None and ladder.get("rungs"):
             worst = ladder["rungs"][0].get("vs_freshest", {}).get("instance_delta_pct")
             if worst is not None:
-                bullets.insert(1,
+                bullets[-1] = (
                     f"<b>Vulnerability counts depend on the knowledge-database date.</b> Scanning "
                     f"the same code with year-old advisory data misses most of what a fresh scan "
                     f"finds (up to {abs(worst):.0f}% with very old data; see the knowledge-staleness "
