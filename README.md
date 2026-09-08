@@ -78,7 +78,7 @@ Before setting up your development environment, ensure you have the following to
 - **curl** - For downloading setup scripts
 - **git-lfs** - For fetching database dumps (stored in Git LFS). [Install instructions](https://git-lfs.com/)
 - **make** - For automating build and deployment tasks
-- **Go >= 1.24** - Required for backend plugins. [Download here](https://go.dev/dl/)
+- **Go >= 1.27.1** - Required for backend plugins. [Download here](https://go.dev/dl/)
 - **Docker** - Containerization platform. [Installation guide](https://docs.docker.com/engine/install/)
 - **Docker Compose** - Multi-container orchestration. [Installation guide](https://docs.docker.com/compose/install/)
 

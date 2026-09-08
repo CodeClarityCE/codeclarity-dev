@@ -1,6 +1,6 @@
-go 1.26.4
+go 1.27.1
 
-toolchain go1.26.4
+toolchain go1.27.1
 
 use (
 	backend/plugins/codeql
@@ -15,6 +15,7 @@ use (
 	backend/services/knowledge
 	backend/services/notifier
 	backend/services/packageFollower
+	backend/services/scheduler
 
 	backend/utilities/amqp-helper
 	backend/utilities/boilerplates
