@@ -35,6 +35,8 @@ POLL_MAX = 120.0
 NO_PROGRESS_WARN_SECONDS = 45 * 60  # dead plugin consumer (RabbitMQ mgmt UI) signal
 DEFAULT_GIVE_UP_HOURS = 30  # past the server reaper's RECOVERY_MAX_AGE (24h)
 
+DRY_RUN_PROJECT_ID = "(dry-run: not imported)"  # stands in for an un-imported project
+
 PLUGIN_TYPES = ("js-sbom", "vuln-finder", "license-finder")  # probed for a failure reason
 PERSIST_PLUGINS = ("js-sbom", "vuln-finder")  # the only blobs collect.py reads
 
@@ -212,9 +214,12 @@ def _ensure_project(
     description: str,
     project_ids: dict[str, str],
     integration_id: str,
+    dry_run: bool = False,
 ) -> str:
     project_id = project_ids.get(git_url)
     if project_id is None:
+        if dry_run:
+            return DRY_RUN_PROJECT_ID
         project_id = client.import_project(
             org_id, git_url, name=npm_name, description=description, integration_id=integration_id
         )
@@ -242,8 +247,17 @@ def _submit_one(
     snap: Snapshot,
     knowledge_asof: str | None,
     run_id: str | None,
+    dry_run: bool = False,
 ) -> manifest.Row:
     config = {"vuln-finder": {"knowledge_asof": knowledge_asof}} if knowledge_asof else None
+    if dry_run:
+        log.info("[dry-run] would submit %s@%s (%s)", npm_name, snap.date, (snap.commit_hash or "")[:12])
+        return manifest.Row(
+            npm_name=npm_name, tier=tier, rank=rank, git_url=git_url, branch=branch,
+            snapshot_date=snap.date, commit_hash=snap.commit_hash, committed_at=snap.committed_at,
+            project_id=project_id, analysis_id=None, state="pending", error=None,
+            knowledge_asof=knowledge_asof, run_id=run_id, submitted_at=None,
+        )
     try:
         analysis_id = client.start_analysis(
             org_id=org_id, project_id=project_id, analyzer_id=analyzer_id,
@@ -273,11 +287,16 @@ def submit_missing(
     project_ids: dict[str, str],
     run_id: str,
     limit: int | None = None,
+    dry_run: bool = False,
 ) -> list[manifest.Row]:
     """Compute missing (git_url, snapshot_date) keys before any GitHub call,
     then resolve + import + POST per project, serially. A Ctrl-C loses at
     most one in-flight project's POSTs; a resumed run over a fully-covered
-    sample makes zero GitHub calls."""
+    sample makes zero GitHub calls.
+
+    Under `dry_run` the GitHub resolution still runs (it is read-only, and the
+    plan is only honest if the commits really resolve), but nothing is
+    imported and no analysis is POSTed."""
     if limit:
         specs = specs[:limit]
     dates = study.grid if study.snapshots else []
@@ -303,6 +322,7 @@ def submit_missing(
                 project_id = _ensure_project(
                     client, org_id, spec.git_url, spec.npm_name,
                     f"{study.name} rank={spec.rank}", project_ids, integration_id,
+                    dry_run=dry_run,
                 )
             except CodeClarityError as e:
                 row = _skip_row(spec.npm_name, study.name, spec.rank, spec.git_url, "*", f"import: {e}")
@@ -316,6 +336,7 @@ def submit_missing(
                 row = _submit_one(
                     client, org_id, project_id, analyzer_id, spec.npm_name, study.name,
                     spec.rank, spec.git_url, branch, snap, study.knowledge_asof, run_id,
+                    dry_run=dry_run,
                 )
                 new_rows.append(row)
                 existing_keys.add(key)
@@ -326,6 +347,7 @@ def submit_missing(
                     row = _submit_one(
                         client, org_id, project_id, analyzer_id, spec.npm_name, study.name,
                         spec.rank, spec.git_url, branch, head_snap, study.knowledge_asof, run_id,
+                        dry_run=dry_run,
                     )
                 else:
                     row = _skip_row(
@@ -349,6 +371,7 @@ def submit_frozen(
     existing_keys: set[tuple[str, str]],
     project_ids: dict[str, str],
     run_id: str,
+    dry_run: bool = False,
 ) -> list[manifest.Row]:
     """Re-submit another study's `done` rows commit-pinned at their archived
     SHAs, deduped by (git_url, commit_hash) so an identical tree pinned by
@@ -376,7 +399,7 @@ def submit_frozen(
         try:
             project_id = _ensure_project(
                 client, org_id, r.git_url, r.npm_name,
-                f"{study.name} frozen_from", project_ids, integration_id,
+                f"{study.name} frozen_from", project_ids, integration_id, dry_run=dry_run,
             )
         except CodeClarityError as e:
             new_rows.append(_skip_row(r.npm_name, study.name, r.rank, r.git_url, r.snapshot_date, f"import: {e}"))
@@ -384,7 +407,7 @@ def submit_frozen(
         snap = Snapshot(r.snapshot_date, r.commit_hash, r.committed_at)
         row = _submit_one(
             client, org_id, project_id, analyzer_id, r.npm_name, study.name, r.rank,
-            r.git_url, r.branch or "main", snap, study.knowledge_asof, run_id,
+            r.git_url, r.branch or "main", snap, study.knowledge_asof, run_id, dry_run=dry_run,
         )
         new_rows.append(row)
         existing_keys.add(key)
@@ -406,19 +429,32 @@ def _failure_reason(client: CodeClarityClient, org_id: str, row: manifest.Row, a
         for s in (stage or [])
         if s.get("status") in TERMINAL_SAD and s.get("name")
     ]
+    got_blob: list[str] = []
     for plugin in (failed_steps or PLUGIN_TYPES):
         try:
             blob = client.get_result(org_id, row.project_id, row.analysis_id, plugin)
         except CodeClarityError:
             continue
-        errors = (((blob or {}).get("analysis_info") or {}).get("errors")) or []
+        got_blob.append(plugin)
+        # The plugin's own report sits under `result`; only fall back to the
+        # top level for a hypothetical flatter envelope. Reading just the top
+        # level found nothing on every real blob and mislabelled every such
+        # failure as "stage-0/download", which is the opposite of the truth:
+        # a blob exists precisely because the download and that plugin ran.
+        info = ((blob or {}).get("result") or {}).get("analysis_info") \
+            or (blob or {}).get("analysis_info") or {}
+        errors = info.get("errors") or []
         for err in errors:
             pub = (err or {}).get("public_error") or {}
             key = pub.get("key") or "Error"
             desc = pub.get("description") or ""
             return f"{plugin}: {key}: {desc}".strip().rstrip(":").strip()
-    where = ", ".join(failed_steps) if failed_steps else "stage-0/download"
-    return f"failure at {where}; no plugin result"
+    if failed_steps:
+        return f"failure at {', '.join(failed_steps)}; no error detail in result"
+    if got_blob:
+        # Something ran and produced output, so the download cannot be at fault.
+        return f"failure after {', '.join(got_blob)}; no error detail in result"
+    return "failure at stage-0/download; no plugin result"
 
 
 def _persist_results(client: CodeClarityClient, org_id: str, row: manifest.Row, study: Study) -> None:
@@ -576,11 +612,19 @@ def retry_one(
     force: bool = False,
 ) -> int:
     """`run --retry SLUG[@DATE] [--force]`: re-drive one failed row, ignoring
-    the attempts cap and the CommitUnresolvable marker when `force` is set."""
+    the attempts cap and the CommitUnresolvable marker when `force` is set.
+
+    `force` additionally re-drives a row still sitting in `pending`. A lost
+    dispatcher message leaves an analysis non-terminal with `updated_on` never
+    set, which the server's reaper does not retire and `poll` therefore waits
+    on until `--give-up-hours`; this is the only way to re-submit it. The
+    stranded server-side analysis is left alone (it is already unreachable),
+    exactly as for a failed row."""
+    retriable = {"failed", "pending"} if force else {"failed"}
     rows = manifest.read(study.manifest_path)
     n = 0
     for i, r in enumerate(rows):
-        if r.npm_name != npm_name or r.state != "failed":
+        if r.npm_name != npm_name or r.state not in retriable:
             continue
         if snapshot_date is not None and r.snapshot_date != snapshot_date:
             continue
@@ -717,13 +761,13 @@ def run(
     if study.frozen_from:
         new_rows = submit_frozen(
             client, study, org_id, analyzer_id, integration_id,
-            study.frozen_from, existing_keys, project_ids, run_id,
+            study.frozen_from, existing_keys, project_ids, run_id, dry_run=dry_run,
         )
     else:
         specs = sample.load_sample(study.sample_path)
         new_rows = submit_missing(
             client, study, settings, org_id, analyzer_id, integration_id,
-            specs, existing_keys, project_ids, run_id, limit=limit,
+            specs, existing_keys, project_ids, run_id, limit=limit, dry_run=dry_run,
         )
 
     if dry_run:

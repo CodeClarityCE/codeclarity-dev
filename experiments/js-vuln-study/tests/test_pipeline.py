@@ -294,3 +294,99 @@ def test_poll_ceiling_fails_a_stuck_updating_db_row(fake_api, study):
 def test_poll_noop_when_nothing_pending(fake_api, study):
     manifest.write_all(study.manifest_path, [row(state="done")])
     pipeline.poll(fake_api, study, "org")  # must not raise
+
+
+def test_submit_missing_dry_run_writes_nothing(monkeypatch, fake_api):
+    """`--dry-run` must plan without touching the server: it used to import the
+    project and POST every analysis, checking the flag only afterwards."""
+    _patch_github(monkeypatch, REPOS)
+    rows = pipeline.submit_missing(
+        fake_api, _study_stub(["2024-01-01"]), SETTINGS, "org", "az", "integ",
+        [SPEC], set(), {}, "r", dry_run=True,
+    )
+    assert fake_api.import_calls == []
+    assert fake_api.start_calls == []
+    # It still reports a real plan, resolved against GitHub.
+    assert {r.snapshot_date for r in rows} == {"HEAD", "2024-01-01"}
+    assert all(r.analysis_id is None for r in rows)
+    assert all(r.project_id == pipeline.DRY_RUN_PROJECT_ID for r in rows)
+
+
+def test_submit_frozen_dry_run_writes_nothing(monkeypatch, tmp_path, fake_api):
+    src = tmp_path / "source.jsonl"
+    manifest.write_all(src, [
+        row(npm_name="acme/widgets", git_url="https://github.com/acme/widgets",
+            snapshot_date="2024-01-01", state="done", commit_hash="a" * 40, branch="main"),
+    ])
+    rows = pipeline.submit_frozen(
+        fake_api, _study_stub([]), "org", "az", "integ", src, set(), {}, "r", dry_run=True,
+    )
+    assert fake_api.import_calls == []
+    assert fake_api.start_calls == []
+    assert len(rows) == 1 and rows[0].analysis_id is None
+
+
+def test_retry_one_force_redrives_a_stuck_pending_row(monkeypatch, tmp_path, fake_api):
+    """A lost dispatcher message strands a row in `pending` with no server-side
+    progress; the reaper never retires it, so --force is the only way out."""
+    from js_vuln_study.config import Study
+    study = Study.load(tmp_path)  # no study.toml: pure defaults, retries=2
+    manifest.write_all(study.manifest_path, [
+        row(npm_name="acme/widgets", git_url="https://github.com/acme/widgets",
+            snapshot_date="2024-01-01", state="pending", commit_hash="a" * 40,
+            branch="main", project_id="p1", analysis_id="stuck"),
+    ])
+    # Without --force a pending row is left alone.
+    assert pipeline.retry_one(fake_api, study, "org", "az", "acme/widgets", "2024-01-01") == 0
+    assert fake_api.start_calls == []
+
+    assert pipeline.retry_one(
+        fake_api, study, "org", "az", "acme/widgets", "2024-01-01", force=True
+    ) == 1
+    after = manifest.read(study.manifest_path)[0]
+    assert after.analysis_id != "stuck" and after.attempts == 1
+
+
+class _BlobAPI:
+    """get_result serving the real envelope: the plugin report is nested under
+    `result`, never at the top level."""
+
+    def __init__(self, blobs):
+        self._blobs = blobs
+
+    def get_result(self, org_id, project_id, analysis_id, plugin_type):
+        if plugin_type not in self._blobs:
+            raise CodeClarityError(f"GET /result: 404 for {plugin_type}")
+        return self._blobs[plugin_type]
+
+
+def _err(key, desc):
+    return {"result": {"analysis_info": {"errors": [
+        {"public_error": {"key": key, "description": desc}}]}}}
+
+
+def test_failure_reason_reads_the_nested_analysis_info():
+    """Reading only the top-level `analysis_info` found nothing on every real
+    blob and mislabelled the failure as stage-0/download."""
+    r = row(npm_name="a/b", git_url="u", snapshot_date="2024-01-01",
+            project_id="p1", analysis_id="a1")
+    api = _BlobAPI({"js-sbom": _err("LockFileParsingException", "Unable to parse lock file")})
+    reason = pipeline._failure_reason(api, "org", r, {"steps": []})
+    assert reason == "js-sbom: LockFileParsingException: Unable to parse lock file"
+
+
+def test_failure_reason_does_not_blame_download_when_a_blob_exists():
+    """A blob proves the download and that plugin ran, so stage-0 is wrong."""
+    r = row(npm_name="a/b", git_url="u", snapshot_date="2024-01-01",
+            project_id="p1", analysis_id="a1")
+    api = _BlobAPI({"js-sbom": {"result": {"workspaces": {}}}})  # no errors recorded
+    reason = pipeline._failure_reason(api, "org", r, {"steps": []})
+    assert "stage-0" not in reason
+    assert reason == "failure after js-sbom; no error detail in result"
+
+
+def test_failure_reason_still_reports_stage_zero_with_no_blobs():
+    r = row(npm_name="a/b", git_url="u", snapshot_date="2024-01-01",
+            project_id="p1", analysis_id="a1")
+    reason = pipeline._failure_reason(_BlobAPI({}), "org", r, {"steps": []})
+    assert reason == "failure at stage-0/download; no plugin result"

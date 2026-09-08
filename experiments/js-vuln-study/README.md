@@ -50,7 +50,11 @@ different `knowledge_asof`, without touching GitHub).
    projects as FILE-type archive uploads instead of cloning them, and
    GitHub API lookups are capped at 60/h instead of 5000/h. Rotate it
    immediately if it was ever pasted into a shared terminal, log, or chat.
-   The bundled sandbox token expires 2026-09-01.
+   The bundled sandbox token expires 2026-10-29 (check it rather than
+   trusting this line: `curl -sI -H "Authorization: Bearer $GITHUB_TOKEN"
+   https://api.github.com/rate_limit | grep -i token-expiration`). A full
+   top-100 run takes hours and thousands of commit lookups, so a token that
+   expires mid-run turns into skipped rows, not a clean failure.
 4. **Python 3.11+ venv**:
    ```bash
    cd experiments/js-vuln-study

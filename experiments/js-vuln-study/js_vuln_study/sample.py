@@ -74,10 +74,13 @@ def _search_repos(http: httpx.Client, language: str, pages: int) -> list[dict[st
 
 
 def build_sample(
-    limit: int, github_token: str | None, output: Path | None = None
+    limit: int, github_token: str | None, tier: str = "", output: Path | None = None
 ) -> list[ProjectSpec]:
     """Build a top-`limit` GitHub-stars sample of JS/TS repos with a root
-    package.json + lockfile and a resolvable, canonical, non-fork slug."""
+    package.json + lockfile and a resolvable, canonical, non-fork slug.
+
+    `tier` (the study name) is stamped on every spec before `output` is
+    written, so the label reaches disk rather than only the returned objects."""
     if not github_token:
         log.warning(
             "GITHUB_TOKEN not set: GitHub API is capped at 60/h unauthenticated"
@@ -132,7 +135,7 @@ def build_sample(
             selected.append(ProjectSpec(
                 npm_name=canonical,
                 rank=rank,
-                tier="",  # filled in by the caller from the study name
+                tier=tier,
                 git_url=meta.get("html_url") or f"https://github.com/{owner}/{repo}",
                 github_owner=(meta.get("owner") or {}).get("login") or owner,
                 github_repo=meta.get("name") or repo,

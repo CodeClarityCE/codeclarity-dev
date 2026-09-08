@@ -39,9 +39,8 @@ def _client(settings: Settings) -> CodeClarityClient:
 def cmd_sample(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
     study = Study.load(Path(args.study))
-    specs = sample_mod.build_sample(args.limit, settings.github_token, output=study.sample_path)
-    for s in specs:
-        s.tier = study.name
+    specs = sample_mod.build_sample(args.limit, settings.github_token, tier=study.name,
+                                    output=study.sample_path)
     log.info("wrote %d rows to %s", len(specs), study.sample_path)
     return 0
 
@@ -76,7 +75,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             miner.run_mining(baseline, settings)
 
     numbers.build_numbers(study, baseline=baseline)
-    pdf = brief_mod.build(study, cohort_study=study if baseline else None)
+    pdf = brief_mod.build(study, baseline_study=baseline)
     log.info("wrote %s", pdf)
     return 0
 
