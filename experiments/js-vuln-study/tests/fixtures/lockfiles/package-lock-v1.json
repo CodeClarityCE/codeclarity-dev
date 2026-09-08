@@ -1,0 +1,26 @@
+{
+  "name": "fixture-v1",
+  "version": "1.0.0",
+  "lockfileVersion": 1,
+  "requires": true,
+  "dependencies": {
+    "lodash": {
+      "version": "4.17.20",
+      "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz",
+      "integrity": "sha512-v1"
+    },
+    "@babel/core": {
+      "version": "7.12.3",
+      "resolved": "https://registry.npmjs.org/@babel/core/-/core-7.12.3.tgz",
+      "dependencies": {
+        "semver": {
+          "version": "5.7.1"
+        }
+      }
+    },
+    "semver": {
+      "version": "7.3.2",
+      "dev": true
+    }
+  }
+}

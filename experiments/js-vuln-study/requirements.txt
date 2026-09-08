@@ -1,0 +1,11 @@
+# Python >=3.11 (tomllib is stdlib). Direct deps only, pinned to the venv's
+# exact versions; regenerate with `.venv/bin/pip freeze` after any upgrade.
+httpx==0.28.1
+pandas==3.0.3
+pyarrow==24.0.0
+python-dotenv==1.2.2
+matplotlib==3.11.0
+scipy==1.18.0
+reportlab==5.0.0
+pytest==9.1.1
+PyYAML==6.0.3

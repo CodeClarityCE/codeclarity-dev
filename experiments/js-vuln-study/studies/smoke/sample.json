@@ -1,0 +1,11 @@
+[
+  {
+    "npm_name": "vuejs/core",
+    "rank": 0,
+    "tier": "smoke",
+    "git_url": "https://github.com/vuejs/core",
+    "github_owner": "vuejs",
+    "github_repo": "core",
+    "default_branch": "main"
+  }
+]

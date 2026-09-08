@@ -1,0 +1,44 @@
+# The Passbolt cohort: a security-focused team, compared against the top100
+# baseline's fix speed (RESULTS.md section 16). sample.json is hand-written
+# and committed.
+#
+# Regeneration recipe, from an empty tree, in this order. Both cohorts must be
+# fully scanned before either HEAD is refreshed; --refresh-head returns without
+# polling or collecting, so each one needs a plain `run` after it to drive the
+# new HEAD analyses to terminal and rebuild the tables:
+#   python run.py run     studies/top100
+#   python run.py run     studies/passbolt
+#   python run.py run     studies/top100   --refresh-head   # both HEADs on one day
+#   python run.py run     studies/passbolt --refresh-head
+#   python run.py run     studies/top100                    # poll + re-collect
+#   python run.py run     studies/passbolt
+#   python run.py analyze studies/top100
+#   python run.py analyze studies/passbolt --baseline studies/top100
+#
+# Both cohorts must be scanned against the same knowledge snapshot or the
+# cross-cohort delta absorbs knowledge drift; `compare_cohorts` asserts stamp
+# equality and warns when it fails (results_numbers.json ->
+# cohort.meta.knowledge_stamps_match).
+
+[study]
+name = "passbolt"
+sample = "sample.json"
+snapshots = true
+retries = 2
+
+[grid]
+quarterly = ["2022-01-01", "2023-10-01"]
+monthly = ["2024-01-01", "2026-08-01"]
+
+[codeclarity]
+org = "js-vuln-study-passbolt"
+analyzer = "js-vuln-study-v2"
+
+[codeclarity.plugins]
+js-sbom = "v0.0.25-alpha"
+vuln-finder = "v0.0.25-alpha"
+license-finder = "v0.0.18-alpha"
+
+[analyze]
+recency_cutoff = "2024-01-01"
+triangulate = 0

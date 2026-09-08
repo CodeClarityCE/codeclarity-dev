@@ -1,3 +1,8 @@
+---
+paths:
+  - "api/**"
+---
+
 # Database Migration Strategy
 
 ## Three Databases

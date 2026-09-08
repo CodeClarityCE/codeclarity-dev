@@ -48,6 +48,13 @@ services:
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
+    # Connection budget (transaction pooling via pgbouncer):
+    #   Server side: pgbouncer DEFAULT_POOL_SIZE(20) × (users × databases) << max_connections(300).
+    #   Client side: each service/plugin pool is bounded by DB_MAX_OPEN_CONNS (default 15)
+    #   and the API by PG_DB_POOL_MAX (default 10), but pgbouncer multiplexes them so
+    #   replica count no longer drives server connections.
+    #   max_connections=300 is kept as headroom only.
+    #   Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4 each.
     volumes:
       - ../../deployment/docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
       - ../../deployment/dump:/dump
@@ -57,12 +64,42 @@ services:
       postgres
         -c hba_file=/etc/postgresql/pg_hba.conf
         -c password_encryption=scram-sha-256
+        -c max_connections=300
     ports:
       - 127.0.0.1:5432:5432
     env_file:
       - ../env/.env.dev
     environment:
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
+
+  # Transaction-pooling connection pooler. All services/plugins/API connect here
+  # (PG_DB_HOST=pgbouncer, PG_DB_PORT=6432) instead of directly to Postgres, so
+  # hundreds of client pools multiplex onto a small server-side connection set.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    restart: always
+    ports:
+      # Published for host-side CLI tooling (e.g. `make knowledge-update`)
+      - 127.0.0.1:6433:6432
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      # Literal dev password. `environment:` interpolation reads the host shell, not
+      # the service's env_file, so ${POSTGRES_PASSWORD} would resolve blank here.
+      # Keep this in sync with POSTGRES_PASSWORD in ../env/.env.dev.
+      - DB_PASSWORD=!ChangeMe!
+      # DB_NAME omitted -> proxy every database (codeclarity, knowledge, plugins, config)
+      - LISTEN_PORT=6432
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=500
+      - DEFAULT_POOL_SIZE=20
+      - AUTH_TYPE=scram-sha-256
+      - ADMIN_USERS=postgres
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    depends_on:
+      db:
+        condition: service_started
 
   adminer:
     image: adminer:5.4.1

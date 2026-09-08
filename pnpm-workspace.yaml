@@ -10,6 +10,15 @@ packages:
 # once those entries age out OR after a dedupe/refresh PR pins older stable versions.
 minimumReleaseAge: 0
 
+# Disable pnpm 11's pre-run dependency check. `pnpm migration:run:*` (invoked by
+# `make migrate` on the host during setup) would otherwise trigger an automatic
+# `pnpm install` before running the script. Under CI=true that auto-install does
+# NOT honor `allowBuilds` below and fails every build-script package with
+# ERR_PNPM_IGNORED_BUILDS (and without CI it prompts to purge node_modules and
+# aborts non-interactively). Deps are installed explicitly by setup.sh, so this
+# pre-run re-check is redundant as well as broken here.
+verifyDepsBeforeRun: false
+
 # pnpm 11 replaces `onlyBuiltDependencies` with `allowBuilds` (explicit per-package
 # true/false verdict). True allows the lifecycle script to run; false blocks it.
 # Anything not listed here is implicitly blocked.
