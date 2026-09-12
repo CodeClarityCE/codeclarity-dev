@@ -2,13 +2,18 @@ packages:
   - api
   - frontend
 
-# Set to 0 to override pnpm 11's default of 1440 (24h). Several lockfile entries
-# (ws@7.5.11, ws@8.21.0, baseline-browser-mapping, es-object-atoms, node-addon-api,
-# shell-quote, web-features) were published within the last 24h. The migration
-# lockfile is too fresh to satisfy any nonzero gate today.
-# TODO(re-enable 2026-05-26): switch to `minimumReleaseAge: 4320` (3d in minutes)
-# once those entries age out OR after a dedupe/refresh PR pins older stable versions.
-minimumReleaseAge: 0
+# Cooling-off window before a freshly published version may be resolved, in
+# minutes. 4320 is 3 days. This defends against the window where a compromised
+# release is public but not yet yanked, which is when most npm supply-chain
+# attacks are caught. Restored during the 2026-09 dependency refresh; it had
+# been pinned to 0 since the yarn-to-pnpm migration, whose lockfile was too
+# fresh to satisfy any nonzero gate at the time.
+#
+# Mirrored in api/.cloud/docker/pnpm-workspace.yaml and
+# frontend/.cloud/docker/pnpm-workspace.yaml for the standalone container
+# builds, and as PNPM_CONFIG_MINIMUM_RELEASE_AGE in both Jenkinsfiles. All five
+# must move together.
+minimumReleaseAge: 4320
 
 # Disable pnpm 11's pre-run dependency check. `pnpm migration:run:*` (invoked by
 # `make migrate` on the host during setup) would otherwise trigger an automatic
@@ -35,6 +40,16 @@ allowBuilds:
   "@nestjs/core": false   # donate-notice script — non-functional, blocked
   "@percy/core": false    # downloads a bundled Chromium — only needed for visual regression; opt in when running stryker/percy
   "@scarf/scarf": false   # telemetry — never allowed
+  protobufjs: false       # transitive under the already-blocked @percy/core; its postinstall only prints version-scheme warnings
+
+# @nestjs/platform-fastify pins fastify as an exact direct dependency (11.2.3
+# pins 5.11.3), so without this the tree carries two fastify copies and the
+# instance that actually serves requests is the older one. 5.11.3 is affected
+# by GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing under trustProxy, patched in
+# 5.12.1). Mirrored in api/.cloud/docker/pnpm-workspace.yaml for the standalone
+# container build; keep both in sync with the fastify pin in api/package.json.
+overrides:
+  fastify: 5.12.3
 
 auditConfig:
   ignoreCves: []
