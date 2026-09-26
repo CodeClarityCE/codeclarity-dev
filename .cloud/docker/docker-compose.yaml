@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.2.3-management-alpine
+    image: rabbitmq:4.3.6-management-alpine@sha256:1aab4d911053f3ee4ff9bb231f5192ebd6a12281f8044910256a667fdb04108d
     env_file:
       - ../env/.env.dev
     environment:
@@ -44,7 +44,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres:18.1-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -76,7 +76,7 @@ services:
   # (PG_DB_HOST=pgbouncer, PG_DB_PORT=6432) instead of directly to Postgres, so
   # hundreds of client pools multiplex onto a small server-side connection set.
   pgbouncer:
-    image: edoburu/pgbouncer:v1.25.2-p0
+    image: edoburu/pgbouncer:v1.25.2-p0@sha256:7d7a27d9e90985cab5cf42256f5c13a3120baa4b055b69df37beb272b89b2340
     restart: always
     ports:
       # Published for host-side CLI tooling (e.g. `make knowledge-update`)
@@ -102,14 +102,14 @@ services:
         condition: service_started
 
   adminer:
-    image: adminer:5.4.1
+    image: adminer:6.1.1@sha256:f2d8070d6416befaa50b9e5f8059dc181c7859b0ab4c0b081de945336e50a2ef
     restart: always
     ports:
       - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
   prometheus:
-    image: prom/prometheus:v3.8.1
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     container_name: codeclarity-prometheus-dev
     restart: always
     ports:
@@ -138,7 +138,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:12.3.0
+    image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
     container_name: codeclarity-grafana-dev
     restart: always
     ports:
@@ -150,7 +150,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     depends_on:
       - prometheus
     deploy:
@@ -163,7 +162,7 @@ services:
           memory: 256M
 
   postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:v0.18.1
+    image: prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     container_name: codeclarity-postgres-exporter-dev
     restart: always
     env_file:
@@ -184,7 +183,7 @@ services:
           memory: 64M
 
   loki:
-    image: grafana/loki:3.5.7
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
     container_name: codeclarity-loki-dev
     restart: always
     ports:
@@ -205,7 +204,7 @@ services:
           memory: 256M
 
   alloy:
-    image: grafana/alloy:v1.11.2
+    image: grafana/alloy:v1.20.0@sha256:f111cce835516c5f99166342be7038496b52ced16667be5a11e19258a3e4cd30
     container_name: codeclarity-alloy-dev
     restart: always
     ports:
