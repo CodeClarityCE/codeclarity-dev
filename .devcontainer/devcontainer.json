@@ -19,13 +19,9 @@
     "ghcr.io/devcontainers/features/go:1": {
       "version": "1.27.1"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {},
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.12",
-      "installTools": false
-    }
+    "ghcr.io/devcontainers/features/git-lfs:1": {}
   },
-  "postCreateCommand": "npm install -g corepack@latest --force && corepack enable && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && python3 -m venv experiments/.venv && experiments/.venv/bin/pip install --upgrade pip && experiments/.venv/bin/pip install -r experiments/js-vuln-study/requirements.txt ipykernel jupytext",
+  "postCreateCommand": "npm install -g corepack@latest --force && corepack enable && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -33,13 +29,10 @@
         "Vue.volar",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "golang.go",
-        "ms-python.python",
-        "ms-toolsai.jupyter"
+        "golang.go"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh",
-        "python.defaultInterpreterPath": "${workspaceFolder}/experiments/.venv/bin/python"
+        "terminal.integrated.defaultProfile.linux": "zsh"
       }
     }
   },

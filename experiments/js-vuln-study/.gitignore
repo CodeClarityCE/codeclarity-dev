@@ -1,8 +1,0 @@
-.env
-*.pyc
-__pycache__/
-.venv/
-.pytest_cache/
-studies/*/*
-!studies/*/study.toml
-!studies/*/sample.json
