@@ -17,7 +17,7 @@
       "version": "26"
     },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.27.1"
+      "version": "1.27.3"
     },
     "ghcr.io/devcontainers/features/git-lfs:1": {}
   },
