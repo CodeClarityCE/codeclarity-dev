@@ -10,9 +10,8 @@ packages:
 # fresh to satisfy any nonzero gate at the time.
 #
 # Mirrored in api/.cloud/docker/pnpm-workspace.yaml and
-# frontend/.cloud/docker/pnpm-workspace.yaml for the standalone container
-# builds, and as PNPM_CONFIG_MINIMUM_RELEASE_AGE in both Jenkinsfiles. All five
-# must move together.
+# frontend/.cloud/docker/pnpm-workspace.yaml, which the standalone container
+# builds and both Jenkinsfiles stage. All three must move together.
 minimumReleaseAge: 4320
 
 # Disable pnpm 11's pre-run dependency check. `pnpm migration:run:*` (invoked by

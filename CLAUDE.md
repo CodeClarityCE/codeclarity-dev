@@ -67,6 +67,17 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
 
+## CI (Jenkins)
+
+Each repo has `.cloud/jenkins/Jenkinsfile`. Toolchains never come from the agent host:
+
+- **api / frontend**: Test steps run through `inToolchain()` inside the Dockerfile's `toolchain` target (pinned Node, corepack, and the pnpm version from `package.json` `packageManager`, the single source of truth for pnpm).
+- **Go**: Go steps run through `inGo()` in the digest-pinned `golang:1.27.3` image (keep in sync with the Dockerfiles and `go.mod`). Image repos test with `GOWORK=off` like the image build, so they pass only after `scripts/release-all.sh` has bumped utility versions.
+- Both helpers use plain `docker run`, not `agent { docker }` / `agent { dockerfile }`: the Docker Pipeline plugin is up for adoption and deliberately not used.
+- **Releases**: PRs to `main` must bump the version (`package.json` / `config.json`). Main builds push the image, then `gh release create --target $GIT_COMMIT`; an existing version tag is never re-pushed.
+
+The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the Pipeline Utility Steps plugin (`readJSON`), an authenticated `gh`, and a `dockerhub` credential.
+
 ## Database Commands
 
 - `make knowledge-setup` - Initialize knowledge DB

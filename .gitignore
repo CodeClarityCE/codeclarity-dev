@@ -30,3 +30,5 @@ yarn.lock
 .env
 private
 setup*.log
+# Progress of scripts/release-all.sh (resume state)
+scripts/.release-state
