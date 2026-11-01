@@ -69,13 +69,26 @@ if ! command -v docker &>/dev/null || ! command -v docker compose &>/dev/null; t
     exit 1
 fi
 
-# Check for yarn - either directly installed or via corepack
-if ! command -v yarn &>/dev/null; then
-    print_error "yarn is not installed."
+# Check for node - the database migrations run on the host via pnpm, whose
+# scripts spawn `node` directly (e.g. typeorm/ts-node `#!/usr/bin/env node`).
+# pnpm can be present (Homebrew/standalone) while node is missing from PATH.
+if ! command -v node &>/dev/null; then
+    print_error "node is not installed (or not on PATH for non-interactive shells)."
+    print_info "The 'make migrate' step runs on the host and needs Node.js."
     print_info "You can install it using one of these methods:"
-    print_info "  1. Using corepack (recommended): corepack enable"
-    print_info "  2. Using npm: npm install -g yarn"
-    print_info "  3. Using Homebrew: brew install yarn"
+    print_info "  1. Using Homebrew (macOS): brew install node"
+    print_info "  2. Using a version manager (nvm/fnm/asdf), then ensure it is on PATH"
+    print_info "     for non-login shells (so 'make' can find it)."
+    exit 1
+fi
+
+# Check for pnpm - either directly installed or via corepack
+if ! command -v pnpm &>/dev/null; then
+    print_error "pnpm is not installed."
+    print_info "You can install it using one of these methods:"
+    print_info "  1. Using corepack (recommended): corepack enable && corepack prepare pnpm@12 --activate"
+    print_info "  2. Using npm: npm install -g pnpm@12"
+    print_info "  3. Using Homebrew: brew install pnpm"
     exit 1
 fi
 
@@ -169,6 +182,21 @@ if make restore-database >>"$SETUP_LOG" 2>&1; then
 else
     printf "\r"
     print_error "Failed to restore database - check $SETUP_LOG"
+    exit 1
+fi
+
+# The migrations run on the host via pnpm, so the host workspace dependencies
+# must be installed first. The dev containers use their own (Linux) node_modules
+# in an anonymous volume, so the host node_modules can be in a foreign state and
+# pnpm would otherwise prompt interactively to purge it. CI=true makes pnpm
+# resolve that non-interactively so setup can run unattended.
+print_progress "Installing host workspace dependencies..."
+if CI=true pnpm install >>"$SETUP_LOG" 2>&1; then
+    printf "\r"
+    print_success "Host workspace dependencies installed"
+else
+    printf "\r"
+    print_error "Failed to install host dependencies - check $SETUP_LOG"
     exit 1
 fi
 

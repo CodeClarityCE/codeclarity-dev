@@ -1,14 +1,9 @@
 {
   "private": true,
-  "workspaces": [
-    "frontend",
-    "api"
-  ],
   "devDependencies": {
-    "@yarnpkg/pnpify": "4.1.6",
-    "eslint": "9.39.2",
-    "prettier": "3.8.1",
-    "typescript": "5.9.3"
+    "eslint": "10.10.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3"
   },
-  "packageManager": "yarn@4.12.0+sha512.f45ab632439a67f8bc759bf32ead036a1f413287b9042726b7cc4818b7b49e14e9423ba49b18f9e06ea4941c1ad062385b1d8760a8d5091a1a31e5f6219afca8"
+  "packageManager": "pnpm@12.6.0+sha512.3ef68f951cb111ac204b4a5a16f0b2ddf0da56a96e0413e81d855d9f0b55ef926714709028e1cd00c405c2c5fb7b9e8ec4dc46777c805d0373c2f2ff00fd20ec"
 }

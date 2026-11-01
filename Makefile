@@ -35,11 +35,11 @@ down-prod: ## Stops the Docker images in prod mode
 	@cd deployment && make down
 
 ## —— Commands to setup database 💾 ———————————————————————————————————————————————————————————————
-knowledge-setup: export PG_DB_PORT = 5432
+knowledge-setup: export PG_DB_PORT = 6433
 knowledge-setup: ## Creates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
 
-knowledge-update: export PG_DB_PORT = 5432
+knowledge-update: export PG_DB_PORT = 6433
 knowledge-update: ## Updates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
 
@@ -57,6 +57,18 @@ restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
 	@cd .cloud/scripts && sh restore-test-db.sh
+
+dump-knowledge-dated: ## Dumps the knowledge + config databases to dated files (LABEL=<label>)
+ifndef LABEL
+	$(error LABEL is not set. Usage: make dump-knowledge-dated LABEL=<label>)
+endif
+	@cd .cloud/scripts && sh dump-db-dated.sh $(LABEL)
+
+restore-knowledge-dated: ## Restores the knowledge + config databases from dated files (LABEL=<label>)
+ifndef LABEL
+	$(error LABEL is not set. Usage: make restore-knowledge-dated LABEL=<label>)
+endif
+	@cd .cloud/scripts && sh restore-knowledge-dated.sh $(LABEL)
 
 ## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
 migrate: ## Run all database migrations (api)

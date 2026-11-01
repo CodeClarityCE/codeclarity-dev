@@ -3,7 +3,7 @@ name: codeclarity-dev
 services:
   rabbitmq:
     restart: always
-    image: rabbitmq:4.2.3-management-alpine
+    image: rabbitmq:4.3.6-management-alpine@sha256:1aab4d911053f3ee4ff9bb231f5192ebd6a12281f8044910256a667fdb04108d
     env_file:
       - ../env/.env.dev
     environment:
@@ -13,9 +13,12 @@ services:
         rabbitmq-plugins enable rabbitmq_management rabbitmq_prometheus --offline &&
         exec docker-entrypoint.sh rabbitmq-server
       '
+    volumes:
+      - ./certs/rabbitmq:/etc/rabbitmq/certs:ro
+      - ./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
-      - target: 5672
-        published: ${AMQP_PORT:-5672}
+      - target: 5671
+        published: ${AMQP_PORT:-5671}
         protocol: tcp
         mode: host
       - target: 15672
@@ -41,34 +44,72 @@ services:
           memory: 500M
 
   db:
-    image: postgres:18.1-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
-    # or set shared memory limit when deploy via swarm stack
-    #volumes:
-    #  - type: tmpfs
-    #    target: /dev/shm
-    #    tmpfs:
-    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    # Connection budget (transaction pooling via pgbouncer):
+    #   Server side: pgbouncer DEFAULT_POOL_SIZE(20) × (users × databases) << max_connections(300).
+    #   Client side: each service/plugin pool is bounded by DB_MAX_OPEN_CONNS (default 15)
+    #   and the API by PG_DB_POOL_MAX (default 10), but pgbouncer multiplexes them so
+    #   replica count no longer drives server connections.
+    #   max_connections=300 is kept as headroom only.
+    #   Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4 each.
     volumes:
-      - ./docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
+      - ../../deployment/docker-entrypoint-initdb:/docker-entrypoint-initdb.d/
       - ../../deployment/dump:/dump
       - db_data_container:/var/lib/postgresql/18
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: >
+      postgres
+        -c hba_file=/etc/postgresql/pg_hba.conf
+        -c password_encryption=scram-sha-256
+        -c max_connections=300
     ports:
-      - 5432:5432
+      - 127.0.0.1:5432:5432
     env_file:
       - ../env/.env.dev
+    environment:
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
 
-  adminer:
-    image: adminer:5.4.1
+  # Transaction-pooling connection pooler. All services/plugins/API connect here
+  # (PG_DB_HOST=pgbouncer, PG_DB_PORT=6432) instead of directly to Postgres, so
+  # hundreds of client pools multiplex onto a small server-side connection set.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0@sha256:7d7a27d9e90985cab5cf42256f5c13a3120baa4b055b69df37beb272b89b2340
     restart: always
     ports:
-      - 8080:8080
+      # Published for host-side CLI tooling (e.g. `make knowledge-update`)
+      - 127.0.0.1:6433:6432
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      # Literal dev password. `environment:` interpolation reads the host shell, not
+      # the service's env_file, so ${POSTGRES_PASSWORD} would resolve blank here.
+      # Keep this in sync with POSTGRES_PASSWORD in ../env/.env.dev.
+      - DB_PASSWORD=!ChangeMe!
+      # DB_NAME omitted -> proxy every database (codeclarity, knowledge, plugins, config)
+      - LISTEN_PORT=6432
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=500
+      - DEFAULT_POOL_SIZE=20
+      - AUTH_TYPE=scram-sha-256
+      - ADMIN_USERS=postgres
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    depends_on:
+      db:
+        condition: service_started
+
+  adminer:
+    image: adminer:6.1.1@sha256:f2d8070d6416befaa50b9e5f8059dc181c7859b0ab4c0b081de945336e50a2ef
+    restart: always
+    ports:
+      - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
 
   prometheus:
-    image: prom/prometheus:v3.8.1
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     container_name: codeclarity-prometheus-dev
     restart: always
     ports:
@@ -97,7 +138,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:12.3.0
+    image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
     container_name: codeclarity-grafana-dev
     restart: always
     ports:
@@ -109,7 +150,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     depends_on:
       - prometheus
     deploy:
@@ -122,13 +162,11 @@ services:
           memory: 256M
 
   postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:v0.18.1
+    image: prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     container_name: codeclarity-postgres-exporter-dev
     restart: always
     env_file:
       - ../env/.env.dev
-    environment:
-      - DATA_SOURCE_NAME=postgresql://postgres:$${POSTGRES_PASSWORD}@codeclarity-dev-db-1:5432/codeclarity?sslmode=disable
     ports:
       - "9187:9187"
     depends_on:
@@ -143,7 +181,7 @@ services:
           memory: 64M
 
   loki:
-    image: grafana/loki:3.5.7
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
     container_name: codeclarity-loki-dev
     restart: always
     ports:
@@ -164,7 +202,7 @@ services:
           memory: 256M
 
   alloy:
-    image: grafana/alloy:v1.11.2
+    image: grafana/alloy:v1.20.0@sha256:f111cce835516c5f99166342be7038496b52ced16667be5a11e19258a3e4cd30
     container_name: codeclarity-alloy-dev
     restart: always
     ports:

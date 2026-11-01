@@ -1,0 +1,55 @@
+packages:
+  - api
+  - frontend
+
+# Cooling-off window before a freshly published version may be resolved, in
+# minutes. 4320 is 3 days. This defends against the window where a compromised
+# release is public but not yet yanked, which is when most npm supply-chain
+# attacks are caught. Restored during the 2026-09 dependency refresh; it had
+# been pinned to 0 since the yarn-to-pnpm migration, whose lockfile was too
+# fresh to satisfy any nonzero gate at the time.
+#
+# Mirrored in api/.cloud/docker/pnpm-workspace.yaml and
+# frontend/.cloud/docker/pnpm-workspace.yaml, which the standalone container
+# builds and both Jenkinsfiles stage. All three must move together.
+minimumReleaseAge: 4320
+
+# Disable pnpm 11's pre-run dependency check. `pnpm migration:run:*` (invoked by
+# `make migrate` on the host during setup) would otherwise trigger an automatic
+# `pnpm install` before running the script. Under CI=true that auto-install does
+# NOT honor `allowBuilds` below and fails every build-script package with
+# ERR_PNPM_IGNORED_BUILDS (and without CI it prompts to purge node_modules and
+# aborts non-interactively). Deps are installed explicitly by setup.sh, so this
+# pre-run re-check is redundant as well as broken here.
+verifyDepsBeforeRun: false
+
+# pnpm 11 replaces `onlyBuiltDependencies` with `allowBuilds` (explicit per-package
+# true/false verdict). True allows the lifecycle script to run; false blocks it.
+# Anything not listed here is implicitly blocked.
+allowBuilds:
+  # Native bindings — required for runtime
+  bcrypt: true
+  "@swc/core": true
+  esbuild: true
+  "@parcel/watcher": true
+  unrs-resolver: true
+  msw: true
+  vue-demi: true
+  # Blocked deliberately (security)
+  "@nestjs/core": false   # donate-notice script — non-functional, blocked
+  "@percy/core": false    # downloads a bundled Chromium — only needed for visual regression; opt in when running stryker/percy
+  "@scarf/scarf": false   # telemetry — never allowed
+  protobufjs: false       # transitive under the already-blocked @percy/core; its postinstall only prints version-scheme warnings
+
+# @nestjs/platform-fastify pins fastify as an exact direct dependency (11.2.3
+# pins 5.11.3), so without this the tree carries two fastify copies and the
+# instance that actually serves requests is the older one. 5.11.3 is affected
+# by GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing under trustProxy, patched in
+# 5.12.1). Mirrored in api/.cloud/docker/pnpm-workspace.yaml for the standalone
+# container build; keep both in sync with the fastify pin in api/package.json.
+overrides:
+  fastify: 5.12.3
+
+auditConfig:
+  ignoreCves: []
+  ignoreGhsas: []
