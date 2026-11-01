@@ -167,8 +167,6 @@ services:
     restart: always
     env_file:
       - ../env/.env.dev
-    environment:
-      - DATA_SOURCE_NAME=postgresql://postgres:$${POSTGRES_PASSWORD}@codeclarity-dev-db-1:5432/codeclarity?sslmode=disable
     ports:
       - "9187:9187"
     depends_on:
