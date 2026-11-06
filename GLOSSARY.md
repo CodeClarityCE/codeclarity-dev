@@ -14,6 +14,10 @@ _Avoid_: Scan (except informally), job
 A named, ordered set of plugin stages that an analysis executes.
 _Avoid_: Pipeline, workflow
 
+**Submission**:
+Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
+_Avoid_: Dispatch (the dispatcher's own step), enqueue
+
 ### Experiments
 
 **Dataset**:
