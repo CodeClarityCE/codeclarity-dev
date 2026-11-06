@@ -6,7 +6,9 @@
   "workspaceFolder": "/workspaces/codeclarity-dev",
   "remoteUser": "vscode",
   "containerEnv": {
-    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"
+    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+    "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH": "/usr/bin/chromium",
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
   },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {

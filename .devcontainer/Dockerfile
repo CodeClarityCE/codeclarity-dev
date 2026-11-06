@@ -6,4 +6,10 @@ RUN apt-get update \
       curl \
       ca-certificates \
       jq \
+      # Headless browser for debugging the frontend with Playwright. Taken
+      # from the signed Debian archive (security updates via apt) rather than
+      # Playwright's own CDN download; Playwright drives it through
+      # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH (see devcontainer.json).
+      chromium \
+      fonts-liberation \
  && rm -rf /var/lib/apt/lists/*
