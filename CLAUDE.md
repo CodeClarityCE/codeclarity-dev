@@ -92,3 +92,17 @@ Production deployment: see `deployment/CLAUDE.md`.
 ## License
 
 AGPL-3.0. All contributions must be compatible with this license.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues: cross-cutting work in `CodeClarityCE/codeclarity-dev`, single-area work in that submodule's repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
