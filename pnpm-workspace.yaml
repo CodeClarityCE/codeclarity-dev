@@ -48,7 +48,7 @@ allowBuilds:
 # 5.12.1). Mirrored in api/.cloud/docker/pnpm-workspace.yaml for the standalone
 # container build; keep both in sync with the fastify pin in api/package.json.
 overrides:
-  fastify: 5.12.3
+  fastify: 5.12.8
 
 auditConfig:
   ignoreCves: []
