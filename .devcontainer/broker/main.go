@@ -302,6 +302,11 @@ func (b *broker) seed(w io.Writer, _ string) int {
 	if code := b.runMigrations(w, migrated); code != 0 {
 		worst = code
 	}
+	// Dumps also carry old advisories. Being offline should not fail the seed.
+	fmt.Fprintln(w, "broker: refreshing OSV advisories")
+	if code := docker(w, resolved(knowledgeOSVArgs()...)...); code != 0 {
+		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
+	}
 	return worst
 }
 
