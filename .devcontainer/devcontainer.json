@@ -1,8 +1,8 @@
 {
   "name": "codeclarity-dev (Claude Code sandbox)",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "shutdownAction": "stopCompose",
   "workspaceFolder": "/workspaces/codeclarity-dev",
   "remoteUser": "vscode",
   "containerEnv": {
@@ -41,17 +41,5 @@
       }
     }
   },
-  "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached"
-  ],
-  "runArgs": [
-    "--cap-drop=ALL",
-    "--cap-add=CHOWN",
-    "--cap-add=SETUID",
-    "--cap-add=SETGID",
-    "--cap-add=DAC_OVERRIDE",
-    "--security-opt=no-new-privileges"
-  ],
   "forwardPorts": []
 }

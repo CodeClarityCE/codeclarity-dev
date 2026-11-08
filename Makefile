@@ -1,26 +1,42 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config
+.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
 	@grep -E '(^[a-zA-Z0-9_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
 ## —— Commands for the dev env 💻 ———————————————————————————————————————————————————————————————
+# Inside the devcontainer these targets go through the broker. SERVICE is optional.
+BROKER_SOCKET = /run/codeclarity-broker/broker.sock
+BROKER = sh .devcontainer/broker-client.sh
+
 build: ## Builds the Docker images
-	@cd .cloud/scripts && sh build.sh
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) build $(SERVICE); else cd .cloud/scripts && sh build.sh; fi
 
 up: ## Starts the Docker images
-	@cd .cloud/scripts && sh up.sh
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) up $(SERVICE); else cd .cloud/scripts && sh up.sh; fi
 
 down: ## Stops the Docker images
-	@cd .cloud/scripts && sh down.sh
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) down; else cd .cloud/scripts && sh down.sh; fi
 
 pull: ## Pulls the Docker images
-	docker compose -f .cloud/docker/docker-compose.yaml pull
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) pull; else docker compose -f .cloud/docker/docker-compose.yaml pull; fi
 
-logs: ## Displays the logs of the Docker images
-	@cd .cloud/scripts && sh logs.sh
+logs: ## Displays the logs of the Docker images (devcontainer needs SERVICE=name)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) logs $(SERVICE); else cd .cloud/scripts && sh logs.sh; fi
+
+restart: ## Restarts one service in the devcontainer (SERVICE=name)
+	@$(BROKER) restart $(SERVICE)
+
+ps: ## Lists the agent stack's containers in the devcontainer
+	@$(BROKER) ps
+
+seed: ## Restores all databases from deployment/dump in the devcontainer
+	@$(BROKER) seed
+
+reset: ## Wipes the agent stack's data, then starts and seeds it in the devcontainer
+	@$(BROKER) reset
 
 ## —— Commands to test production 🎯 ———————————————————————————————————————————————————————————————
 build-prod: ## Builds de production Docker images

@@ -12,6 +12,15 @@
 - Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
 - IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
+### Agent stack in the devcontainer
+
+The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
+
+- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset`, plus `make restart SERVICE=api` and `make logs SERVICE=api`. `up` and `build` also accept `SERVICE=`.
+- First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
+- The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
+- A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
+
 ## Architecture Overview
 
 - **Frontend**: Vue.js 3 + TypeScript + Tailwind CSS + Reka UI (port 443)
@@ -62,7 +71,7 @@ onto a small server-side connection set, so replica count no longer drives `max_
 
 ## Testing
 
-- **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Cypress)
+- **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Playwright)
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
