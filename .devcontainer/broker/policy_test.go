@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -246,6 +247,18 @@ func TestMigrateArgsRunInTheAPIContainer(t *testing.T) {
 	want := "exec -T -e PG_DB_HOST=db -e PG_DB_PORT=5432 api pnpm migration:run:plugins"
 	if got != want {
 		t.Errorf("migrateArgs = %q, want %q", got, want)
+	}
+}
+
+func TestMigrationTargets(t *testing.T) {
+	if got, ok := migrationTargets(""); !ok || !slices.Equal(got, migrated) {
+		t.Errorf("no name should select every database, got %v, %v", got, ok)
+	}
+	if got, ok := migrationTargets("config"); !ok || !slices.Equal(got, []string{"config"}) {
+		t.Errorf("config should select only itself, got %v, %v", got, ok)
+	}
+	if _, ok := migrationTargets("api"); ok {
+		t.Error("a name without migrations should be rejected")
 	}
 }
 

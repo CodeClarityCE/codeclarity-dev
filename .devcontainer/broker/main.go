@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +54,7 @@ var restores = [][2]string{
 	{"codeclarity", "codeclarity_test"},
 }
 
-// Databases seed migrates after restoring the dumps.
+// Databases with migrations, in the order they run.
 var migrated = []string{"codeclarity", "knowledge", "plugins", "config"}
 
 var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -83,6 +84,7 @@ var commands = map[string]command{
 	"ps":      {run: (*broker).ps},
 	"seed":    {run: (*broker).seed},
 	"reset":   {run: (*broker).reset},
+	"migrate": {run: (*broker).migrate, takes: true},
 }
 
 func main() {
@@ -296,7 +298,40 @@ func (b *broker) seed(w io.Writer, _ string) int {
 		}
 	}
 	// Dumps are older than the schema, so bring every database up to date.
-	for _, db := range migrated {
+	if code := b.runMigrations(w, migrated); code != 0 {
+		worst = code
+	}
+	return worst
+}
+
+// migrate applies pending migrations without touching existing data.
+func (b *broker) migrate(w io.Writer, db string) int {
+	targets, ok := migrationTargets(db)
+	if !ok {
+		fmt.Fprintf(w, "broker: unknown database %q, expected one of %s\n", db, strings.Join(migrated, ", "))
+		return 1
+	}
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	return b.runMigrations(w, targets)
+}
+
+// migrationTargets returns the databases to migrate; no name means all of them.
+func migrationTargets(db string) ([]string, bool) {
+	if db == "" {
+		return migrated, true
+	}
+	if slices.Contains(migrated, db) {
+		return []string{db}, true
+	}
+	return nil, false
+}
+
+// runMigrations tries every database and returns the last failure.
+func (b *broker) runMigrations(w io.Writer, dbs []string) int {
+	worst := 0
+	for _, db := range dbs {
 		fmt.Fprintf(w, "broker: migrating %s\n", db)
 		if code := docker(w, resolved(migrateArgs(db)...)...); code != 0 {
 			fmt.Fprintf(w, "broker: migration of %s exited %d\n", db, code)
