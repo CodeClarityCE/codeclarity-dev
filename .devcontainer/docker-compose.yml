@@ -1,0 +1,92 @@
+name: codeclarity-agent
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sleep infinity
+    # Shares the daemon's network so the agent's stack is reachable on localhost.
+    network_mode: service:dockerd
+    depends_on:
+      - dockerd
+      - broker
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ..:/workspaces/codeclarity-dev:cached
+      - ${HOME}/.claude:/home/vscode/.claude:cached
+      - ${HOME}/.claude.json:/home/vscode/.claude.json:cached
+      - broker-socket:/run/codeclarity-broker
+
+  broker:
+    build:
+      context: ./broker
+    restart: unless-stopped
+    network_mode: service:dockerd
+    read_only: true
+    depends_on:
+      - dockerd
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /var/lib/broker
+    tmpfs:
+      - /var/lib/broker:mode=0700
+    volumes:
+      - ..:/workspaces/codeclarity-dev:ro
+      # The only repo path the broker may write: generated RabbitMQ certs.
+      - ../.cloud/docker/certs:/workspaces/codeclarity-dev/.cloud/docker/certs
+      - dockerd-socket:/run/dockerd
+      - broker-socket:/run/codeclarity-broker
+
+  dockerd:
+    image: docker:29.9.3-dind@sha256:08a98015fce594af7c382883bea080ea206de74402a95da9dc52b6428c8cd121
+    restart: unless-stopped
+    privileged: true
+    cpus: 8
+    mem_limit: 32g
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    # The second socket is the one the alloy service mounts.
+    command:
+      - --host=unix:///run/dockerd/docker.sock
+      - --host=unix:///var/run/docker.sock
+    volumes:
+      - dockerd-data:/var/lib/docker
+      - dockerd-socket:/run/dockerd
+      # Exact bind sources for the stack. Keep in sync with pinnedBinds in broker/policy.go.
+      - ../.cloud/docker/alloy-config.alloy:/workspaces/codeclarity-dev/.cloud/docker/alloy-config.alloy
+      - ../.cloud/docker/certs/rabbitmq:/workspaces/codeclarity-dev/.cloud/docker/certs/rabbitmq
+      - ../.cloud/docker/config/pg_hba.conf:/workspaces/codeclarity-dev/.cloud/docker/config/pg_hba.conf
+      - ../.cloud/docker/config/rabbitmq.conf:/workspaces/codeclarity-dev/.cloud/docker/config/rabbitmq.conf
+      - ../.cloud/docker/grafana/dashboards:/workspaces/codeclarity-dev/.cloud/docker/grafana/dashboards
+      - ../.cloud/docker/grafana/provisioning:/workspaces/codeclarity-dev/.cloud/docker/grafana/provisioning
+      - ../.cloud/docker/loki-config.yml:/workspaces/codeclarity-dev/.cloud/docker/loki-config.yml
+      - ../.cloud/docker/prometheus.yml:/workspaces/codeclarity-dev/.cloud/docker/prometheus.yml
+      - ../.cloud/env:/workspaces/codeclarity-dev/.cloud/env
+      - ../deployment/docker-entrypoint-initdb:/workspaces/codeclarity-dev/deployment/docker-entrypoint-initdb
+      - ../deployment/dump:/workspaces/codeclarity-dev/deployment/dump
+      - ../private:/workspaces/codeclarity-dev/private
+      - ../scripts:/workspaces/codeclarity-dev/scripts
+      - ../backend:/workspaces/codeclarity-dev/backend
+      - ../api:/workspaces/codeclarity-dev/api
+      - ../api/.cloud/docker/pnpm-workspace.yaml:/workspaces/codeclarity-dev/api/.cloud/docker/pnpm-workspace.yaml
+      - ../frontend:/workspaces/codeclarity-dev/frontend
+      - ../frontend/.cloud/docker/pnpm-workspace.yaml:/workspaces/codeclarity-dev/frontend/.cloud/docker/pnpm-workspace.yaml
+      - ../frontend/.cloud/docker/conf/caddy/Caddyfile:/workspaces/codeclarity-dev/frontend/.cloud/docker/conf/caddy/Caddyfile
+      - ../frontend/.cloud/docker/conf/certs:/workspaces/codeclarity-dev/frontend/.cloud/docker/conf/certs
+
+volumes:
+  broker-socket:
+  dockerd-socket:
+  dockerd-data:
