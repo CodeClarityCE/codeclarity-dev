@@ -16,7 +16,7 @@
 
 The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
 
-- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset`, plus `make restart SERVICE=api` and `make logs SERVICE=api`. `up` and `build` also accept `SERVICE=`.
+- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api` and `make logs SERVICE=api`. `up` and `build` also accept `SERVICE=`.
 - First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
@@ -91,6 +91,7 @@ The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the P
 
 - `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key)
+- `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
 - `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 

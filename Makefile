@@ -59,6 +59,10 @@ knowledge-update: export PG_DB_PORT = 6433
 knowledge-update: ## Updates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
 
+knowledge-update-osv: export PG_DB_PORT = 6433
+knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update-osv; fi
+
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
 download-dumps: ## Downloads the database dump
 	@sh deployment/scripts/download-dumps.sh
@@ -88,16 +92,16 @@ endif
 
 ## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
 migrate: ## Run all database migrations (api)
-	@cd api && make migrate
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate; else cd api && make migrate; fi
 
 migrate-codeclarity: ## Run codeclarity DB migrations (api)
-	@cd api && make migrate-codeclarity
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate codeclarity; else cd api && make migrate-codeclarity; fi
 
 migrate-knowledge: ## Run knowledge DB migrations (api)
-	@cd api && make migrate-knowledge
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate knowledge; else cd api && make migrate-knowledge; fi
 
 migrate-plugins: ## Run plugins DB migrations (api)
-	@cd api && make migrate-plugins
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate plugins; else cd api && make migrate-plugins; fi
 
 migrate-config: ## Run config DB migrations (api)
-	@cd api && make migrate-config
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate config; else cd api && make migrate-config; fi

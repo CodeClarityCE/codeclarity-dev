@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +54,7 @@ var restores = [][2]string{
 	{"codeclarity", "codeclarity_test"},
 }
 
-// Databases seed migrates after restoring the dumps.
+// Databases with migrations, in the order they run.
 var migrated = []string{"codeclarity", "knowledge", "plugins", "config"}
 
 var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -74,15 +75,17 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"up":      {run: (*broker).up, takes: true},
-	"build":   {run: (*broker).build, takes: true},
-	"restart": {run: (*broker).restart, takes: true, needService: true},
-	"logs":    {run: (*broker).logs, takes: true, needService: true},
-	"pull":    {run: (*broker).pull},
-	"down":    {run: (*broker).down},
-	"ps":      {run: (*broker).ps},
-	"seed":    {run: (*broker).seed},
-	"reset":   {run: (*broker).reset},
+	"up":            {run: (*broker).up, takes: true},
+	"build":         {run: (*broker).build, takes: true},
+	"restart":       {run: (*broker).restart, takes: true, needService: true},
+	"logs":          {run: (*broker).logs, takes: true, needService: true},
+	"pull":          {run: (*broker).pull},
+	"down":          {run: (*broker).down},
+	"ps":            {run: (*broker).ps},
+	"seed":          {run: (*broker).seed},
+	"reset":         {run: (*broker).reset},
+	"migrate":       {run: (*broker).migrate, takes: true},
+	"knowledge-osv": {run: (*broker).knowledgeOSV},
 }
 
 func main() {
@@ -296,7 +299,58 @@ func (b *broker) seed(w io.Writer, _ string) int {
 		}
 	}
 	// Dumps are older than the schema, so bring every database up to date.
-	for _, db := range migrated {
+	if code := b.runMigrations(w, migrated); code != 0 {
+		worst = code
+	}
+	// Dumps also carry old advisories. Being offline should not fail the seed.
+	fmt.Fprintln(w, "broker: refreshing OSV advisories")
+	if code := docker(w, resolved(knowledgeOSVArgs()...)...); code != 0 {
+		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
+	}
+	return worst
+}
+
+// migrate applies pending migrations without touching existing data.
+func (b *broker) migrate(w io.Writer, db string) int {
+	targets, ok := migrationTargets(db)
+	if !ok {
+		fmt.Fprintf(w, "broker: unknown database %q, expected one of %s\n", db, strings.Join(migrated, ", "))
+		return 1
+	}
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	return b.runMigrations(w, targets)
+}
+
+// knowledgeOSV refreshes OSV advisories using the stack's own database settings.
+func (b *broker) knowledgeOSV(w io.Writer, _ string) int {
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	return docker(w, resolved(knowledgeOSVArgs()...)...)
+}
+
+// knowledgeOSVArgs runs the update in a Go service container that has the backend source.
+func knowledgeOSVArgs() []string {
+	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "update-osv"}
+}
+
+// migrationTargets returns the databases to migrate; no name means all of them.
+func migrationTargets(db string) ([]string, bool) {
+	if db == "" {
+		return migrated, true
+	}
+	if slices.Contains(migrated, db) {
+		return []string{db}, true
+	}
+	return nil, false
+}
+
+// runMigrations tries every database and returns the last failure.
+func (b *broker) runMigrations(w io.Writer, dbs []string) int {
+	worst := 0
+	for _, db := range dbs {
 		fmt.Fprintf(w, "broker: migrating %s\n", db)
 		if code := docker(w, resolved(migrateArgs(db)...)...); code != 0 {
 			fmt.Fprintf(w, "broker: migration of %s exited %d\n", db, code)
