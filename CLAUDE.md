@@ -91,6 +91,7 @@ The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the P
 
 - `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key)
+- `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
 - `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 

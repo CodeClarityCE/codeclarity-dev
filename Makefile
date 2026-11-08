@@ -59,6 +59,10 @@ knowledge-update: export PG_DB_PORT = 6433
 knowledge-update: ## Updates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
 
+knowledge-update-osv: export PG_DB_PORT = 6433
+knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update-osv; fi
+
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
 download-dumps: ## Downloads the database dump
 	@sh deployment/scripts/download-dumps.sh

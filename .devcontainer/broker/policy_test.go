@@ -262,6 +262,14 @@ func TestMigrationTargets(t *testing.T) {
 	}
 }
 
+func TestKnowledgeOSVRunsInTheBackendContainer(t *testing.T) {
+	got := strings.Join(knowledgeOSVArgs(), " ")
+	want := "exec -T -w /codeclarity/services/knowledge service-package-follower go run . -knowledge -action update-osv"
+	if got != want {
+		t.Errorf("knowledgeOSVArgs = %q, want %q", got, want)
+	}
+}
+
 func TestServiceNames(t *testing.T) {
 	for name, want := range map[string]bool{"api": true, "js-sbom": true, "": false, "-v": false, "a b": false, "../x": false} {
 		if got := validServiceName(name); got != want {

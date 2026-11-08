@@ -75,16 +75,17 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"up":      {run: (*broker).up, takes: true},
-	"build":   {run: (*broker).build, takes: true},
-	"restart": {run: (*broker).restart, takes: true, needService: true},
-	"logs":    {run: (*broker).logs, takes: true, needService: true},
-	"pull":    {run: (*broker).pull},
-	"down":    {run: (*broker).down},
-	"ps":      {run: (*broker).ps},
-	"seed":    {run: (*broker).seed},
-	"reset":   {run: (*broker).reset},
-	"migrate": {run: (*broker).migrate, takes: true},
+	"up":            {run: (*broker).up, takes: true},
+	"build":         {run: (*broker).build, takes: true},
+	"restart":       {run: (*broker).restart, takes: true, needService: true},
+	"logs":          {run: (*broker).logs, takes: true, needService: true},
+	"pull":          {run: (*broker).pull},
+	"down":          {run: (*broker).down},
+	"ps":            {run: (*broker).ps},
+	"seed":          {run: (*broker).seed},
+	"reset":         {run: (*broker).reset},
+	"migrate":       {run: (*broker).migrate, takes: true},
+	"knowledge-osv": {run: (*broker).knowledgeOSV},
 }
 
 func main() {
@@ -315,6 +316,19 @@ func (b *broker) migrate(w io.Writer, db string) int {
 		return 1
 	}
 	return b.runMigrations(w, targets)
+}
+
+// knowledgeOSV refreshes OSV advisories using the stack's own database settings.
+func (b *broker) knowledgeOSV(w io.Writer, _ string) int {
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	return docker(w, resolved(knowledgeOSVArgs()...)...)
+}
+
+// knowledgeOSVArgs runs the update in a Go service container that has the backend source.
+func knowledgeOSVArgs() []string {
+	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "update-osv"}
 }
 
 // migrationTargets returns the databases to migrate; no name means all of them.
