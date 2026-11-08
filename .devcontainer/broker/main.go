@@ -53,6 +53,9 @@ var restores = [][2]string{
 	{"codeclarity", "codeclarity_test"},
 }
 
+// Databases seed migrates after restoring the dumps.
+var migrated = []string{"codeclarity", "knowledge", "plugins", "config"}
+
 var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 
 func validServiceName(name string) bool {
@@ -292,7 +295,20 @@ func (b *broker) seed(w io.Writer, _ string) int {
 			worst = code
 		}
 	}
+	// Dumps are older than the schema, so bring every database up to date.
+	for _, db := range migrated {
+		fmt.Fprintf(w, "broker: migrating %s\n", db)
+		if code := docker(w, resolved(migrateArgs(db)...)...); code != 0 {
+			fmt.Fprintf(w, "broker: migration of %s exited %d\n", db, code)
+			worst = code
+		}
+	}
 	return worst
+}
+
+// migrateArgs runs one database's migrations in the api container, straight on Postgres.
+func migrateArgs(db string) []string {
+	return []string{"exec", "-T", "-e", "PG_DB_HOST=db", "-e", "PG_DB_PORT=5432", "api", "pnpm", "migration:run:" + db}
 }
 
 func (b *broker) reset(w io.Writer, service string) int {

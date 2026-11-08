@@ -241,6 +241,14 @@ func TestRestoreScriptCreatesMissingDatabase(t *testing.T) {
 	}
 }
 
+func TestMigrateArgsRunInTheAPIContainer(t *testing.T) {
+	got := strings.Join(migrateArgs("plugins"), " ")
+	want := "exec -T -e PG_DB_HOST=db -e PG_DB_PORT=5432 api pnpm migration:run:plugins"
+	if got != want {
+		t.Errorf("migrateArgs = %q, want %q", got, want)
+	}
+}
+
 func TestServiceNames(t *testing.T) {
 	for name, want := range map[string]bool{"api": true, "js-sbom": true, "": false, "-v": false, "a b": false, "../x": false} {
 		if got := validServiceName(name); got != want {
