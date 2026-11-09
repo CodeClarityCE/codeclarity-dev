@@ -88,7 +88,7 @@ groups:
           severity: critical
         annotations:
           summary: 'Knowledge source {{ $labels.source }}: failed validation'
-          description: See validation_error in knowledge_source_sync. Stored data was left in place and the source keeps its last validated counts. Stays firing until the source next passes.
+          description: See validation_error in knowledge_source_sync. Updates are applied in place and not rolled back, so stored data may include the update that failed. The source keeps its last validated counts. Stays firing until the source next passes.
         data:
           - refId: A
             relativeTimeRange: { from: 600, to: 0 }
