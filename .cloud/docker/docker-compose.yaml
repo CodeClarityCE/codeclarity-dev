@@ -101,6 +101,29 @@ services:
       db:
         condition: service_started
 
+  # Knowledge update daemon. Off by default: start it with KNOWLEDGE_DAEMON_REPLICAS=1 make up.
+  service-knowledge:
+    build:
+      context: ../../backend
+      dockerfile: services/knowledge/.cloud/docker/Dockerfile
+      target: plugin-dev
+      args:
+        - PLUGINNAME=knowledge
+        - KIND=services
+    image: codeclarityce/service-knowledge-dev:latest
+    restart: always
+    deploy:
+      replicas: ${KNOWLEDGE_DAEMON_REPLICAS:-0}
+    volumes:
+      - ../../backend:/codeclarity
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_started
+    env_file:
+      - ../env/.env.dev
+
   adminer:
     image: adminer:6.1.1@sha256:f2d8070d6416befaa50b9e5f8059dc181c7859b0ab4c0b081de945336e50a2ef
     restart: always
