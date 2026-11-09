@@ -78,3 +78,34 @@ groups:
               expression: A
               conditions:
                 - evaluator: { type: gt, params: [0] }
+      - uid: knowledge-source-validation-failed
+        title: Knowledge source failed validation
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Knowledge source {{ $labels.source }}: failed validation'
+          description: See validation_error in knowledge_source_sync. Stored data was left in place and the source keeps its last validated counts. Stays firing until the source next passes.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: knowledge-postgres
+            model:
+              refId: A
+              format: table
+              editorMode: code
+              rawQuery: true
+              rawSql: >-
+                SELECT source, CASE WHEN validation_error IS NOT NULL THEN 1 ELSE 0 END AS validation_failed
+                FROM knowledge_source_sync WHERE last_run_started_at > now() - interval '14 days'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
