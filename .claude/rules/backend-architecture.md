@@ -34,7 +34,7 @@ paths:
 ## Key Code Patterns
 
 - **Knowledge DB types**: `backend/utilities/types/knowledge_db/` (osv.go, nvd.go, gcve.go)
-- **Mirror pattern**: `backend/services/knowledge/src/mirrors/<source>/main.go` with `Update(db, configDB)` entry point
+- **Mirror pattern**: `backend/services/knowledge/src/mirrors/<source>/main.go` with `Update(db, configDB)` entry point; `Update` wraps its work in `sourcesync.Run` so each source records its own outcome and its watermark moves only on full success
 - **Persistence**: `backend/services/knowledge/src/utilities/pgsql/<source>.go` with `BatchUpdate`, `GetUUIDs`, `BatchInsert`
 - **Vuln-finder pipeline**: Repository (query DB) -> Matcher (normalize versions) -> Match (range/exact/universal) -> Clean (merge sources) -> ConflictResolver -> Severity -> Output
 - **JSONB queries**: Use `@>` operator with GIN index; parameterize via `json.Marshal` to avoid SQL injection

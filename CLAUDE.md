@@ -10,6 +10,7 @@
 - `make pull` - Pull latest images
 - Access at <https://localhost:443>
 - Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
+- Knowledge daemon: off in dev by default. Run `KNOWLEDGE_DAEMON_REPLICAS=1 make up` on the host to start it (`service-knowledge`, default 0 replicas); the devcontainer broker does not read the caller's shell, so the variable has no effect through it.
 - IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
 ### Agent stack in the devcontainer

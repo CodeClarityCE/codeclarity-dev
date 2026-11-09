@@ -62,7 +62,7 @@ groups:
               # Keep these thresholds equal to the API knowledge status endpoint.
               rawSql: >-
                 SELECT t.source,
-                CASE WHEN s.watermark IS NULL OR s.watermark < now() - t.stale_after THEN 1 ELSE 0 END AS stale
+                CASE WHEN s.last_outcome IS NULL OR s.watermark IS NULL OR s.watermark < now() - t.stale_after THEN 1 ELSE 0 END AS stale
                 FROM (VALUES
                 ('osv', interval '24 hours'), ('epss', interval '24 hours'),
                 ('nvd', interval '48 hours'), ('gcve', interval '48 hours'),

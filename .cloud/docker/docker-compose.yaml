@@ -173,8 +173,8 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-    env_file:
-      - ../env/.env.dev
+      # Literal dev password for the knowledge datasource. Keep in sync with POSTGRES_PASSWORD in ../env/.env.dev.
+      - PG_DB_PASSWORD=!ChangeMe!
     depends_on:
       - prometheus
     deploy:
