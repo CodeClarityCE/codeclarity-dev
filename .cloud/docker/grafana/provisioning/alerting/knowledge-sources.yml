@@ -1,0 +1,80 @@
+apiVersion: 1
+
+# Alerts come from knowledge_source_sync, so they still fire when the daemon has crashed.
+# Dev runs the daemon only on request, so only sources run in the last 14 days are checked.
+groups:
+  - orgId: 1
+    name: knowledge-sources
+    folder: Knowledge
+    interval: 1m
+    rules:
+      - uid: knowledge-source-failed
+        title: Knowledge source failed
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Knowledge source {{ $labels.source }}: last run failed'
+          description: See last_error in knowledge_source_sync. Stays firing until the source next succeeds.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: knowledge-postgres
+            model:
+              refId: A
+              format: table
+              editorMode: code
+              rawQuery: true
+              rawSql: >-
+                SELECT source, CASE WHEN last_outcome = 'failure' THEN 1 ELSE 0 END AS failed
+                FROM knowledge_source_sync WHERE last_run_started_at > now() - interval '14 days'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: knowledge-source-stale
+        title: Knowledge source stale
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Knowledge source {{ $labels.source }}: watermark is past its staleness threshold'
+          description: The source has not completed a sync within its threshold, or has never completed one.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: knowledge-postgres
+            model:
+              refId: A
+              format: table
+              editorMode: code
+              rawQuery: true
+              # Keep these thresholds equal to the API knowledge status endpoint.
+              rawSql: >-
+                SELECT t.source,
+                CASE WHEN s.last_outcome IS NULL OR s.watermark IS NULL OR s.watermark < now() - t.stale_after THEN 1 ELSE 0 END AS stale
+                FROM (VALUES
+                ('osv', interval '24 hours'), ('epss', interval '24 hours'),
+                ('nvd', interval '48 hours'), ('gcve', interval '48 hours'),
+                ('cwe', interval '7 days'), ('licenses', interval '7 days'),
+                ('friends_of_php', interval '7 days')
+                ) AS t (source, stale_after)
+                JOIN knowledge_source_sync s ON s.source = t.source WHERE s.last_run_started_at > now() - interval '14 days'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
