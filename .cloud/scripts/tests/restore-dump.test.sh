@@ -9,6 +9,7 @@ DEPLOYMENT_DIR=$(cd "${DEPLOYMENT_DIR:-$root/deployment}" && pwd)
 export DEPLOYMENT_DIR
 dump_script="$here/../dump-knowledge-in-db.sh"
 restore_script="$DEPLOYMENT_DIR/scripts/restore-dump.sh"
+[ -f "$restore_script" ] || { echo "no $restore_script; set DEPLOYMENT_DIR to a deployment checkout" >&2; exit 1; }
 chmod +x "$here"/stubs/*
 PATH="$here/stubs:$PATH"
 export PATH
