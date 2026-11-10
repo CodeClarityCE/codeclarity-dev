@@ -285,25 +285,37 @@ func waitForDB(w io.Writer) bool {
 	return false
 }
 
-// restoreScript creates the database if it is missing, then restores the dump into it.
-func restoreScript(dump, db string) string {
-	return fmt.Sprintf(
-		`export PGPASSWORD=$POSTGRES_PASSWORD; { psql -w -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='%[2]s'" | grep -q 1 || createdb -w -U postgres %[2]s; } && pg_restore -l /dump/%[1]s.dump > /dump/%[1]s.list && pg_restore -w -U postgres -d %[2]s -L /dump/%[1]s.list /dump/%[1]s.dump`,
-		dump, db)
+// restoreDumpScript verifies and restores dumps; it runs inside the db container.
+const restoreDumpScript = "deployment/scripts/restore-dump.sh"
+
+// verifyDumpsArgs checks every dump against its manifest before anything is restored.
+func verifyDumpsArgs(script string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "verify"}
+}
+
+// restoreDumpArgs restores one dump, reassembling a split one, and creates the database if missing.
+func restoreDumpArgs(script, dump, db string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
 }
 
 func (b *broker) seed(w io.Writer, _ string) int {
+	script, err := os.ReadFile(filepath.Join(repoRoot, restoreDumpScript))
+	if err != nil {
+		fmt.Fprintf(w, "broker: cannot read the restore script: %v\n", err)
+		return 1
+	}
 	if !resolve(w) || !waitForDB(w) {
 		return 1
 	}
-	worst := 0
-	for _, r := range restores {
-		dump, db := r[0], r[1]
-		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
-		if code := docker(w, resolved("exec", "-T", "db", "sh", "-c", restoreScript(dump, db))...); code != 0 {
-			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
-			worst = code
-		}
+	verify := func() int {
+		return docker(w, resolved(verifyDumpsArgs(string(script))...)...)
+	}
+	restore := func(dump, db string) int {
+		return docker(w, resolved(restoreDumpArgs(string(script), dump, db)...)...)
+	}
+	worst, verified := seedRestores(w, verify, restore)
+	if !verified {
+		return worst
 	}
 	// Dumps are older than the schema, so bring every database up to date.
 	if code := b.runMigrations(w, migrated); code != 0 {
@@ -315,6 +327,24 @@ func (b *broker) seed(w io.Writer, _ string) int {
 		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
 	}
 	return worst
+}
+
+// seedRestores verifies the dumps, then restores each one; verified is false if nothing was restored.
+func seedRestores(w io.Writer, verify func() int, restore func(dump, db string) int) (worst int, verified bool) {
+	fmt.Fprintln(w, "broker: verifying the dumps against their manifest")
+	if code := verify(); code != 0 {
+		fmt.Fprintf(w, "broker: dump verification failed (exit %d), nothing was restored\n", code)
+		return code, false
+	}
+	for _, r := range restores {
+		dump, db := r[0], r[1]
+		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
+		if code := restore(dump, db); code != 0 {
+			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
+			worst = code
+		}
+	}
+	return worst, true
 }
 
 // migrate applies pending migrations without touching existing data.

@@ -156,13 +156,13 @@ fi
 print_header "Database Setup"
 
 print_progress "Fetching database dumps from Git LFS..."
-# Ensure Git LFS files are pulled (dumps are stored in deployment submodule)
-if cd deployment && git lfs pull --include="dump/*.dump" >>"../$SETUP_LOG" 2>&1 && cd - >/dev/null 2>&1; then
+# Pulls the dumps (stored in the deployment submodule) and checks them against their manifest
+if sh deployment/scripts/download-dumps.sh >>"$SETUP_LOG" 2>&1; then
     printf "\r"
-    print_success "Database dumps fetched from Git LFS "
+    print_success "Database dumps fetched and verified "
 else
     printf "\r"
-    print_error "Failed to fetch database dumps - check $SETUP_LOG"
+    print_error "Database dumps are missing or do not match their manifest - check $SETUP_LOG"
     exit 1
 fi
 

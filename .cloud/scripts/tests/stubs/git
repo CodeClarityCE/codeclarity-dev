@@ -1,0 +1,3 @@
+#!/bin/sh
+# Test stand-in for git: logs its arguments to STUB_GIT_LOG and does nothing else.
+echo "git $*" >>"${STUB_GIT_LOG:-/dev/null}"

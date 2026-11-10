@@ -32,7 +32,7 @@ restart: ## Restarts one service in the devcontainer (SERVICE=name)
 ps: ## Lists the agent stack's containers in the devcontainer
 	@$(BROKER) ps
 
-seed: ## Restores all databases from deployment/dump in the devcontainer
+seed: ## Verifies deployment/dump against its manifest, then restores all databases in the devcontainer
 	@$(BROKER) seed
 
 reset: ## Wipes the agent stack's data, then starts and seeds it in the devcontainer
@@ -74,7 +74,8 @@ dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowle
 	@cd .cloud/scripts && sh dump-db.sh codeclarity
 	@$(MAKE) --no-print-directory dump-knowledge
 
-restore-database: ## Restores the database
+restore-database: ## Verifies the dumps against their manifest, then restores the databases
+	@cd .cloud/scripts && sh restore-db.sh verify
 	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
