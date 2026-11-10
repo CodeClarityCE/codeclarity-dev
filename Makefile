@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config
+.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge dump-database
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -67,10 +67,12 @@ knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
 download-dumps: ## Downloads the database dump
 	@sh deployment/scripts/download-dumps.sh
 
-dump-database: ## Dumps the database
+dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) dump-knowledge; else cd .cloud/scripts && sh dump-knowledge.sh; fi
+
+dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowledge
 	@cd .cloud/scripts && sh dump-db.sh codeclarity
-	@cd .cloud/scripts && sh dump-db.sh knowledge
-	@cd .cloud/scripts && sh dump-db.sh config
+	@$(MAKE) --no-print-directory dump-knowledge
 
 restore-database: ## Restores the database
 	@cd .cloud/scripts && sh restore-db.sh codeclarity

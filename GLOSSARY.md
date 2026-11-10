@@ -73,3 +73,11 @@ _Avoid_: Deleted record
 **Malicious package advisory**:
 A statement that a package or version is intentionally harmful, as opposed to carrying a vulnerability.
 _Avoid_: Vulnerability, MAL
+
+**Knowledge dump**:
+The published `knowledge` and `config` database files every new install restores, made only after the completeness gate passes.
+_Avoid_: Snapshot (that is a dated restore), backup
+
+**Dump manifest**:
+The file next to a knowledge dump that records what it holds and the SHA-256 of every file a restore must verify.
+_Avoid_: Metadata, index

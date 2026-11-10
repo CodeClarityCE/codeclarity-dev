@@ -1,0 +1,17 @@
+#!/bin/sh
+# Test stand-in for pg_dump: writes STUB_DUMP_BYTES_<db> bytes of repeatable content to -f.
+if [ "$1" = "--version" ]; then
+	echo "pg_dump (PostgreSQL) 18.6"
+	exit 0
+fi
+db="" file=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-d) db="$2"; shift ;;
+	-f) file="$2"; shift ;;
+	esac
+	shift
+done
+[ "$STUB_PG_DUMP_FAIL" = "$db" ] && { echo "pg_dump: error: stub failure for $db" >&2; exit 1; }
+eval "bytes=\${STUB_DUMP_BYTES_$db:-100}"
+seq 1 "$bytes" | tr -d '\n' | head -c "$bytes" >"$file"
