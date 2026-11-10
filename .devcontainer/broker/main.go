@@ -75,17 +75,18 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"up":            {run: (*broker).up, takes: true},
-	"build":         {run: (*broker).build, takes: true},
-	"restart":       {run: (*broker).restart, takes: true, needService: true},
-	"logs":          {run: (*broker).logs, takes: true, needService: true},
-	"pull":          {run: (*broker).pull},
-	"down":          {run: (*broker).down},
-	"ps":            {run: (*broker).ps},
-	"seed":          {run: (*broker).seed},
-	"reset":         {run: (*broker).reset},
-	"migrate":       {run: (*broker).migrate, takes: true},
-	"knowledge-osv": {run: (*broker).knowledgeOSV},
+	"up":             {run: (*broker).up, takes: true},
+	"build":          {run: (*broker).build, takes: true},
+	"restart":        {run: (*broker).restart, takes: true, needService: true},
+	"logs":           {run: (*broker).logs, takes: true, needService: true},
+	"pull":           {run: (*broker).pull},
+	"down":           {run: (*broker).down},
+	"ps":             {run: (*broker).ps},
+	"seed":           {run: (*broker).seed},
+	"reset":          {run: (*broker).reset},
+	"migrate":        {run: (*broker).migrate, takes: true},
+	"knowledge-osv":  {run: (*broker).knowledgeOSV},
+	"dump-knowledge": {run: (*broker).dumpKnowledge},
 }
 
 func main() {
@@ -152,9 +153,15 @@ func (f *flushWriter) Write(p []byte) (int, error) {
 }
 
 func docker(w io.Writer, args ...string) int {
+	return dockerIO(w, nil, w, args...)
+}
+
+// dockerIO runs docker with its own stdin and stdout; stderr and broker errors go to w.
+func dockerIO(w io.Writer, stdin io.Reader, stdout io.Writer, args ...string) int {
 	cmd := exec.Command("docker", args...)
 	cmd.Env = append(os.Environ(), "DOCKER_HOST="+dockerHost)
-	cmd.Stdout = w
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
 	cmd.Stderr = w
 	if err := cmd.Run(); err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
@@ -334,6 +341,51 @@ func (b *broker) knowledgeOSV(w io.Writer, _ string) int {
 // knowledgeOSVArgs runs the update in a Go service container that has the backend source.
 func knowledgeOSVArgs() []string {
 	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "update-osv"}
+}
+
+// dumpKnowledgeScript dumps knowledge and config with a manifest; it runs inside the db container.
+const dumpKnowledgeScript = ".cloud/scripts/dump-knowledge-in-db.sh"
+
+// dumpKnowledge dumps knowledge and config only when the completeness gate passes.
+func (b *broker) dumpKnowledge(w io.Writer, _ string) int {
+	script, err := os.ReadFile(filepath.Join(repoRoot, dumpKnowledgeScript))
+	if err != nil {
+		fmt.Fprintf(w, "broker: cannot read the dump script: %v\n", err)
+		return 1
+	}
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	gate := func(stdout io.Writer) int {
+		return dockerIO(w, nil, stdout, resolved(knowledgeGateArgs()...)...)
+	}
+	dump := func(stdin io.Reader) int {
+		return dockerIO(w, stdin, w, resolved(dumpKnowledgeArgs(string(script))...)...)
+	}
+	return gatedDump(w, gate, dump)
+}
+
+// gatedDump runs the gate, shows its report, and hands the report to the dump only if it passed.
+func gatedDump(w io.Writer, gate func(stdout io.Writer) int, dump func(stdin io.Reader) int) int {
+	fmt.Fprintln(w, "broker: running the knowledge completeness gate")
+	var report bytes.Buffer
+	code := gate(&report)
+	_, _ = w.Write(report.Bytes())
+	if code != 0 {
+		fmt.Fprintf(w, "broker: the completeness gate failed (exit %d), nothing was dumped\n", code)
+		return code
+	}
+	return dump(&report)
+}
+
+// knowledgeGateArgs runs the read-only completeness gate; its JSON report is on stdout.
+func knowledgeGateArgs() []string {
+	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "validate", "-read-only"}
+}
+
+// dumpKnowledgeArgs runs the dump script in the db container, which writes to deployment/dump.
+func dumpKnowledgeArgs(script string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "dump-knowledge"}
 }
 
 // migrationTargets returns the databases to migrate; no name means all of them.

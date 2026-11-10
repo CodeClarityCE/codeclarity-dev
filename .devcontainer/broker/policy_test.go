@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -297,5 +300,76 @@ func TestParseCertBundle(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(dir, "server.crt"))
 	if string(before) != string(after) {
 		t.Error("existing certs were regenerated")
+	}
+}
+
+func TestDumpKnowledgeGateRunsReadOnlyInTheBackendContainer(t *testing.T) {
+	got := strings.Join(knowledgeGateArgs(), " ")
+	want := "exec -T -w /codeclarity/services/knowledge service-package-follower go run . -knowledge -action validate -read-only"
+	if got != want {
+		t.Errorf("knowledgeGateArgs = %q, want %q", got, want)
+	}
+}
+
+func TestDumpKnowledgeRunsTheScriptInTheDBContainer(t *testing.T) {
+	got := dumpKnowledgeArgs("echo dumping")
+	want := []string{"exec", "-T", "db", "sh", "-c", "echo dumping", "dump-knowledge"}
+	if !slices.Equal(got, want) {
+		t.Errorf("dumpKnowledgeArgs = %q, want %q", got, want)
+	}
+}
+
+func TestDumpKnowledgeScriptIsInTheRepo(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("../..", dumpKnowledgeScript)); err != nil {
+		t.Errorf("broker reads %s: %v", dumpKnowledgeScript, err)
+	}
+}
+
+func TestDumpKnowledgeTakesNoArgument(t *testing.T) {
+	cmd, ok := commands["dump-knowledge"]
+	if !ok || cmd.takes {
+		t.Errorf("dump-knowledge should be a command without an argument, got %+v, %v", cmd, ok)
+	}
+}
+
+func TestDumpKnowledgeStopsWhenTheGateFails(t *testing.T) {
+	var out bytes.Buffer
+	dumped := false
+	gate := func(stdout io.Writer) int {
+		fmt.Fprintln(stdout, `{"passed": false}`)
+		return 1
+	}
+	dump := func(io.Reader) int {
+		dumped = true
+		return 0
+	}
+	if code := gatedDump(&out, gate, dump); code == 0 {
+		t.Error("a failed gate should fail the command")
+	}
+	if dumped {
+		t.Error("a failed gate must not dump")
+	}
+	if !strings.Contains(out.String(), `{"passed": false}`) {
+		t.Errorf("the gate report should be shown, got %q", out.String())
+	}
+}
+
+func TestDumpKnowledgeHandsThePassingReportToTheDump(t *testing.T) {
+	var out bytes.Buffer
+	var got string
+	gate := func(stdout io.Writer) int {
+		fmt.Fprintln(stdout, `{"passed": true}`)
+		return 0
+	}
+	dump := func(stdin io.Reader) int {
+		raw, _ := io.ReadAll(stdin)
+		got = string(raw)
+		return 3
+	}
+	if code := gatedDump(&out, gate, dump); code != 3 {
+		t.Errorf("the command should exit with the dump's status, got %d", code)
+	}
+	if got != "{\"passed\": true}\n" {
+		t.Errorf("dump read %q from stdin", got)
 	}
 }
