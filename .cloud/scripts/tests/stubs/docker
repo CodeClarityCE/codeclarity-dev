@@ -1,0 +1,6 @@
+#!/bin/sh
+# Test stand-in for docker: runs the command given to "compose ... exec [-T] db" on this machine.
+while [ $# -gt 0 ] && [ "$1" != db ]; do shift; done
+[ $# -gt 0 ] || { echo "docker stub: no db command" >&2; exit 1; }
+shift
+exec "$@"

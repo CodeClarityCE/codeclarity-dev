@@ -27,8 +27,9 @@ Dated dumps (`make dump-knowledge-dated`) are separate experiment files and are 
 | `knowledge-manifest.json`             | The dump manifest, below                                                                  |
 | `knowledge-manifest.sha256`           | `sha256sum -c` list of every file on disk: each unsplit dump, or each part of a split one |
 
-Verify the files on disk with `cd deployment/dump && sha256sum -c knowledge-manifest.sha256`.
-After rebuilding a split dump, compare its SHA-256 with `files[].sha256` in the manifest.
+Verify the files on disk with `sh deployment/scripts/restore-dump.sh verify` (`DUMP_DIR=deployment/dump`), or by hand with
+`cd deployment/dump && sha256sum -c knowledge-manifest.sha256`. After rebuilding a split dump, compare its SHA-256 with
+`files[].sha256` in the manifest.
 
 ## Manifest format 1
 
@@ -102,7 +103,29 @@ After rebuilding a split dump, compare its SHA-256 with `files[].sha256` in the 
 
 The manifest is not listed in `knowledge-manifest.sha256`, and neither file checksums itself.
 
+## Restoring
+
+Every restore goes through `deployment/scripts/restore-dump.sh`, run inside the `db` container:
+
+| Path                                           | What runs                                                                  |
+| ---------------------------------------------- | -------------------------------------------------------------------------- |
+| `make download-dumps` (`download-dumps.sh`)    | Pulls any file that is still a Git LFS pointer, then `verify` on the host  |
+| `make restore-database` (umbrella, deployment) | `verify`, then `restore` for each database; stops at the first failure     |
+| `make seed` (devcontainer broker)              | `verify`, then `restore` for each database; nothing is restored on failure |
+| `deployment/setup.sh`, umbrella `setup.sh`     | `download-dumps.sh`, then each restore; setup stops on any error           |
+
+- `verify` checks every line of `knowledge-manifest.sha256`, refuses parts it does not list, and checks that each dump
+  (rebuilt from its parts when split) matches `files[].sha256`. It refuses a manifest format other than 1.
+- `restore <dump> <database>` creates the database if it is missing, checks the dump against the manifest again, rebuilds a
+  split dump into `/dump/.restore.<pid>` (removed afterwards), and runs `pg_restore`. A `pg_restore` error fails the restore.
+- `codeclarity.dump` is not in the manifest, so it restores unverified.
+- **Old dump layout.** Without `knowledge-manifest.json`, whole dumps still restore, with a warning that they are not
+  verified. Split parts without a manifest are refused.
+- A restore needs room for one rebuilt split dump in `deployment/dump`, next to its parts.
+
 ## Tests
 
 `sh .cloud/scripts/tests/dump-knowledge-in-db.test.sh` runs the in-container script with stand-in `pg_dump` and `psql` (needs `jq`).
-The broker command is covered by `cd .devcontainer/broker && GOWORK=off go test ./...`.
+`sh .cloud/scripts/tests/restore-dump.test.sh` restores dump sets made by that script, and refuses damaged ones, with stand-in
+`pg_restore`, `psql`, `createdb`, `docker` and `git` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).
+The broker commands are covered by `cd .devcontainer/broker && GOWORK=off go test ./...`.

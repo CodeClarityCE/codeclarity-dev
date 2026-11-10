@@ -236,12 +236,65 @@ func TestAlloyMatchesStackCompose(t *testing.T) {
 	}
 }
 
-func TestRestoreScriptCreatesMissingDatabase(t *testing.T) {
-	got := restoreScript("knowledge", "knowledge_test")
-	for _, want := range []string{"createdb -w -U postgres knowledge_test", "-d knowledge_test", "/dump/knowledge.dump"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("restore script is missing %q: %s", want, got)
+func TestRestoreDumpRunsTheScriptInTheDBContainer(t *testing.T) {
+	got := restoreDumpArgs("echo restoring", "knowledge", "knowledge_test")
+	want := []string{"exec", "-T", "db", "sh", "-c", "echo restoring", "restore-dump", "restore", "knowledge", "knowledge_test"}
+	if !slices.Equal(got, want) {
+		t.Errorf("restoreDumpArgs = %q, want %q", got, want)
+	}
+	got = verifyDumpsArgs("echo verifying")
+	want = []string{"exec", "-T", "db", "sh", "-c", "echo verifying", "restore-dump", "verify"}
+	if !slices.Equal(got, want) {
+		t.Errorf("verifyDumpsArgs = %q, want %q", got, want)
+	}
+}
+
+func TestRestoreDumpScriptIsInTheDeploymentRepo(t *testing.T) {
+	if _, err := os.Stat("../../deployment/scripts"); err != nil {
+		t.Skip("the deployment submodule is not checked out")
+	}
+	if _, err := os.Stat(filepath.Join("../..", restoreDumpScript)); err != nil {
+		t.Errorf("broker reads %s: %v", restoreDumpScript, err)
+	}
+}
+
+func TestSeedRestoresNothingWhenVerificationFails(t *testing.T) {
+	var out bytes.Buffer
+	var restored []string
+	verify := func() int { return 1 }
+	restore := func(dump, db string) int {
+		restored = append(restored, db)
+		return 0
+	}
+	code, ok := seedRestores(&out, verify, restore)
+	if code == 0 || ok {
+		t.Errorf("a failed verification should fail the seed, got %d, %v", code, ok)
+	}
+	if len(restored) > 0 {
+		t.Errorf("nothing should be restored, got %v", restored)
+	}
+	if !strings.Contains(out.String(), "nothing was restored") {
+		t.Errorf("the seed should say nothing was restored, got %q", out.String())
+	}
+}
+
+func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
+	var out bytes.Buffer
+	var restored [][2]string
+	verify := func() int { return 0 }
+	restore := func(dump, db string) int {
+		restored = append(restored, [2]string{dump, db})
+		if db == "config" {
+			return 4
 		}
+		return 0
+	}
+	code, ok := seedRestores(&out, verify, restore)
+	if code != 4 || !ok {
+		t.Errorf("a failed restore should give its exit code, got %d, %v", code, ok)
+	}
+	if !slices.Equal(restored, restores) {
+		t.Errorf("restored %v, want %v", restored, restores)
 	}
 }
 

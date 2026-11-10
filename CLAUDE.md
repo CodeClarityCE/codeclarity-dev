@@ -93,7 +93,7 @@ The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the P
 - `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key)
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
-- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
+- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first and reassemble split dumps; see `docs/knowledge-dump.md`
 - `make dump-knowledge` - Dumps `knowledge` + `config` with a manifest, only after the read-only completeness gate passes; also works in the devcontainer. See `docs/knowledge-dump.md`
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 
