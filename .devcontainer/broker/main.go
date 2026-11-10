@@ -368,9 +368,19 @@ func (b *broker) knowledgeOSV(w io.Writer, _ string) int {
 	return docker(w, resolved(knowledgeOSVArgs()...)...)
 }
 
-// knowledgeOSVArgs runs the update in a Go service container that has the backend source.
+// knowledgeArgs runs a knowledge action, with extra env, in a Go service container that has the backend source.
+func knowledgeArgs(env []string, action ...string) []string {
+	args := []string{"exec", "-T", "-w", "/codeclarity/services/knowledge"}
+	for _, e := range env {
+		args = append(args, "-e", e)
+	}
+	args = append(args, "service-package-follower", "go", "run", ".", "-knowledge", "-action")
+	return append(args, action...)
+}
+
+// knowledgeOSVArgs runs the OSV update.
 func knowledgeOSVArgs() []string {
-	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "update-osv"}
+	return knowledgeArgs(nil, "update-osv")
 }
 
 // dumpKnowledgeScript dumps knowledge and config with a manifest; it runs inside the db container.
@@ -386,8 +396,12 @@ func (b *broker) dumpKnowledge(w io.Writer, _ string) int {
 	if !resolve(w) || !waitForDB(w) {
 		return 1
 	}
+	env, err := expectedMigrationsEnv(filepath.Join(repoRoot, apiMigrationsDir))
+	if err != nil {
+		fmt.Fprintf(w, "broker: warning, the gate falls back to its own migration list: %v\n", err)
+	}
 	gate := func(stdout io.Writer) int {
-		return dockerIO(w, nil, stdout, resolved(knowledgeGateArgs()...)...)
+		return dockerIO(w, nil, stdout, resolved(knowledgeGateArgs(env)...)...)
 	}
 	dump := func(stdin io.Reader) int {
 		return dockerIO(w, stdin, w, resolved(dumpKnowledgeArgs(string(script))...)...)
@@ -409,8 +423,41 @@ func gatedDump(w io.Writer, gate func(stdout io.Writer) int, dump func(stdin io.
 }
 
 // knowledgeGateArgs runs the read-only completeness gate; its JSON report is on stdout.
-func knowledgeGateArgs() []string {
-	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "validate", "-read-only"}
+func knowledgeGateArgs(env []string) []string {
+	return knowledgeArgs(env, "validate", "-read-only")
+}
+
+// apiMigrationsDir holds the API's TypeORM migrations, one folder per database.
+const apiMigrationsDir = "api/src/migrations"
+
+var migrationClass = regexp.MustCompile(`export class (\w+)`)
+
+// expectedMigrationsEnv tells the gate to expect the knowledge and config migrations in dir.
+func expectedMigrationsEnv(dir string) ([]string, error) {
+	var env []string
+	for _, db := range []string{"knowledge", "config"} {
+		files, err := filepath.Glob(filepath.Join(dir, db, "*.ts"))
+		if err != nil {
+			return nil, err
+		}
+		// File names start with the timestamp, so sorting puts them oldest first.
+		slices.Sort(files)
+		var names []string
+		for _, file := range files {
+			source, err := os.ReadFile(file)
+			if err != nil {
+				return nil, err
+			}
+			if match := migrationClass.FindSubmatch(source); match != nil {
+				names = append(names, string(match[1]))
+			}
+		}
+		if len(names) == 0 {
+			return nil, fmt.Errorf("no %s migrations in %s", db, dir)
+		}
+		env = append(env, "KNOWLEDGE_EXPECTED_MIGRATIONS_"+strings.ToUpper(db)+"="+strings.Join(names, ","))
+	}
+	return env, nil
 }
 
 // dumpKnowledgeArgs runs the dump script in the db container, which writes to deployment/dump.

@@ -2,14 +2,20 @@
 
 `make dump-knowledge` writes the knowledge dump and its dump manifest to `deployment/dump`.
 It works from a host stack and from the devcontainer (through the broker's `dump-knowledge` command).
+The broker's code is baked into its image, so a change to its `dump-knowledge` or `seed` commands only takes effect after a
+developer rebuilds the devcontainer.
 Nothing is needed where you run it beyond the running stack: Go and Postgres tools come from its containers.
 
 ## What it does
 
 1. Runs the read-only completeness gate (`-knowledge -action validate -read-only`) in `service-package-follower` and prints its JSON report.
+   The gate expects the knowledge and config migrations found in `api/src/migrations`, passed as
+   `KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE` and `_CONFIG`, so a stale list embedded in the service cannot pass or block a dump.
+   Without an API checkout it falls back to that embedded list.
 2. If the gate fails, it stops. Nothing in `deployment/dump` changes.
 3. Otherwise it runs `.cloud/scripts/dump-knowledge-in-db.sh` inside the `db` container, with the gate report on stdin. The script:
-   - dumps `knowledge` and `config` with `pg_dump -Fc` into a staging directory under `/dump`;
+   - dumps `knowledge` and `config` with `pg_dump -Fc` into a staging directory under `/dump`. `package` and `version` ship
+     empty (schema only, `--exclude-table-data`), because packageFollower fills them on demand;
    - splits any file larger than `SPLIT_BYTES` (default 1900 MiB, under GitHub's 2 GB Git LFS file limit) into parts and removes the whole file;
    - writes `knowledge-manifest.json` and `knowledge-manifest.sha256`;
    - only then replaces the previous `knowledge.dump`, `config.dump`, their parts and the manifest files.
@@ -125,6 +131,7 @@ Every restore goes through `deployment/scripts/restore-dump.sh`, run inside the 
 
 ## Tests
 
+`sh .cloud/scripts/tests/dump-knowledge.test.sh` runs the host `dump-knowledge.sh` with a stand-in `docker`.
 `sh .cloud/scripts/tests/dump-knowledge-in-db.test.sh` runs the in-container script with stand-in `pg_dump` and `psql` (needs `jq`).
 `sh .cloud/scripts/tests/restore-dump.test.sh` restores dump sets made by that script, and refuses damaged ones, with stand-in
 `pg_restore`, `psql`, `createdb`, `docker` and `git` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).

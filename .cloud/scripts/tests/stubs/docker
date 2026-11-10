@@ -1,5 +1,13 @@
 #!/bin/sh
-# Test stand-in for docker: runs the command given to "compose ... exec [-T] db" on this machine.
+# Test stand-in for docker: logs its arguments to STUB_DOCKER_LOG, answers the completeness gate
+# with STUB_GATE_REPORT (exit 1 unless it passed), and runs "compose ... exec [-T] db" commands here.
+echo "$*" >>"${STUB_DOCKER_LOG:-/dev/null}"
+case " $* " in
+*" service-package-follower "*)
+	printf '%s\n' "$STUB_GATE_REPORT"
+	case "$STUB_GATE_REPORT" in *'"passed": true'*) exit 0 ;; *) exit 1 ;; esac
+	;;
+esac
 while [ $# -gt 0 ] && [ "$1" != db ]; do shift; done
 [ $# -gt 0 ] || { echo "docker stub: no db command" >&2; exit 1; }
 shift

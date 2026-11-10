@@ -357,10 +357,57 @@ func TestParseCertBundle(t *testing.T) {
 }
 
 func TestDumpKnowledgeGateRunsReadOnlyInTheBackendContainer(t *testing.T) {
-	got := strings.Join(knowledgeGateArgs(), " ")
-	want := "exec -T -w /codeclarity/services/knowledge service-package-follower go run . -knowledge -action validate -read-only"
+	got := strings.Join(knowledgeGateArgs([]string{"A=1", "B=2"}), " ")
+	want := "exec -T -w /codeclarity/services/knowledge -e A=1 -e B=2 service-package-follower go run . -knowledge -action validate -read-only"
 	if got != want {
 		t.Errorf("knowledgeGateArgs = %q, want %q", got, want)
+	}
+}
+
+// writeMigration writes one TypeORM migration file declaring class.
+func writeMigration(t *testing.T, dir, folder, file, class string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, folder), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := "import { MigrationInterface } from \"typeorm\";\n\nexport class " + class + " implements MigrationInterface {}\n"
+	if err := os.WriteFile(filepath.Join(dir, folder, file), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDumpKnowledgeGateExpectsTheAPIMigrations(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "knowledge", "1794528000000-AddUpstreamTotal.ts", "AddUpstreamTotal1794528000000")
+	writeMigration(t, dir, "knowledge", "1754600000000-CreateKnowledgeBaseline.ts", "CreateKnowledgeBaseline1754600000000")
+	writeMigration(t, dir, "config", "1754600000000-CreateConfigBaseline.ts", "CreateConfigBaseline1754600000000")
+	got, err := expectedMigrationsEnv(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE=CreateKnowledgeBaseline1754600000000,AddUpstreamTotal1794528000000",
+		"KNOWLEDGE_EXPECTED_MIGRATIONS_CONFIG=CreateConfigBaseline1754600000000",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("expectedMigrationsEnv = %q, want %q", got, want)
+	}
+}
+
+func TestDumpKnowledgeGateNeedsAPIMigrations(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "knowledge", "1754600000000-CreateKnowledgeBaseline.ts", "CreateKnowledgeBaseline1754600000000")
+	if _, err := expectedMigrationsEnv(dir); err == nil {
+		t.Error("a missing config migrations folder should be an error")
+	}
+}
+
+func TestTheBrokerReadsTheRepoAPIMigrations(t *testing.T) {
+	if _, err := os.Stat("../../api/package.json"); err != nil {
+		t.Skip("the api submodule is not checked out")
+	}
+	if _, err := expectedMigrationsEnv(filepath.Join("../..", apiMigrationsDir)); err != nil {
+		t.Errorf("broker reads %s: %v", apiMigrationsDir, err)
 	}
 }
 
