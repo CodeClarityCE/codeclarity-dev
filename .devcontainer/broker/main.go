@@ -75,17 +75,18 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"up":            {run: (*broker).up, takes: true},
-	"build":         {run: (*broker).build, takes: true},
-	"restart":       {run: (*broker).restart, takes: true, needService: true},
-	"logs":          {run: (*broker).logs, takes: true, needService: true},
-	"pull":          {run: (*broker).pull},
-	"down":          {run: (*broker).down},
-	"ps":            {run: (*broker).ps},
-	"seed":          {run: (*broker).seed},
-	"reset":         {run: (*broker).reset},
-	"migrate":       {run: (*broker).migrate, takes: true},
-	"knowledge-osv": {run: (*broker).knowledgeOSV},
+	"up":             {run: (*broker).up, takes: true},
+	"build":          {run: (*broker).build, takes: true},
+	"restart":        {run: (*broker).restart, takes: true, needService: true},
+	"logs":           {run: (*broker).logs, takes: true, needService: true},
+	"pull":           {run: (*broker).pull},
+	"down":           {run: (*broker).down},
+	"ps":             {run: (*broker).ps},
+	"seed":           {run: (*broker).seed},
+	"reset":          {run: (*broker).reset},
+	"migrate":        {run: (*broker).migrate, takes: true},
+	"knowledge-osv":  {run: (*broker).knowledgeOSV},
+	"dump-knowledge": {run: (*broker).dumpKnowledge},
 }
 
 func main() {
@@ -152,9 +153,15 @@ func (f *flushWriter) Write(p []byte) (int, error) {
 }
 
 func docker(w io.Writer, args ...string) int {
+	return dockerIO(w, nil, w, args...)
+}
+
+// dockerIO runs docker with its own stdin and stdout; stderr and broker errors go to w.
+func dockerIO(w io.Writer, stdin io.Reader, stdout io.Writer, args ...string) int {
 	cmd := exec.Command("docker", args...)
 	cmd.Env = append(os.Environ(), "DOCKER_HOST="+dockerHost)
-	cmd.Stdout = w
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
 	cmd.Stderr = w
 	if err := cmd.Run(); err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
@@ -278,25 +285,37 @@ func waitForDB(w io.Writer) bool {
 	return false
 }
 
-// restoreScript creates the database if it is missing, then restores the dump into it.
-func restoreScript(dump, db string) string {
-	return fmt.Sprintf(
-		`export PGPASSWORD=$POSTGRES_PASSWORD; { psql -w -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='%[2]s'" | grep -q 1 || createdb -w -U postgres %[2]s; } && pg_restore -l /dump/%[1]s.dump > /dump/%[1]s.list && pg_restore -w -U postgres -d %[2]s -L /dump/%[1]s.list /dump/%[1]s.dump`,
-		dump, db)
+// restoreDumpScript verifies and restores dumps; it runs inside the db container.
+const restoreDumpScript = "deployment/scripts/restore-dump.sh"
+
+// verifyDumpsArgs checks every dump against its manifest before anything is restored.
+func verifyDumpsArgs(script string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "verify"}
+}
+
+// restoreDumpArgs restores one dump, reassembling a split one, and creates the database if missing.
+func restoreDumpArgs(script, dump, db string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
 }
 
 func (b *broker) seed(w io.Writer, _ string) int {
+	script, err := os.ReadFile(filepath.Join(repoRoot, restoreDumpScript))
+	if err != nil {
+		fmt.Fprintf(w, "broker: cannot read the restore script: %v\n", err)
+		return 1
+	}
 	if !resolve(w) || !waitForDB(w) {
 		return 1
 	}
-	worst := 0
-	for _, r := range restores {
-		dump, db := r[0], r[1]
-		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
-		if code := docker(w, resolved("exec", "-T", "db", "sh", "-c", restoreScript(dump, db))...); code != 0 {
-			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
-			worst = code
-		}
+	verify := func() int {
+		return docker(w, resolved(verifyDumpsArgs(string(script))...)...)
+	}
+	restore := func(dump, db string) int {
+		return docker(w, resolved(restoreDumpArgs(string(script), dump, db)...)...)
+	}
+	worst, verified := seedRestores(w, verify, restore)
+	if !verified {
+		return worst
 	}
 	// Dumps are older than the schema, so bring every database up to date.
 	if code := b.runMigrations(w, migrated); code != 0 {
@@ -308,6 +327,24 @@ func (b *broker) seed(w io.Writer, _ string) int {
 		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
 	}
 	return worst
+}
+
+// seedRestores verifies the dumps, then restores each one; verified is false if nothing was restored.
+func seedRestores(w io.Writer, verify func() int, restore func(dump, db string) int) (worst int, verified bool) {
+	fmt.Fprintln(w, "broker: verifying the dumps against their manifest")
+	if code := verify(); code != 0 {
+		fmt.Fprintf(w, "broker: dump verification failed (exit %d), nothing was restored\n", code)
+		return code, false
+	}
+	for _, r := range restores {
+		dump, db := r[0], r[1]
+		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
+		if code := restore(dump, db); code != 0 {
+			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
+			worst = code
+		}
+	}
+	return worst, true
 }
 
 // migrate applies pending migrations without touching existing data.
@@ -331,9 +368,101 @@ func (b *broker) knowledgeOSV(w io.Writer, _ string) int {
 	return docker(w, resolved(knowledgeOSVArgs()...)...)
 }
 
-// knowledgeOSVArgs runs the update in a Go service container that has the backend source.
+// knowledgeArgs runs a knowledge action, with extra env, in a Go service container that has the backend source.
+func knowledgeArgs(env []string, action ...string) []string {
+	args := []string{"exec", "-T", "-w", "/codeclarity/services/knowledge"}
+	for _, e := range env {
+		args = append(args, "-e", e)
+	}
+	args = append(args, "service-package-follower", "go", "run", ".", "-knowledge", "-action")
+	return append(args, action...)
+}
+
+// knowledgeOSVArgs runs the OSV update.
 func knowledgeOSVArgs() []string {
-	return []string{"exec", "-T", "-w", "/codeclarity/services/knowledge", "service-package-follower", "go", "run", ".", "-knowledge", "-action", "update-osv"}
+	return knowledgeArgs(nil, "update-osv")
+}
+
+// dumpKnowledgeScript dumps knowledge and config with a manifest; it runs inside the db container.
+const dumpKnowledgeScript = ".cloud/scripts/dump-knowledge-in-db.sh"
+
+// dumpKnowledge dumps knowledge and config only when the completeness gate passes.
+func (b *broker) dumpKnowledge(w io.Writer, _ string) int {
+	script, err := os.ReadFile(filepath.Join(repoRoot, dumpKnowledgeScript))
+	if err != nil {
+		fmt.Fprintf(w, "broker: cannot read the dump script: %v\n", err)
+		return 1
+	}
+	if !resolve(w) || !waitForDB(w) {
+		return 1
+	}
+	env, err := expectedMigrationsEnv(filepath.Join(repoRoot, apiMigrationsDir))
+	if err != nil {
+		fmt.Fprintf(w, "broker: warning, the gate falls back to its own migration list: %v\n", err)
+	}
+	gate := func(stdout io.Writer) int {
+		return dockerIO(w, nil, stdout, resolved(knowledgeGateArgs(env)...)...)
+	}
+	dump := func(stdin io.Reader) int {
+		return dockerIO(w, stdin, w, resolved(dumpKnowledgeArgs(string(script))...)...)
+	}
+	return gatedDump(w, gate, dump)
+}
+
+// gatedDump runs the gate, shows its report, and hands the report to the dump only if it passed.
+func gatedDump(w io.Writer, gate func(stdout io.Writer) int, dump func(stdin io.Reader) int) int {
+	fmt.Fprintln(w, "broker: running the knowledge completeness gate")
+	var report bytes.Buffer
+	code := gate(&report)
+	_, _ = w.Write(report.Bytes())
+	if code != 0 {
+		fmt.Fprintf(w, "broker: the completeness gate failed (exit %d), nothing was dumped\n", code)
+		return code
+	}
+	return dump(&report)
+}
+
+// knowledgeGateArgs runs the read-only completeness gate; its JSON report is on stdout.
+func knowledgeGateArgs(env []string) []string {
+	return knowledgeArgs(env, "validate", "-read-only")
+}
+
+// apiMigrationsDir holds the API's TypeORM migrations, one folder per database.
+const apiMigrationsDir = "api/src/migrations"
+
+var migrationClass = regexp.MustCompile(`export class (\w+)`)
+
+// expectedMigrationsEnv tells the gate to expect the knowledge and config migrations in dir.
+func expectedMigrationsEnv(dir string) ([]string, error) {
+	var env []string
+	for _, db := range []string{"knowledge", "config"} {
+		files, err := filepath.Glob(filepath.Join(dir, db, "*.ts"))
+		if err != nil {
+			return nil, err
+		}
+		// File names start with the timestamp, so sorting puts them oldest first.
+		slices.Sort(files)
+		var names []string
+		for _, file := range files {
+			source, err := os.ReadFile(file)
+			if err != nil {
+				return nil, err
+			}
+			if match := migrationClass.FindSubmatch(source); match != nil {
+				names = append(names, string(match[1]))
+			}
+		}
+		if len(names) == 0 {
+			return nil, fmt.Errorf("no %s migrations in %s", db, dir)
+		}
+		env = append(env, "KNOWLEDGE_EXPECTED_MIGRATIONS_"+strings.ToUpper(db)+"="+strings.Join(names, ","))
+	}
+	return env, nil
+}
+
+// dumpKnowledgeArgs runs the dump script in the db container, which writes to deployment/dump.
+func dumpKnowledgeArgs(script string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", script, "dump-knowledge"}
 }
 
 // migrationTargets returns the databases to migrate; no name means all of them.

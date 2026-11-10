@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -233,12 +236,65 @@ func TestAlloyMatchesStackCompose(t *testing.T) {
 	}
 }
 
-func TestRestoreScriptCreatesMissingDatabase(t *testing.T) {
-	got := restoreScript("knowledge", "knowledge_test")
-	for _, want := range []string{"createdb -w -U postgres knowledge_test", "-d knowledge_test", "/dump/knowledge.dump"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("restore script is missing %q: %s", want, got)
+func TestRestoreDumpRunsTheScriptInTheDBContainer(t *testing.T) {
+	got := restoreDumpArgs("echo restoring", "knowledge", "knowledge_test")
+	want := []string{"exec", "-T", "db", "sh", "-c", "echo restoring", "restore-dump", "restore", "knowledge", "knowledge_test"}
+	if !slices.Equal(got, want) {
+		t.Errorf("restoreDumpArgs = %q, want %q", got, want)
+	}
+	got = verifyDumpsArgs("echo verifying")
+	want = []string{"exec", "-T", "db", "sh", "-c", "echo verifying", "restore-dump", "verify"}
+	if !slices.Equal(got, want) {
+		t.Errorf("verifyDumpsArgs = %q, want %q", got, want)
+	}
+}
+
+func TestRestoreDumpScriptIsInTheDeploymentRepo(t *testing.T) {
+	if _, err := os.Stat("../../deployment/scripts"); err != nil {
+		t.Skip("the deployment submodule is not checked out")
+	}
+	if _, err := os.Stat(filepath.Join("../..", restoreDumpScript)); err != nil {
+		t.Errorf("broker reads %s: %v", restoreDumpScript, err)
+	}
+}
+
+func TestSeedRestoresNothingWhenVerificationFails(t *testing.T) {
+	var out bytes.Buffer
+	var restored []string
+	verify := func() int { return 1 }
+	restore := func(dump, db string) int {
+		restored = append(restored, db)
+		return 0
+	}
+	code, ok := seedRestores(&out, verify, restore)
+	if code == 0 || ok {
+		t.Errorf("a failed verification should fail the seed, got %d, %v", code, ok)
+	}
+	if len(restored) > 0 {
+		t.Errorf("nothing should be restored, got %v", restored)
+	}
+	if !strings.Contains(out.String(), "nothing was restored") {
+		t.Errorf("the seed should say nothing was restored, got %q", out.String())
+	}
+}
+
+func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
+	var out bytes.Buffer
+	var restored [][2]string
+	verify := func() int { return 0 }
+	restore := func(dump, db string) int {
+		restored = append(restored, [2]string{dump, db})
+		if db == "config" {
+			return 4
 		}
+		return 0
+	}
+	code, ok := seedRestores(&out, verify, restore)
+	if code != 4 || !ok {
+		t.Errorf("a failed restore should give its exit code, got %d, %v", code, ok)
+	}
+	if !slices.Equal(restored, restores) {
+		t.Errorf("restored %v, want %v", restored, restores)
 	}
 }
 
@@ -297,5 +353,123 @@ func TestParseCertBundle(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(dir, "server.crt"))
 	if string(before) != string(after) {
 		t.Error("existing certs were regenerated")
+	}
+}
+
+func TestDumpKnowledgeGateRunsReadOnlyInTheBackendContainer(t *testing.T) {
+	got := strings.Join(knowledgeGateArgs([]string{"A=1", "B=2"}), " ")
+	want := "exec -T -w /codeclarity/services/knowledge -e A=1 -e B=2 service-package-follower go run . -knowledge -action validate -read-only"
+	if got != want {
+		t.Errorf("knowledgeGateArgs = %q, want %q", got, want)
+	}
+}
+
+// writeMigration writes one TypeORM migration file declaring class.
+func writeMigration(t *testing.T, dir, folder, file, class string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, folder), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := "import { MigrationInterface } from \"typeorm\";\n\nexport class " + class + " implements MigrationInterface {}\n"
+	if err := os.WriteFile(filepath.Join(dir, folder, file), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDumpKnowledgeGateExpectsTheAPIMigrations(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "knowledge", "1794528000000-AddUpstreamTotal.ts", "AddUpstreamTotal1794528000000")
+	writeMigration(t, dir, "knowledge", "1754600000000-CreateKnowledgeBaseline.ts", "CreateKnowledgeBaseline1754600000000")
+	writeMigration(t, dir, "config", "1754600000000-CreateConfigBaseline.ts", "CreateConfigBaseline1754600000000")
+	got, err := expectedMigrationsEnv(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE=CreateKnowledgeBaseline1754600000000,AddUpstreamTotal1794528000000",
+		"KNOWLEDGE_EXPECTED_MIGRATIONS_CONFIG=CreateConfigBaseline1754600000000",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("expectedMigrationsEnv = %q, want %q", got, want)
+	}
+}
+
+func TestDumpKnowledgeGateNeedsAPIMigrations(t *testing.T) {
+	dir := t.TempDir()
+	writeMigration(t, dir, "knowledge", "1754600000000-CreateKnowledgeBaseline.ts", "CreateKnowledgeBaseline1754600000000")
+	if _, err := expectedMigrationsEnv(dir); err == nil {
+		t.Error("a missing config migrations folder should be an error")
+	}
+}
+
+func TestTheBrokerReadsTheRepoAPIMigrations(t *testing.T) {
+	if _, err := os.Stat("../../api/package.json"); err != nil {
+		t.Skip("the api submodule is not checked out")
+	}
+	if _, err := expectedMigrationsEnv(filepath.Join("../..", apiMigrationsDir)); err != nil {
+		t.Errorf("broker reads %s: %v", apiMigrationsDir, err)
+	}
+}
+
+func TestDumpKnowledgeRunsTheScriptInTheDBContainer(t *testing.T) {
+	got := dumpKnowledgeArgs("echo dumping")
+	want := []string{"exec", "-T", "db", "sh", "-c", "echo dumping", "dump-knowledge"}
+	if !slices.Equal(got, want) {
+		t.Errorf("dumpKnowledgeArgs = %q, want %q", got, want)
+	}
+}
+
+func TestDumpKnowledgeScriptIsInTheRepo(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("../..", dumpKnowledgeScript)); err != nil {
+		t.Errorf("broker reads %s: %v", dumpKnowledgeScript, err)
+	}
+}
+
+func TestDumpKnowledgeTakesNoArgument(t *testing.T) {
+	cmd, ok := commands["dump-knowledge"]
+	if !ok || cmd.takes {
+		t.Errorf("dump-knowledge should be a command without an argument, got %+v, %v", cmd, ok)
+	}
+}
+
+func TestDumpKnowledgeStopsWhenTheGateFails(t *testing.T) {
+	var out bytes.Buffer
+	dumped := false
+	gate := func(stdout io.Writer) int {
+		fmt.Fprintln(stdout, `{"passed": false}`)
+		return 1
+	}
+	dump := func(io.Reader) int {
+		dumped = true
+		return 0
+	}
+	if code := gatedDump(&out, gate, dump); code == 0 {
+		t.Error("a failed gate should fail the command")
+	}
+	if dumped {
+		t.Error("a failed gate must not dump")
+	}
+	if !strings.Contains(out.String(), `{"passed": false}`) {
+		t.Errorf("the gate report should be shown, got %q", out.String())
+	}
+}
+
+func TestDumpKnowledgeHandsThePassingReportToTheDump(t *testing.T) {
+	var out bytes.Buffer
+	var got string
+	gate := func(stdout io.Writer) int {
+		fmt.Fprintln(stdout, `{"passed": true}`)
+		return 0
+	}
+	dump := func(stdin io.Reader) int {
+		raw, _ := io.ReadAll(stdin)
+		got = string(raw)
+		return 3
+	}
+	if code := gatedDump(&out, gate, dump); code != 3 {
+		t.Errorf("the command should exit with the dump's status, got %d", code)
+	}
+	if got != "{\"passed\": true}\n" {
+		t.Errorf("dump read %q from stdin", got)
 	}
 }
