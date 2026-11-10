@@ -3,13 +3,18 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // goodConfig returns a valid resolved config rooted at a temp repo.
@@ -471,5 +476,118 @@ func TestDumpKnowledgeHandsThePassingReportToTheDump(t *testing.T) {
 	}
 	if got != "{\"passed\": true}\n" {
 		t.Errorf("dump read %q from stdin", got)
+	}
+}
+
+// updateRun records what updateKnowledge would hand to docker.
+type updateRun struct {
+	called bool
+	env    []string
+	args   []string
+}
+
+func (u *updateRun) run(env, args []string) int {
+	u.called, u.env, u.args = true, env, args
+	return 0
+}
+
+func TestKnowledgeUpdateRefusesWithoutTheSecretsFile(t *testing.T) {
+	var out bytes.Buffer
+	var u updateRun
+	code := updateKnowledge(&out, filepath.Join(t.TempDir(), ".env.secrets"), func() bool { return true }, u.run)
+	if code == 0 || u.called {
+		t.Errorf("exit %d, ran %v; want a refusal before docker runs", code, u.called)
+	}
+	if !strings.Contains(out.String(), ".env.secrets") {
+		t.Errorf("output should name the secrets file, got %q", out.String())
+	}
+}
+
+func writeSecrets(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), ".env.secrets")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestKnowledgeUpdateRefusesAnUnsetKey(t *testing.T) {
+	for name, content := range map[string]string{
+		"no key":             "OTHER=1\n",
+		"empty":              "NVD_API_KEY=\n",
+		"empty quotes":       "NVD_API_KEY=\"\"\n",
+		"placeholder":        "NVD_API_KEY=!ChangeMe!\n",
+		"quoted placeholder": "NVD_API_KEY=\"!ChangeMe!\"\n",
+		"commented out":      "# NVD_API_KEY=abc\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			var u updateRun
+			code := updateKnowledge(&out, writeSecrets(t, content), func() bool { return true }, u.run)
+			if code == 0 || u.called {
+				t.Errorf("exit %d, ran %v; want a refusal before docker runs", code, u.called)
+			}
+			if !strings.Contains(out.String(), "NVD_API_KEY") {
+				t.Errorf("output should name NVD_API_KEY, got %q", out.String())
+			}
+		})
+	}
+}
+
+func TestKnowledgeUpdatePassesTheKeyOnlyInTheEnvironment(t *testing.T) {
+	const secret = "s3cr3t-nvd-key"
+	var out bytes.Buffer
+	var u updateRun
+	path := writeSecrets(t, "# NVD key\nNVD_API_KEY=\""+secret+"\"\n")
+	if code := updateKnowledge(&out, path, func() bool { return true }, u.run); code != 0 {
+		t.Fatalf("exit %d, output %q", code, out.String())
+	}
+	want := "exec -T -w /codeclarity/services/knowledge -e NVD_API_KEY service-package-follower go run . -knowledge -action update"
+	if got := strings.Join(u.args, " "); got != want {
+		t.Errorf("args = %q, want %q", got, want)
+	}
+	if !slices.Equal(u.env, []string{"NVD_API_KEY=" + secret}) {
+		t.Errorf("env = %q, want only the NVD key", u.env)
+	}
+	if strings.Contains(out.String(), secret) {
+		t.Errorf("output leaks the key: %q", out.String())
+	}
+}
+
+func TestKnowledgeUpdateStopsWhenTheStackIsNotReady(t *testing.T) {
+	var u updateRun
+	code := updateKnowledge(io.Discard, writeSecrets(t, "NVD_API_KEY=abc\n"), func() bool { return false }, u.run)
+	if code == 0 || u.called {
+		t.Errorf("exit %d, ran %v; want a failure without running the update", code, u.called)
+	}
+}
+
+func TestKnowledgeUpdateTakesNoArgument(t *testing.T) {
+	cmd, ok := commands["knowledge-update"]
+	if !ok || cmd.takes || cmd.needService {
+		t.Errorf("knowledge-update should be a command without an argument, got %+v, %v", cmd, ok)
+	}
+}
+
+// goneClient is a response whose client has disconnected.
+type goneClient struct{ http.ResponseWriter }
+
+func (goneClient) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+func TestOutputKeepsDrainingAfterTheClientLeaves(t *testing.T) {
+	out := &flushWriter{w: goneClient{httptest.NewRecorder()}}
+	cmd := exec.Command("sh", "-c", "head -c 1000000 /dev/zero")
+	cmd.Stdout = out
+	done := make(chan error, 1)
+	go func() { done <- cmd.Run() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("command failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("command blocked once the client was gone")
 	}
 }

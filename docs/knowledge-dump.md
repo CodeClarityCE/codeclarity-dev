@@ -6,6 +6,22 @@ The broker's code is baked into its image, so a change to its `dump-knowledge` o
 developer rebuilds the devcontainer.
 Nothing is needed where you run it beyond the running stack: Go and Postgres tools come from its containers.
 
+## Building the knowledge data
+
+`make knowledge-update` runs the full update (`-knowledge -action update`) that a dump is built from. On the host it reads
+`NVD_API_KEY` from `.cloud/env/.env.makefile`. In the devcontainer it goes through the broker's `knowledge-update` command,
+which runs it in `service-package-follower` with the key from `.cloud/env/.env.secrets`:
+
+1. `cp .cloud/env/.env.secrets.example .cloud/env/.env.secrets` and set `NVD_API_KEY`. The file is gitignored; never put the key
+   in `.env.dev` or `.env.makefile`, which are tracked.
+2. `make up` (and `make seed` on an empty stack), then `make knowledge-update`, then `make dump-knowledge`.
+
+The broker reads only `NVD_API_KEY` from that file, at run time, and refuses to start if the file or key is missing, empty or
+`!ChangeMe!`. It passes the key to `docker compose exec` as `-e NVD_API_KEY` with the value in docker's environment, so it is
+not in the command line or the broker's logs. Neither the broker nor its client times out, and output streams as it runs.
+The update takes 2 to 4 hours, and the broker runs one command at a time, so other `make` targets wait until it ends; read
+logs from Loki meanwhile. If the client stops or its terminal closes, the update still runs to the end; the broker log records its exit status.
+
 ## What it does
 
 1. Runs the read-only completeness gate (`-knowledge -action validate -read-only`) in `service-package-follower` and prints its JSON report.

@@ -75,18 +75,19 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"up":             {run: (*broker).up, takes: true},
-	"build":          {run: (*broker).build, takes: true},
-	"restart":        {run: (*broker).restart, takes: true, needService: true},
-	"logs":           {run: (*broker).logs, takes: true, needService: true},
-	"pull":           {run: (*broker).pull},
-	"down":           {run: (*broker).down},
-	"ps":             {run: (*broker).ps},
-	"seed":           {run: (*broker).seed},
-	"reset":          {run: (*broker).reset},
-	"migrate":        {run: (*broker).migrate, takes: true},
-	"knowledge-osv":  {run: (*broker).knowledgeOSV},
-	"dump-knowledge": {run: (*broker).dumpKnowledge},
+	"up":               {run: (*broker).up, takes: true},
+	"build":            {run: (*broker).build, takes: true},
+	"restart":          {run: (*broker).restart, takes: true, needService: true},
+	"logs":             {run: (*broker).logs, takes: true, needService: true},
+	"pull":             {run: (*broker).pull},
+	"down":             {run: (*broker).down},
+	"ps":               {run: (*broker).ps},
+	"seed":             {run: (*broker).seed},
+	"reset":            {run: (*broker).reset},
+	"migrate":          {run: (*broker).migrate, takes: true},
+	"knowledge-osv":    {run: (*broker).knowledgeOSV},
+	"knowledge-update": {run: (*broker).knowledgeUpdate},
+	"dump-knowledge":   {run: (*broker).dumpKnowledge},
 }
 
 func main() {
@@ -140,16 +141,25 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 	entry.WithFields(log.Fields{"exit": code, "seconds": int(time.Since(start).Seconds())}).Info("command finished")
 }
 
+// flushWriter streams output; once the client is gone it discards output so the command still finishes.
 type flushWriter struct {
-	w http.ResponseWriter
+	w    http.ResponseWriter
+	gone bool
 }
 
 func (f *flushWriter) Write(p []byte) (int, error) {
-	n, err := f.w.Write(p)
+	if f.gone {
+		return len(p), nil
+	}
+	if _, err := f.w.Write(p); err != nil {
+		f.gone = true
+		log.WithError(err).Warn("client left, discarding output")
+		return len(p), nil
+	}
 	if flusher, ok := f.w.(http.Flusher); ok {
 		flusher.Flush()
 	}
-	return n, err
+	return len(p), nil
 }
 
 func docker(w io.Writer, args ...string) int {
@@ -158,8 +168,13 @@ func docker(w io.Writer, args ...string) int {
 
 // dockerIO runs docker with its own stdin and stdout; stderr and broker errors go to w.
 func dockerIO(w io.Writer, stdin io.Reader, stdout io.Writer, args ...string) int {
+	return dockerEnv(w, nil, stdin, stdout, args...)
+}
+
+// dockerEnv is dockerIO with extra environment for the docker process, kept out of argv.
+func dockerEnv(w io.Writer, env []string, stdin io.Reader, stdout io.Writer, args ...string) int {
 	cmd := exec.Command("docker", args...)
-	cmd.Env = append(os.Environ(), "DOCKER_HOST="+dockerHost)
+	cmd.Env = append(append(os.Environ(), "DOCKER_HOST="+dockerHost), env...)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = w
@@ -381,6 +396,55 @@ func knowledgeArgs(env []string, action ...string) []string {
 // knowledgeOSVArgs runs the OSV update.
 func knowledgeOSVArgs() []string {
 	return knowledgeArgs(nil, "update-osv")
+}
+
+// knowledgeUpdate runs the full knowledge update, which needs the NVD key and takes hours.
+func (b *broker) knowledgeUpdate(w io.Writer, _ string) int {
+	ready := func() bool { return resolve(w) && waitForDB(w) }
+	run := func(env, args []string) int { return dockerEnv(w, env, nil, w, resolved(args...)...) }
+	return updateKnowledge(w, filepath.Join(repoRoot, secretsFile), ready, run)
+}
+
+// secretsFile holds developer secrets; it is gitignored and read only when a command needs it.
+const secretsFile = ".cloud/env/.env.secrets"
+
+// updateKnowledge runs the full knowledge update with the NVD key from path, passed only in docker's environment.
+func updateKnowledge(w io.Writer, path string, ready func() bool, run func(env, args []string) int) int {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(w, "broker: cannot read %s; copy %s.example and set NVD_API_KEY\n", secretsFile, secretsFile)
+		return 1
+	}
+	key := envValue(raw, "NVD_API_KEY")
+	if key == "" || key == "!ChangeMe!" {
+		fmt.Fprintf(w, "broker: NVD_API_KEY is not set in %s\n", secretsFile)
+		return 1
+	}
+	if !ready() {
+		return 1
+	}
+	return run([]string{"NVD_API_KEY=" + key}, knowledgeUpdateArgs())
+}
+
+// knowledgeUpdateArgs runs the full update; -e names the key so its value stays out of argv.
+func knowledgeUpdateArgs() []string {
+	return knowledgeArgs([]string{"NVD_API_KEY"}, "update")
+}
+
+// envValue returns name's value from env file content, without surrounding quotes.
+func envValue(raw []byte, name string) string {
+	value := ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && strings.TrimSpace(k) == name {
+			v = strings.TrimSpace(v)
+			if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+				v = v[1 : len(v)-1]
+			}
+			value = v
+		}
+	}
+	return value
 }
 
 // dumpKnowledgeScript dumps knowledge and config with a manifest; it runs inside the db container.

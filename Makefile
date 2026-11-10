@@ -56,8 +56,8 @@ knowledge-setup: ## Creates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
 
 knowledge-update: export PG_DB_PORT = 6433
-knowledge-update: ## Updates the database
-	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
+knowledge-update: ## Updates the database (NVD_API_KEY; in the devcontainer from .cloud/env/.env.secrets)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -; fi
 
 knowledge-update-osv: export PG_DB_PORT = 6433
 knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
