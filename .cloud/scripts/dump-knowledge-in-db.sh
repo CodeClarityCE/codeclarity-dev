@@ -68,7 +68,11 @@ files=""
 for db in $DATABASES; do
 	name="$db.dump"
 	echo "dump-knowledge: dumping $db"
-	pg_dump -w -U postgres -d "$db" -Fc -f "$staging/$name"
+	# package and version ship empty (schema only): packageFollower fills them on demand.
+	no_data=""
+	[ "$db" = knowledge ] && no_data="--exclude-table-data=package --exclude-table-data=version"
+	# shellcheck disable=SC2086
+	pg_dump -w -U postgres -d "$db" $no_data -Fc -f "$staging/$name"
 	size=$(stat -c %s "$staging/$name")
 	whole=$(sha "$staging/$name")
 	parts=""

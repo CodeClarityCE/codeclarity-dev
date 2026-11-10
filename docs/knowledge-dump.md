@@ -9,7 +9,8 @@ Nothing is needed where you run it beyond the running stack: Go and Postgres too
 1. Runs the read-only completeness gate (`-knowledge -action validate -read-only`) in `service-package-follower` and prints its JSON report.
 2. If the gate fails, it stops. Nothing in `deployment/dump` changes.
 3. Otherwise it runs `.cloud/scripts/dump-knowledge-in-db.sh` inside the `db` container, with the gate report on stdin. The script:
-   - dumps `knowledge` and `config` with `pg_dump -Fc` into a staging directory under `/dump`;
+   - dumps `knowledge` and `config` with `pg_dump -Fc` into a staging directory under `/dump`. `package` and `version` ship
+     empty (schema only, `--exclude-table-data`), because packageFollower fills them on demand;
    - splits any file larger than `SPLIT_BYTES` (default 1900 MiB, under GitHub's 2 GB Git LFS file limit) into parts and removes the whole file;
    - writes `knowledge-manifest.json` and `knowledge-manifest.sha256`;
    - only then replaces the previous `knowledge.dump`, `config.dump`, their parts and the manifest files.

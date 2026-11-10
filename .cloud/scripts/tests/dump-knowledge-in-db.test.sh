@@ -132,7 +132,20 @@ test_failed_pg_dump_keeps_the_previous_dump() {
 	check "a failed pg_dump leaves the previous dump untouched and no staging files" $result
 }
 
+test_package_and_version_ship_empty() {
+	fresh ship_empty
+	result=ok
+	log="$work/pg_dump.log"
+	: >"$log"
+	printf '%s\n' "$pass_report" | STUB_PG_DUMP_LOG="$log" dump "$dir" || result=bad
+	grep -e '-d knowledge' "$log" | grep -q -e '--exclude-table-data=package --exclude-table-data=version' || result=bad
+	grep -e '-d config' "$log" | grep -q -e '--exclude-table-data' && result=bad
+	cat "$log" >>"$work/out"
+	check "knowledge ships the package and version tables without data" $result
+}
+
 test_failed_gate_writes_nothing
+test_package_and_version_ship_empty
 test_passing_gate_writes_dumps_and_manifest
 test_large_dump_is_split_into_checksummed_parts
 test_a_new_dump_removes_old_parts

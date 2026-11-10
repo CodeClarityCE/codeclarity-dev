@@ -4,6 +4,8 @@ if [ "$1" = "--version" ]; then
 	echo "pg_dump (PostgreSQL) 18.6"
 	exit 0
 fi
+# Logs each call's arguments to STUB_PG_DUMP_LOG when set.
+[ -n "$STUB_PG_DUMP_LOG" ] && echo "$*" >>"$STUB_PG_DUMP_LOG"
 db="" file=""
 while [ $# -gt 0 ]; do
 	case "$1" in
