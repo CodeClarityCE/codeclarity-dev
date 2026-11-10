@@ -27,7 +27,7 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - **Frontend**: Vue.js 3 + TypeScript + Tailwind CSS + Reka UI (port 443)
 - **API**: NestJS + TypeScript + TypeORM
 - **Backend**: Go microservices + Bun ORM
-- **Databases**: PostgreSQL with 3 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (plugin metadata)
+- **Databases**: PostgreSQL with 4 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (one row of knowledge source watermarks: `nvd_last`, `gcve_last`, `osv_last`), `plugins` (plugin metadata). API migrations own the schema of all four.
 - **Message Queue**: RabbitMQ for async task processing
 - **Go module paths**: `github.com/CodeClarityCE/plugin-*`, `github.com/CodeClarityCE/utility-types`
 - **Message flow**: API Request -> Dispatcher -> Downloader (if git needed) -> Dispatcher -> Plugins (stage execution) -> Dispatcher (results)
@@ -95,6 +95,8 @@ The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the P
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
 - `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
+
+Empty `knowledge` and `config` databases need no dump: running the API migrations creates every base table and the `config` row with null watermarks, so the first knowledge update does a full fetch.
 
 Migration workflow: see `.claude/rules/database-migrations.md`.
 
