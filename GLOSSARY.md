@@ -39,3 +39,37 @@ _Avoid_: Manifest row, job, attempt
 **Vulnerability instance**:
 One (vulnerability, affected dependency, workspace) finding within one analysis. A project's load is its count of vulnerability instances.
 _Avoid_: Vulnerability (when counting), finding
+
+### Knowledge
+
+**Knowledge source**:
+An external body of vulnerability or weakness data mirrored separately into the knowledge database, such as OSV, NVD or GCVE.
+_Avoid_: Dataset (that is a repository cohort), feed
+
+**Source origin**:
+The upstream authority a knowledge source's data derives from. Knowledge sources sharing an origin do not corroborate each other.
+_Avoid_: Provider
+
+**Source watermark**:
+The point up to which a knowledge source is known to be completely synchronized.
+_Avoid_: Cursor, last update
+
+**Canonical vulnerability**:
+The single identity of a vulnerability, linking every alias it has across knowledge sources.
+_Avoid_: CVE (when the identity may have none), vuln ID
+
+**Source match**:
+One knowledge source's claim that a canonical vulnerability affects a dependency version, kept whether or not that source is chosen for display.
+_Avoid_: Conflict, pair
+
+**Winning source**:
+The knowledge source whose data is displayed for a vulnerability instance when several source matches exist.
+_Avoid_: Primary source, truth
+
+**Retired record**:
+A knowledge record its source no longer asserts because it was rejected, withdrawn or removed, kept with the reason and date.
+_Avoid_: Deleted record
+
+**Malicious package advisory**:
+A statement that a package or version is intentionally harmful, as opposed to carrying a vulnerability.
+_Avoid_: Vulnerability, MAL
