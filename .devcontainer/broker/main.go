@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -72,6 +73,8 @@ type command struct {
 	run         func(b *broker, w io.Writer, service string) int
 	takes       bool
 	needService bool
+	// runWaived replaces run for a command that takes a gate waiver, given as environment.
+	runWaived func(b *broker, w io.Writer, waiver []string) int
 }
 
 var commands = map[string]command{
@@ -87,7 +90,7 @@ var commands = map[string]command{
 	"migrate":          {run: (*broker).migrate, takes: true},
 	"knowledge-osv":    {run: (*broker).knowledgeOSV},
 	"knowledge-update": {run: (*broker).knowledgeUpdate},
-	"dump-knowledge":   {run: (*broker).dumpKnowledge},
+	"dump-knowledge":   {runWaived: (*broker).dumpKnowledge},
 }
 
 func main() {
@@ -129,6 +132,18 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad service argument", http.StatusBadRequest)
 		return
 	}
+	waive, reason := r.URL.Query().Get("waive"), r.URL.Query().Get("reason")
+	if cmd.runWaived == nil && (waive != "" || reason != "") {
+		entry.Warn("rejected a waiver on a command without a gate")
+		http.Error(w, "this command takes no waiver", http.StatusBadRequest)
+		return
+	}
+	waiver, err := gateWaiverEnv(waive, reason)
+	if err != nil {
+		entry.WithError(err).Warn("rejected bad waiver")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// One operation at a time.
 	b.mu.Lock()
@@ -136,7 +151,12 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 
 	out := &flushWriter{w: w}
 	start := time.Now()
-	code := cmd.run(b, out, service)
+	var code int
+	if cmd.runWaived != nil {
+		code = cmd.runWaived(b, out, waiver)
+	} else {
+		code = cmd.run(b, out, service)
+	}
 	fmt.Fprintf(out, "%s %d\n", exitMarker, code)
 	entry.WithFields(log.Fields{"exit": code, "seconds": int(time.Since(start).Seconds())}).Info("command finished")
 }
@@ -450,8 +470,9 @@ func envValue(raw []byte, name string) string {
 // dumpKnowledgeScript dumps knowledge and config with a manifest; it runs inside the db container.
 const dumpKnowledgeScript = ".cloud/scripts/dump-knowledge-in-db.sh"
 
-// dumpKnowledge dumps knowledge and config only when the completeness gate passes.
-func (b *broker) dumpKnowledge(w io.Writer, _ string) int {
+// dumpKnowledge dumps knowledge and config only when the completeness gate passes,
+// with any waived checks recorded in the gate report.
+func (b *broker) dumpKnowledge(w io.Writer, waiver []string) int {
 	script, err := os.ReadFile(filepath.Join(repoRoot, dumpKnowledgeScript))
 	if err != nil {
 		fmt.Fprintf(w, "broker: cannot read the dump script: %v\n", err)
@@ -464,6 +485,7 @@ func (b *broker) dumpKnowledge(w io.Writer, _ string) int {
 	if err != nil {
 		fmt.Fprintf(w, "broker: warning, the gate falls back to its own migration list: %v\n", err)
 	}
+	env = append(env, waiver...)
 	gate := func(stdout io.Writer) int {
 		return dockerIO(w, nil, stdout, resolved(knowledgeGateArgs(env)...)...)
 	}
@@ -484,6 +506,28 @@ func gatedDump(w io.Writer, gate func(stdout io.Writer) int, dump func(stdin io.
 		return code
 	}
 	return dump(&report)
+}
+
+// waivedChecks is a comma-separated list of <source>.<check> or <source>.* gate check patterns.
+var waivedChecks = regexp.MustCompile(`^[a-z_]+\.([a-z_]+|\*)(,[a-z_]+\.([a-z_]+|\*))*$`)
+
+// maxWaiverReason bounds the reason recorded in the gate report.
+const maxWaiverReason = 300
+
+// gateWaiverEnv checks a waiver from make's WAIVE and REASON and returns it as the gate's environment.
+// The gate itself refuses checks that cannot be waived.
+func gateWaiverEnv(waive, reason string) ([]string, error) {
+	if waive == "" && reason == "" {
+		return nil, nil
+	}
+	if !waivedChecks.MatchString(waive) {
+		return nil, fmt.Errorf("WAIVE must list <source>.<check> or <source>.* patterns, got %q", waive)
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" || len(reason) > maxWaiverReason || strings.IndexFunc(reason, unicode.IsControl) >= 0 {
+		return nil, fmt.Errorf("REASON must be one line of at most %d characters", maxWaiverReason)
+	}
+	return []string{"KNOWLEDGE_GATE_WAIVE=" + waive, "KNOWLEDGE_GATE_WAIVE_REASON=" + reason}, nil
 }
 
 // knowledgeGateArgs runs the read-only completeness gate; its JSON report is on stdout.
