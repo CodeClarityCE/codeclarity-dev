@@ -1,3 +1,12 @@
+# Dumps one database to deployment/dump/<db>.dump. knowledge and config go through
+# dump-knowledge.sh instead, so they are only dumped after the completeness gate passes.
+case "$1" in
+knowledge | config)
+	echo "Error: dump $1 with make dump-knowledge, which runs the completeness gate first" >&2
+	exit 1
+	;;
+esac
+
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
 	-f ../../frontend/.cloud/docker/docker-compose.yaml \

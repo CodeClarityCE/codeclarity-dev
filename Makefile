@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config
+.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge dump-database
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -32,7 +32,7 @@ restart: ## Restarts one service in the devcontainer (SERVICE=name)
 ps: ## Lists the agent stack's containers in the devcontainer
 	@$(BROKER) ps
 
-seed: ## Restores all databases from deployment/dump in the devcontainer
+seed: ## Verifies deployment/dump against its manifest, then restores all databases in the devcontainer
 	@$(BROKER) seed
 
 reset: ## Wipes the agent stack's data, then starts and seeds it in the devcontainer
@@ -56,8 +56,8 @@ knowledge-setup: ## Creates the database
 	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
 
 knowledge-update: export PG_DB_PORT = 6433
-knowledge-update: ## Updates the database
-	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -
+knowledge-update: ## Updates the database (NVD_API_KEY; in the devcontainer from .cloud/env/.env.secrets)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -; fi
 
 knowledge-update-osv: export PG_DB_PORT = 6433
 knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
@@ -67,12 +67,15 @@ knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
 download-dumps: ## Downloads the database dump
 	@sh deployment/scripts/download-dumps.sh
 
-dump-database: ## Dumps the database
-	@cd .cloud/scripts && sh dump-db.sh codeclarity
-	@cd .cloud/scripts && sh dump-db.sh knowledge
-	@cd .cloud/scripts && sh dump-db.sh config
+dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) dump-knowledge; else cd .cloud/scripts && sh dump-knowledge.sh; fi
 
-restore-database: ## Restores the database
+dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowledge
+	@cd .cloud/scripts && sh dump-db.sh codeclarity
+	@$(MAKE) --no-print-directory dump-knowledge
+
+restore-database: ## Verifies the dumps against their manifest, then restores the databases
+	@cd .cloud/scripts && sh restore-db.sh verify
 	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config

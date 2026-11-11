@@ -34,7 +34,9 @@ paths:
 ## Key Code Patterns
 
 - **Knowledge DB types**: `backend/utilities/types/knowledge_db/` (osv.go, nvd.go, gcve.go)
-- **Mirror pattern**: `backend/services/knowledge/src/mirrors/<source>/main.go` with `Update(db, configDB)` entry point
+- **Mirror pattern**: `backend/services/knowledge/src/mirrors/<source>/main.go` with `Update(db, configDB)` entry point; `Update` wraps its work in `sourcesync.RunCounted` so each source records its own outcome and its watermark moves only on full success
+- **Upstream totals**: the sync returns `sourcesync.Result{Watermark, UpstreamTotal}`; set `UpstreamTotal` (`sourcesync.Total(n)` or `sourcesync.DistinctTotal(ids)`) to the records upstream offers, stored in `knowledge_source_sync.upstream_total` on success for the completeness gate. Nil keeps the recorded total. NVD asks for its current total even on incremental runs; GCVE counts the dump's distinct records
+- **Empty upstream**: a feed with no records must fail, not sync nothing: wrap the error with `sourcesync.ErrNoUpstreamRecords` (a total of 0 fails the same way). `sourcesync.Run` is the older form without a total
 - **Persistence**: `backend/services/knowledge/src/utilities/pgsql/<source>.go` with `BatchUpdate`, `GetUUIDs`, `BatchInsert`
 - **Vuln-finder pipeline**: Repository (query DB) -> Matcher (normalize versions) -> Match (range/exact/universal) -> Clean (merge sources) -> ConflictResolver -> Severity -> Output
 - **JSONB queries**: Use `@>` operator with GIN index; parameterize via `json.Marshal` to avoid SQL injection

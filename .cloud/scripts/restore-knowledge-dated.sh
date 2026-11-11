@@ -24,6 +24,8 @@ esac
 
 DUMP_DIR=../../deployment/dump
 
+. ./compose.sh
+
 for db in knowledge config; do
 	if [ ! -f "$DUMP_DIR/$db-$LABEL.dump" ]; then
 		echo "Error: $DUMP_DIR/$db-$LABEL.dump not found (run dump-db-dated.sh $LABEL first)" >&2
@@ -31,34 +33,13 @@ for db in knowledge config; do
 	fi
 done
 
-docker compose -f ../docker/docker-compose.yaml \
-	-f ../../api/.cloud/docker/docker-compose.yaml \
-	-f ../../frontend/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/packageFollower/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/notifier/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/downloader/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/dispatcher/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/codeql/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/license-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
+compose \
 	exec db sh -c "pg_restore -l /dump/knowledge-$LABEL.dump > /dump/knowledge-$LABEL.list && PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -w -U postgres -d knowledge --clean --if-exists -L /dump/knowledge-$LABEL.list /dump/knowledge-$LABEL.dump" || exit 1
 
-docker compose -f ../docker/docker-compose.yaml \
-	-f ../../api/.cloud/docker/docker-compose.yaml \
-	-f ../../frontend/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/packageFollower/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/notifier/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/downloader/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/dispatcher/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/codeql/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/license-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
+# Marks the database so the daemon refuses to update it and filter-asof accepts it.
+compose exec -T db sh -c "PGPASSWORD=\$POSTGRES_PASSWORD psql -v ON_ERROR_STOP=1 -w -U postgres -d knowledge -v label='$LABEL'" <mark-dated-restore.sql || exit 1
+
+compose \
 	exec db sh -c "pg_restore -l /dump/config-$LABEL.dump > /dump/config-$LABEL.list && PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -w -U postgres -d config --clean --if-exists -L /dump/config-$LABEL.list /dump/config-$LABEL.dump" || exit 1
 
 echo "Restored knowledge and config from label '$LABEL'."

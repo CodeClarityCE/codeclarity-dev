@@ -10,13 +10,14 @@
 - `make pull` - Pull latest images
 - Access at <https://localhost:443>
 - Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
+- Knowledge daemon: off in dev by default. Run `KNOWLEDGE_DAEMON_REPLICAS=1 make up` on the host to start it (`service-knowledge`, default 0 replicas); the devcontainer broker does not read the caller's shell, so the variable has no effect through it.
 - IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
 ### Agent stack in the devcontainer
 
 The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
 
-- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api` and `make logs SERVICE=api`. `up` and `build` also accept `SERVICE=`.
+- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
 - First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
@@ -26,7 +27,7 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - **Frontend**: Vue.js 3 + TypeScript + Tailwind CSS + Reka UI (port 443)
 - **API**: NestJS + TypeScript + TypeORM
 - **Backend**: Go microservices + Bun ORM
-- **Databases**: PostgreSQL with 3 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (plugin metadata)
+- **Databases**: PostgreSQL with 4 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (one row of knowledge source watermarks: `nvd_last`, `gcve_last`, `osv_last`), `plugins` (plugin metadata). API migrations own the schema of all four.
 - **Message Queue**: RabbitMQ for async task processing
 - **Go module paths**: `github.com/CodeClarityCE/plugin-*`, `github.com/CodeClarityCE/utility-types`
 - **Message flow**: API Request -> Dispatcher -> Downloader (if git needed) -> Dispatcher -> Plugins (stage execution) -> Dispatcher (results)
@@ -90,10 +91,13 @@ The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the P
 ## Database Commands
 
 - `make knowledge-setup` - Initialize knowledge DB
-- `make knowledge-update` - Update vulnerability data (needs NVD API key)
+- `make knowledge-update` - Update vulnerability data (needs NVD API key); in the devcontainer the broker reads it from the gitignored `.cloud/env/.env.secrets`. See `docs/knowledge-dump.md`
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
-- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management
+- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first and reassemble split dumps; see `docs/knowledge-dump.md`
+- `make dump-knowledge` - Dumps `knowledge` + `config` with a manifest, only after the read-only completeness gate passes; also works in the devcontainer. See `docs/knowledge-dump.md`
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
+
+Empty `knowledge` and `config` databases need no dump: running the API migrations creates every base table and the `config` row with null watermarks, so the first knowledge update does a full fetch.
 
 Migration workflow: see `.claude/rules/database-migrations.md`.
 

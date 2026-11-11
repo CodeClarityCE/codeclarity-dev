@@ -91,3 +91,45 @@ _Avoid_: Release, final results
 **Figure**:
 A named, saved definition of one visual over one experiment's results: what it measures, how it is grouped and filtered, and how it is styled. It is the definition, not the image exported from it.
 _Avoid_: Chart, plot, graph (for the saved definition)
+
+### Knowledge
+
+**Knowledge source**:
+An external body of vulnerability or weakness data mirrored separately into the knowledge database, such as OSV, NVD or GCVE.
+_Avoid_: Dataset (that is a repository cohort), feed
+
+**Source origin**:
+The upstream authority a knowledge source's data derives from. Knowledge sources sharing an origin do not corroborate each other.
+_Avoid_: Provider
+
+**Source watermark**:
+The point up to which a knowledge source is known to be completely synchronized.
+_Avoid_: Cursor, last update
+
+**Canonical vulnerability**:
+The single identity of a vulnerability, linking every alias it has across knowledge sources.
+_Avoid_: CVE (when the identity may have none), vuln ID
+
+**Source match**:
+One knowledge source's claim that a canonical vulnerability affects a dependency version, kept whether or not that source is chosen for display.
+_Avoid_: Conflict, pair
+
+**Winning source**:
+The knowledge source whose data is displayed for a vulnerability instance when several source matches exist.
+_Avoid_: Primary source, truth
+
+**Retired record**:
+A knowledge record its source no longer asserts because it was rejected, withdrawn or removed, kept with the reason and date.
+_Avoid_: Deleted record
+
+**Malicious package advisory**:
+A statement that a package or version is intentionally harmful, as opposed to carrying a vulnerability.
+_Avoid_: Vulnerability, MAL
+
+**Knowledge dump**:
+The published `knowledge` and `config` database files every new install restores, made only after the completeness gate passes.
+_Avoid_: Snapshot (that is a dated restore), backup
+
+**Dump manifest**:
+The file next to a knowledge dump that records what it holds and the SHA-256 of every file a restore must verify.
+_Avoid_: Metadata, index
