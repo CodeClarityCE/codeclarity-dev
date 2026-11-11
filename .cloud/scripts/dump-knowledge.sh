@@ -3,6 +3,7 @@
 #
 # Usage: sh dump-knowledge.sh (from .cloud/scripts)
 # Env: API_DIR (default ../../api), whose migrations the gate expects.
+#      WAIVE and REASON, gate checks to waive (<source>.<check> or <source>.*) and why; the manifest records both.
 
 API_DIR=${API_DIR:-../../api}
 
@@ -23,6 +24,8 @@ echo "Running the knowledge completeness gate"
 compose exec -T -w /codeclarity/services/knowledge \
 	-e KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE="$(api_migrations knowledge)" \
 	-e KNOWLEDGE_EXPECTED_MIGRATIONS_CONFIG="$(api_migrations config)" \
+	-e KNOWLEDGE_GATE_WAIVE="${WAIVE:-}" \
+	-e KNOWLEDGE_GATE_WAIVE_REASON="${REASON:-}" \
 	service-package-follower \
 	go run . -knowledge -action validate -read-only >"$report"
 status=$?

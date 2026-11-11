@@ -67,7 +67,7 @@ knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
 download-dumps: ## Downloads the database dump
 	@sh deployment/scripts/download-dumps.sh
 
-dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes
+dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes (WAIVE=<checks> REASON=<why> records waived checks)
 	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) dump-knowledge; else cd .cloud/scripts && sh dump-knowledge.sh; fi
 
 dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowledge

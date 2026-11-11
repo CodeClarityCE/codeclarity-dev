@@ -40,6 +40,32 @@ Any failure leaves the previous dump untouched. `make dump-database` dumps `code
 
 Dated dumps (`make dump-knowledge-dated`) are separate experiment files and are not gated.
 
+### Waiving checks
+
+When an upstream outage blocks a source and the rest of the build is worth publishing, waive that source's failing checks
+explicitly, with a reason:
+
+```sh
+make dump-knowledge WAIVE='gcve.*' REASON='CIRCL vulnrichment dump is empty upstream since 2026-10-04'
+```
+
+- `WAIVE` lists `<source>.<check>` or `<source>.*` patterns, comma-separated. Only checks of gated sources can be waived;
+  `config.rows`, the migrations checks and `dated_restore` never can. `REASON` is required, one line, at most 300 characters.
+- A waived check still fails in the report: it gains `"waived": true`, and the report gains
+  `"waiver": {"reason": "...", "checks": [...]}` listing the checks the waiver let pass. Failures it does not cover still stop the dump.
+- The manifest copies the report, so every install can see what the dump was published without. Rebuild without a waiver
+  once the upstream recovers.
+- On the host, `dump-knowledge.sh` passes `WAIVE` and `REASON` from its environment. In the devcontainer, the broker
+  accepts them only on `dump-knowledge`, and checks their shape before passing them to the gate.
+
+### Thresholds
+
+| Variable                                             | Default | Meaning                                                                                 |
+| ---------------------------------------------------- | ------- | --------------------------------------------------------------------------------------- |
+| `KNOWLEDGE_GATE_UPSTREAM_TOLERANCE_PERCENT[_SOURCE]` | 1       | How far stored records may be from the recorded upstream total                          |
+| `KNOWLEDGE_GATE_NVD_MISSING_CONFIGURATIONS_PERCENT`  | 0.1     | Share of Analyzed or Modified NVD CVEs that may lack configurations, as NVD serves some |
+| `KNOWLEDGE_STALE_AFTER_HOURS_<SOURCE>`               | varies  | Oldest watermark the gate accepts                                                       |
+
 ## Files
 
 | File                                  | Contents                                                                                  |
@@ -122,6 +148,8 @@ Verify the files on disk with `sh deployment/scripts/restore-dump.sh verify` (`D
 | `sources[].stored_records`                  | Active and retired records, the actual value of the gate's `<source>.upstream_total` check; null for sources without that check |
 | `migrations.knowledge`, `migrations.config` | Applied TypeORM migration names from each database's `migrations` table, oldest first                                           |
 | `gate`                                      | The completeness gate report that passed, verbatim                                                                              |
+| `gate.checks[].waived`                      | True on a failing check a waiver let pass                                                                                       |
+| `gate.waiver`                               | Present only when checks were waived: the `reason` and the waived `checks`                                                      |
 
 The manifest is not listed in `knowledge-manifest.sha256`, and neither file checksums itself.
 

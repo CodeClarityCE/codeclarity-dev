@@ -591,3 +591,58 @@ func TestOutputKeepsDrainingAfterTheClientLeaves(t *testing.T) {
 		t.Fatal("command blocked once the client was gone")
 	}
 }
+
+func TestGateWaiverEnv(t *testing.T) {
+	got, err := gateWaiverEnv("gcve.*,nvd.configurations", "vulnrichment upstream is empty (CIRCL), see #84")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"KNOWLEDGE_GATE_WAIVE=gcve.*,nvd.configurations",
+		"KNOWLEDGE_GATE_WAIVE_REASON=vulnrichment upstream is empty (CIRCL), see #84",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("gateWaiverEnv = %q, want %q", got, want)
+	}
+	if got, err := gateWaiverEnv("", ""); err != nil || got != nil {
+		t.Errorf("no waiver = %q, %v; want nothing", got, err)
+	}
+}
+
+func TestGateWaiverEnvRefuses(t *testing.T) {
+	cases := []struct{ name, waive, reason string }{
+		{"no reason", "gcve.*", ""},
+		{"reason alone", "", "why"},
+		{"bare source", "gcve", "why"},
+		{"everything", "*", "why"},
+		{"shell text", "gcve.*;rm", "why"},
+		{"upper case", "GCVE.*", "why"},
+		{"newline in reason", "gcve.*", "one\ntwo"},
+		{"long reason", "gcve.*", strings.Repeat("a", 301)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got, err := gateWaiverEnv(c.waive, c.reason); err == nil {
+				t.Errorf("accepted %q", got)
+			}
+		})
+	}
+}
+
+func TestOnlyDumpKnowledgeTakesAWaiver(t *testing.T) {
+	cases := []string{
+		"/ps?waive=gcve.*&reason=why",
+		"/knowledge-update?reason=why",
+		"/dump-knowledge?waive=gcve&reason=why",
+		"/dump-knowledge?waive=gcve.*",
+	}
+	for _, target := range cases {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			(&broker{}).handle(rec, httptest.NewRequest(http.MethodPost, target, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+		})
+	}
+}
