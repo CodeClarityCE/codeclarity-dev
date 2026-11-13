@@ -24,7 +24,7 @@ The counts below cover the 367 `.vue` files under `frontend/src`.
 | Icons         | 928 Iconify icons from 22 sets (mostly Solar and tabler); Lucide inside shadcn.                                                                                                                                                                                                               |
 | Charts        | Two d3 generations: generic charts in `base_components/data-display/charts` and the newer Experiment charts in `experiments/charts` (export, captions, table fallback).                                                                                                                       |
 | Shell         | 7-item top nav, hidden below 768px.                                                                                                                                                                                                                                                           |
-| Accessibility | Focus rings only inside shadcn components, 36 `aria-*` attributes, 7 `<img>` without `alt`. axe-core and Percy suites exist.                                                                                                                                                                  |
+| Accessibility | Focus rings only inside shadcn components, 36 `aria-*` attributes, 7 `<img>` without `alt`. axe-core is installed; Percy is configured but takes no snapshots.                                                                                                                                |
 | Brand drift   | `index.html` tile colour `#008491`; it references a `/site.webmanifest` that does not exist.                                                                                                                                                                                                  |
 
 ## Landing page reference values
@@ -43,7 +43,7 @@ The counts below cover the 367 `.vue` files under `frontend/src`.
 
 ## Phase 1: one design system, research first
 
-Each step below is one issue. A step is done when its files are off the lint allowlist, the axe suite passes, and its Percy snapshots at 1280 and 1920 are approved.
+Each step below is one issue. A step is done when its files are off the lint allowlist, its Playwright e2e spec passes axe (WCAG 2.2 AA) and keyboard checks, and its screenshot baselines at 1280 and 1920 are approved in review.
 
 ### Foundation
 
@@ -77,7 +77,7 @@ Each step below is one issue. A step is done when its files are off the lint all
    - raw Tailwind palette classes and `bg-theme-*`;
    - Iconify imports outside the logo sets;
    - imports of deleted `base_components`.
-9. **Dependency cleanup.** Remove `vue-toast-notification`, `sass`, `@formkit/auto-animate` and the unused Iconify sets once nothing imports them. Point Percy at 1280 and 1920 instead of 375, 768 and 1280.
+9. **Dependency cleanup.** Remove `vue-toast-notification`, `sass`, `@formkit/auto-animate` and the unused Iconify sets once nothing imports them. Remove Percy (`@percy/*` and its config) in favour of Playwright's built-in screenshots, whose baselines live in git.
 
 ### Pages, in order
 
