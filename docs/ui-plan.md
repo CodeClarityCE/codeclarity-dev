@@ -54,7 +54,7 @@ Each step below is one issue. A step is done when its files are off the lint all
    - Fix the tile colour and the manifest reference.
 2. **Typography.** Make Lato the only `--font-sans`, drop Roboto, add a single `--font-mono`, remove the inline `<body>` style, and add a heading utility for green emphasis.
 3. **State colours** (`ready-for-human`: needs the values chosen).
-   - An AA-contrast severity ramp (critical, high, medium, low, none) that never uses brand green, always shown with a label or icon.
+   - An AA-contrast severity ramp (critical, high, medium, low, none) that never uses brand green, always shown with a label or icon. It follows the red-to-yellow convention of security tools, from the landing page's Bootstrap palette: critical `#9b1c2c`, high `#dc3545`, medium `#fd7e14`, low `#ffc107`, none `#6c757d`. Medium and low use `#111` text, and their chart marks get a darker outline to reach 3:1.
    - Small semantic sets for snapshot outcome (done, failed, skipped), licence status and patch status.
 4. **Icons.** Migrate every icon to Lucide. Keep only `simple-icons` and `devicon` for brand and language logos, bundled locally so the app makes no third-party icon requests.
 5. **Components.** shadcn wins wherever there is a duplicate:
