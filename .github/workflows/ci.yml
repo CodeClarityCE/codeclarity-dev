@@ -31,6 +31,8 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
+        # Explicit bash adds pipefail, so findings fail the step through the sed.
+        shell: bash
         run: |
           # Every tracked *.sh file; submodules lint their own. Findings become annotations.
           git ls-files -z '*.sh' | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
