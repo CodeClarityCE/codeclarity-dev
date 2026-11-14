@@ -437,3 +437,6 @@ for key in "${ORDER[@]}"; do
 	[[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
 	if [[ $DRY_RUN -eq 1 ]]; then plan "$key"; else release "$key"; fi
 done
+
+# Deliberate shellcheck error for the #99 probe.
+echo $1
