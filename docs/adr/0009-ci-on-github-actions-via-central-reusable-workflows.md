@@ -22,7 +22,7 @@ Main builds run amd64 on `ubuntu-24.04` and arm64 on `ubuntu-24.04-arm`, each pu
 
 ### The same pinned Go image and Dockerfile toolchain target instead of setup actions
 
-Go jobs run in a job container from the same digest-pinned `golang:1.27.3` image Jenkins uses. Node jobs build the Dockerfile's `toolchain` target and run each step in it, so Node, corepack and pnpm versions still come from one place.
+Go jobs run in a job container from the same digest-pinned `golang:1.27.4` image Jenkins uses. Node jobs build the Dockerfile's `toolchain` target and run each step in it, so Node, corepack and pnpm versions still come from one place.
 
 - `actions/setup-go` and `actions/setup-node`: they install a toolchain chosen by version string, not digest, so CI could drift from what the Dockerfiles build with, and pnpm would need a second source of truth next to `packageManager`.
 
