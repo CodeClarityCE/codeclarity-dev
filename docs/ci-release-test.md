@@ -59,7 +59,8 @@ Do both steps together, so Jenkins and Actions never race on the same tag:
 - [ ] The build provenance attestation verifies:
 
   ```bash
-  gh attestation verify oci://index.docker.io/$IMAGE:$DOCKER_TAG -R CodeClarityCE/$REPO
+  gh attestation verify oci://index.docker.io/$IMAGE:$DOCKER_TAG -R CodeClarityCE/$REPO \
+    --signer-repo CodeClarityCE/.github
   ```
 
 - [ ] The tag points at the merged commit:

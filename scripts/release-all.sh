@@ -200,6 +200,37 @@ bump() {
 }
 
 # Version as written in the repo's version file (package.json has no "v").
+# Version in main's version file, with a v prefix; empty when there is none.
+main_version() {
+	local file v
+	file="$(version_file "$1")"
+	[[ -z "$file" ]] && return 0
+	v="$(in_repo "$1" show "origin/main:$file" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
+	[[ -n "$v" ]] && echo "v${v#v}"
+	return 0
+}
+
+# Succeeds when $1 sorts after $2 by version.
+version_gt() {
+	[[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
+}
+
+# Next version: one past the latest tag, unless main holds a merged release
+# that never got its tag. Then reuse it, or go one past it if develop moved on.
+next_tag() {
+	local key="$1" cur="$2" mainv
+	mainv="$(main_version "$key")"
+	if [[ -n "$mainv" ]] && version_gt "$mainv" "$cur"; then
+		if in_repo "$key" merge-base --is-ancestor HEAD origin/main; then
+			echo "$mainv"
+		else
+			bump "$mainv"
+		fi
+		return
+	fi
+	bump "$cur"
+}
+
 file_version() {
 	local file
 	file="$(version_file "$1")"
@@ -447,7 +478,7 @@ release() {
 	fi
 
 	# Same number on a resumed run: the tag doesn't exist until the release finishes.
-	tag="$(bump "$cur")"
+	tag="$(next_tag "$key" "$cur")"
 	if ! confirm "$key" "$cur" "$tag" "${changes[@]}"; then
 		log "$key" "skipped, dependents stay on $cur"
 		record "$key" "$cur"
@@ -490,7 +521,7 @@ plan() {
 		tag="${NEWTAG[$key]}"
 		reason="done"
 	elif ((ahead > 0 || ${#bumps[@]} > 0)); then
-		tag="$(bump "$cur")"
+		tag="$(next_tag "$key" "$cur")"
 		reason="$ahead commits"
 	else
 		tag="$cur"
