@@ -1,6 +1,6 @@
 # Testing the first release through GitHub Actions
 
-Run this once per repo, when moving its releases from Jenkins to Actions (spec #95, ADR 0009). Until a repo passes it, Jenkins stays its releaser and `CI_RELEASE` stays off.
+Run this once for each new repo whose caller can release (`go-library.yml`, `go-image.yml` or `node-image.yml`), before its first release (ADR 0009). Until then `CI_RELEASE` stays off and `scripts/release-all.sh` refuses to release the repo.
 
 Go library repos (the utilities) have no image: skip the image and attestation checks for them.
 
@@ -25,11 +25,8 @@ DOCKER_TAG=${TAG#v}           # Docker tags drop the leading v
 
   If not, add the repo to `IMAGE_REPOS` in `scripts/setup-github-actions-org.sh` and re-run it.
 
-## Switch the releaser
+## Turn on releases
 
-Do both steps together, so Jenkins and Actions never race on the same tag:
-
-- [ ] Disable the repo's Jenkins job (Jenkins UI: the job's page, **Disable Project**).
 - [ ] Turn on the Actions release jobs:
 
   ```bash
@@ -86,11 +83,10 @@ Do both steps together, so Jenkins and Actions never race on the same tag:
 
 - [ ] Fast-forward `develop` onto `main`.
 - [ ] `scripts/release-all.sh --dry-run` now lists the repo with releaser `actions`.
-- [ ] Once a repo has passed, its Jenkinsfile can be deleted in a later PR.
 
 ## Rolling back
 
-Turn Actions releases off and re-enable the Jenkins job, again together:
+Turn Actions releases off; the repo then has no releaser until it is turned back on:
 
 ```bash
 gh variable delete CI_RELEASE -R CodeClarityCE/$REPO

@@ -17,9 +17,9 @@
 # Who creates the release in step 4:
 #   actions  the caller uses a releasing workflow (go-library, go-image,
 #            node-image) and the repo variable CI_RELEASE is true;
-#   jenkins  otherwise, while the repo's Jenkinsfile still runs gh release
-#            create (the transition until CI_RELEASE is switched on);
-#   script   neither, so this script creates the release itself.
+#   script   the caller has no release jobs, so this script creates the
+#            release itself.
+# A releasing caller with CI_RELEASE off stops the run, since no image would ship.
 # GitHub keeps one pending run per concurrency group, so a main push landing
 # while another main run is queued can drop that queued run. If a tag never
 # appears, re-run the repo's main CI run.
@@ -37,9 +37,7 @@
 # and skipped; delete a line there to be asked again. A repo that failed midway
 # resumes with the same version: every step is skipped once it is done.
 #
-# Env: CI_CHECK_PATTERN (regex of PR checks that must pass in repos with an
-#      Actions caller, default "^ci$"), JENKINS_CHECK_PATTERN (the same for
-#      repos with only a Jenkinsfile, default "jenkins"),
+# Env: CI_CHECK_PATTERN (regex of PR checks that must pass, default "^ci$"),
 #      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each).
 
 set -euo pipefail
@@ -47,7 +45,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_FILE="$ROOT/scripts/.release-state"
 CI_CHECK_PATTERN="${CI_CHECK_PATTERN:-^ci\$}"
-JENKINS_CHECK_PATTERN="${JENKINS_CHECK_PATTERN:-jenkins}"
 CI_TIMEOUT_SECONDS="${CI_TIMEOUT_SECONDS:-3600}"
 TAG_TIMEOUT_SECONDS="${TAG_TIMEOUT_SECONDS:-3600}"
 POLL_SECONDS=30
@@ -127,11 +124,6 @@ topo_order() {
 mapfile -t ORDER < <(topo_order)
 ORDER+=("${SUPER_KEYS[@]}")
 
-jenkinsfile() { echo "$ROOT/$1/.cloud/jenkins/Jenkinsfile"; }
-has_jenkins() { [[ -f "$(jenkinsfile "$1")" ]]; }
-# Jenkins' main build creates the tag + GitHub release itself.
-jenkins_releases() { has_jenkins "$1" && grep -q 'gh release create' "$(jenkinsfile "$1")"; }
-
 actions_caller() { echo "$ROOT/$1/.github/workflows/ci.yml"; }
 has_actions() { [[ -f "$(actions_caller "$1")" ]]; }
 # The caller uses a central workflow that has release jobs.
@@ -150,12 +142,12 @@ actions_releases() {
 	[[ "${CI_RELEASE_OF[$1]}" == true ]]
 }
 
-# Who creates the tag + GitHub release: actions, jenkins or script.
+# Who creates the tag + GitHub release: actions or script.
 releaser() {
 	if actions_releases "$1"; then
 		echo actions
-	elif jenkins_releases "$1"; then
-		echo jenkins
+	elif actions_can_release "$1"; then
+		die "$1 has a releasing caller but CI_RELEASE is not true (see docs/ci-release-test.md)"
 	else
 		echo script
 	fi
@@ -163,18 +155,15 @@ releaser() {
 
 # Regex of the PR checks to wait on; empty when the repo has no CI.
 check_pattern() {
-	if has_actions "$1"; then
-		echo "$CI_CHECK_PATTERN"
-	elif has_jenkins "$1"; then
-		echo "$JENKINS_CHECK_PATTERN"
-	fi
+	has_actions "$1" && echo "$CI_CHECK_PATTERN"
+	return 0
 }
 
 # The file whose version the PR version check compares against main.
 version_file() {
 	if [[ -f "$ROOT/$1/config.json" ]]; then
 		echo config.json
-	elif [[ -f "$ROOT/$1/package.json" ]] && { actions_can_release "$1" || jenkins_releases "$1"; }; then
+	elif [[ -f "$ROOT/$1/package.json" ]] && actions_can_release "$1"; then
 		echo package.json
 	fi
 }
@@ -396,16 +385,13 @@ merge_pr() {
 }
 
 publish_tag() {
-	local key="$1" tag="$2" prerelease=false
+	local key="$1" tag="$2" prerelease=false by
 	tag_on_remote "$key" "$tag" && return
-	case "$(releaser "$key")" in
+	by="$(releaser "$key")" || exit 1
+	case "$by" in
 	actions)
 		log "$key" "waiting for the Actions main run (if it failed or never ran, re-run it)"
 		wait_until "$TAG_TIMEOUT_SECONDS" "Actions to release $key $tag" tag_on_remote "$key" "$tag"
-		;;
-	jenkins)
-		log "$key" "waiting for Jenkins' main build (if it failed, re-run it in Jenkins)"
-		wait_until "$TAG_TIMEOUT_SECONDS" "Jenkins to release $key $tag" tag_on_remote "$key" "$tag"
 		;;
 	*)
 		[[ "$tag" =~ alpha|beta ]] && prerelease=true
@@ -459,6 +445,8 @@ release() {
 		log "$key" "already handled: ${NEWTAG[$key]} (state file)"
 		return
 	fi
+	# Stops here, before any PR, if the repo can't release.
+	releaser "$key" >/dev/null
 
 	sync_develop "$key"
 	cur="$(latest_tag "$key")"
@@ -469,7 +457,7 @@ release() {
 	fi
 
 	# Nothing on develop beyond the latest tag. Also covers a run that died after
-	# Jenkins tagged but before develop was fast-forwarded: no second version.
+	# the tag but before develop was fast-forwarded: no second version.
 	if in_repo "$key" merge-base --is-ancestor HEAD "$cur" && [[ ${#changes[@]} -eq 0 ]]; then
 		log "$key" "nothing new since $cur"
 		finish_develop "$key"
@@ -536,7 +524,7 @@ preflight
 [[ -n "$ONLY" && ! " ${ORDER[*]} " =~ " $ONLY " ]] && die "unknown repo '$ONLY' (expected one of: ${ORDER[*]})"
 
 if [[ $DRY_RUN -eq 1 ]]; then
-	log plan "PR checks: /$CI_CHECK_PATTERN/ with an Actions caller, /$JENKINS_CHECK_PATTERN/ with only a Jenkinsfile"
+	log plan "PR checks: /$CI_CHECK_PATTERN/ in repos with an Actions caller"
 	printf '%-32s %-15s    %-15s %-12s %-8s %-9s %s\n' repo current next reason releaser check notes
 fi
 for key in "${ORDER[@]}"; do
