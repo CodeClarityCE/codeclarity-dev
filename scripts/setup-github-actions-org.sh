@@ -15,11 +15,50 @@ ORG="CodeClarityCE"
 CENTRAL_REPO=".github"
 
 # Repos that get the release environment with the Docker Hub secrets.
-IMAGE_REPOS=("plugin-sbom-javascript" "api")
+IMAGE_REPOS=(
+  "plugin-sbom-javascript"
+  "api"
+  "frontend"
+  "service-dispatcher"
+  "service-notifier"
+  "service-project-downloader"
+  "service-knowledge"
+  "service-package-follower"
+  "service-scheduler"
+  "plugin-sca-vuln-finder"
+  "plugin-sca-patching"
+  "plugin-codeql"
+  "plugin-sbom-php"
+  "plugin-sca-license"
+)
 
 # Repos whose default branch must pass the ci check. Add a repo only once its
 # Actions CI reports ci, or merges to its main block on a check that never runs.
-RULESET_REPOS=(".github" "utility-types" "plugin-sbom-javascript" "api" "codeclarity-dev" "deployment" "backend")
+RULESET_REPOS=(
+  ".github"
+  "codeclarity-dev"
+  "deployment"
+  "backend"
+  "utility-types"
+  "utility-node-semver"
+  "utility-dbhelper"
+  "utility-amqp-helper"
+  "utility-boilerplates"
+  "plugin-sbom-javascript"
+  "api"
+  "frontend"
+  "service-dispatcher"
+  "service-notifier"
+  "service-project-downloader"
+  "service-knowledge"
+  "service-package-follower"
+  "service-scheduler"
+  "plugin-sca-vuln-finder"
+  "plugin-sca-patching"
+  "plugin-codeql"
+  "plugin-sbom-php"
+  "plugin-sca-license"
+)
 
 # Actions allowed besides GitHub-owned ones; every action must also be SHA-pinned.
 ALLOWED_ACTION_PATTERNS=(
