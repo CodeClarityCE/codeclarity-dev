@@ -19,8 +19,7 @@ IMAGE_REPOS=("plugin-sbom-javascript" "api")
 
 # Repos whose default branch must pass the ci check. Add a repo only once its
 # Actions CI reports ci, or merges to its main block on a check that never runs.
-# Next in line: codeclarity-dev, deployment, backend.
-RULESET_REPOS=(".github" "utility-types" "plugin-sbom-javascript" "api")
+RULESET_REPOS=(".github" "utility-types" "plugin-sbom-javascript" "api" "codeclarity-dev" "deployment" "backend")
 
 # Actions allowed besides GitHub-owned ones; every action must also be SHA-pinned.
 ALLOWED_ACTION_PATTERNS=(
@@ -30,6 +29,9 @@ ALLOWED_ACTION_PATTERNS=(
   "docker/build-push-action@*"
   "ossf/scorecard-action@*"
   "goreleaser/goreleaser-action@*"
+  "ruby/setup-ruby@*"
+  "licensee/setup-licensed@*"
+  "super-linter/super-linter/slim@*"
 )
 
 RELEASE_ENV="release"
