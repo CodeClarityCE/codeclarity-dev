@@ -11,7 +11,7 @@ packages:
 #
 # Mirrored in api/.cloud/docker/pnpm-workspace.yaml and
 # frontend/.cloud/docker/pnpm-workspace.yaml, which the standalone container
-# builds and both Jenkinsfiles stage. All three must move together.
+# builds and the node-image CI workflow stage. All three must move together.
 minimumReleaseAge: 4320
 
 # Disable pnpm 11's pre-run dependency check. `pnpm migration:run:*` (invoked by
@@ -36,8 +36,8 @@ allowBuilds:
   msw: true
   vue-demi: true
   # Blocked deliberately (security)
-  "@nestjs/core": false   # donate-notice script — non-functional, blocked
-  "@scarf/scarf": false   # telemetry — never allowed
+  "@nestjs/core": false # donate-notice script — non-functional, blocked
+  "@scarf/scarf": false # telemetry — never allowed
 
 # @nestjs/platform-fastify pins fastify as an exact direct dependency (11.2.3
 # pins 5.11.3), so without this the tree carries two fastify copies and the
