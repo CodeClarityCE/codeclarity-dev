@@ -4,14 +4,25 @@
 # For each repo:
 #   1. bump CodeClarityCE go.mod requirements to the tags released upstream in
 #      this run (or, for backend / codeclarity-dev, the submodule pointers);
-#   2. bump the version file Jenkins checks (config.json, or package.json for
+#   2. bump the version file CI checks (config.json, or package.json for
 #      api / frontend) to the next vX.Y.(N+1)-alpha;
-#   3. open a develop -> main PR with gh, wait for the Jenkins checks, merge it;
-#   4. wait for Jenkins' main build to push the image and create the tag +
-#      GitHub release (repos without a Jenkins release stage get their release
-#      created here instead);
+#   3. open a develop -> main PR with gh, wait for its CI check, merge it;
+#   4. wait for the main build to push the image and create the tag + GitHub
+#      release (or create the release here, see below);
 #   5. fast-forward develop onto main.
 # The Go dependency graph is derived from each go.mod, so it never drifts.
+#
+# CI runs on GitHub Actions: each repo's .github/workflows/ci.yml calls the
+# central workflows in CodeClarityCE/.github and ends in the required `ci` job.
+# Who creates the release in step 4:
+#   actions  the caller uses a releasing workflow (go-library, go-image,
+#            node-image) and the repo variable CI_RELEASE is true;
+#   jenkins  otherwise, while the repo's Jenkinsfile still runs gh release
+#            create (the transition until CI_RELEASE is switched on);
+#   script   neither, so this script creates the release itself.
+# GitHub keeps one pending run per concurrency group, so a main push landing
+# while another main run is queued can drop that queued run. If a tag never
+# appears, re-run the repo's main CI run.
 #
 # Usage:
 #   scripts/release-all.sh --dry-run            # print order and versions, change nothing
@@ -26,14 +37,17 @@
 # and skipped; delete a line there to be asked again. A repo that failed midway
 # resumes with the same version: every step is skipped once it is done.
 #
-# Env: CI_CHECK_PATTERN (regex of PR checks that must pass, default "jenkins"),
+# Env: CI_CHECK_PATTERN (regex of PR checks that must pass in repos with an
+#      Actions caller, default "^ci$"), JENKINS_CHECK_PATTERN (the same for
+#      repos with only a Jenkinsfile, default "jenkins"),
 #      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each).
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_FILE="$ROOT/scripts/.release-state"
-CI_CHECK_PATTERN="${CI_CHECK_PATTERN:-jenkins}"
+CI_CHECK_PATTERN="${CI_CHECK_PATTERN:-^ci\$}"
+JENKINS_CHECK_PATTERN="${JENKINS_CHECK_PATTERN:-jenkins}"
 CI_TIMEOUT_SECONDS="${CI_TIMEOUT_SECONDS:-3600}"
 TAG_TIMEOUT_SECONDS="${TAG_TIMEOUT_SECONDS:-3600}"
 POLL_SECONDS=30
@@ -55,7 +69,7 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-h | --help)
-		sed -n '2,30p' "$0"
+		sed -n '2,43p' "$0"
 		exit 0
 		;;
 	*)
@@ -118,11 +132,49 @@ has_jenkins() { [[ -f "$(jenkinsfile "$1")" ]]; }
 # Jenkins' main build creates the tag + GitHub release itself.
 jenkins_releases() { has_jenkins "$1" && grep -q 'gh release create' "$(jenkinsfile "$1")"; }
 
-# The file whose version Jenkins' "PR Version Check" compares against main.
+actions_caller() { echo "$ROOT/$1/.github/workflows/ci.yml"; }
+has_actions() { [[ -f "$(actions_caller "$1")" ]]; }
+# The caller uses a central workflow that has release jobs.
+actions_can_release() {
+	has_actions "$1" &&
+		grep -qE 'CodeClarityCE/\.github/.+/(go-library|go-image|node-image)\.yml@' "$(actions_caller "$1")"
+}
+
+# Actions releases once the repo variable CI_RELEASE is true (looked up once per repo).
+declare -A CI_RELEASE_OF
+actions_releases() {
+	actions_can_release "$1" || return 1
+	if [[ -z "${CI_RELEASE_OF[$1]:-}" ]]; then
+		CI_RELEASE_OF[$1]="$(gh_in "$1" variable get CI_RELEASE 2>/dev/null || echo unset)"
+	fi
+	[[ "${CI_RELEASE_OF[$1]}" == true ]]
+}
+
+# Who creates the tag + GitHub release: actions, jenkins or script.
+releaser() {
+	if actions_releases "$1"; then
+		echo actions
+	elif jenkins_releases "$1"; then
+		echo jenkins
+	else
+		echo script
+	fi
+}
+
+# Regex of the PR checks to wait on; empty when the repo has no CI.
+check_pattern() {
+	if has_actions "$1"; then
+		echo "$CI_CHECK_PATTERN"
+	elif has_jenkins "$1"; then
+		echo "$JENKINS_CHECK_PATTERN"
+	fi
+}
+
+# The file whose version the PR version check compares against main.
 version_file() {
 	if [[ -f "$ROOT/$1/config.json" ]]; then
 		echo config.json
-	elif [[ -f "$ROOT/$1/package.json" ]] && jenkins_releases "$1"; then
+	elif [[ -f "$ROOT/$1/package.json" ]] && { actions_can_release "$1" || jenkins_releases "$1"; }; then
 		echo package.json
 	fi
 }
@@ -261,11 +313,11 @@ bump_submodules() {
 	fi
 }
 
-# Succeeds once every check matching CI_CHECK_PATTERN passed; dies on failure.
+# Succeeds once every check matching the regex passed; dies on failure.
 ci_passed() {
-	local key="$1" pr="$2" checks failed
+	local key="$1" pr="$2" re="$3" checks failed
 	checks="$(gh_in "$key" pr checks "$pr" --json name,bucket 2>/dev/null || true)"
-	checks="$(jq -c --arg re "$CI_CHECK_PATTERN" '[.[]? | select(.name | test($re; "i"))]' <<<"${checks:-[]}")"
+	checks="$(jq -c --arg re "$re" '[.[]? | select(.name | test($re; "i"))]' <<<"${checks:-[]}")"
 	failed="$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")"
 	[[ -n "$failed" ]] && die "$key: PR #$pr checks failed: $failed"
 	[[ "$(jq 'length' <<<"$checks")" -gt 0 ]] &&
@@ -284,7 +336,7 @@ tag_on_remote() {
 }
 
 merge_pr() {
-	local key="$1" tag="$2" pr
+	local key="$1" tag="$2" pr re
 	pr="$(gh_in "$key" pr list --base main --head develop --state open --json number -q '.[0].number')"
 	if [[ -z "$pr" ]]; then
 		pr="$(gh_in "$key" pr create --base main --head develop \
@@ -292,8 +344,9 @@ merge_pr() {
 	fi
 	log "$key" "PR #$pr opened"
 
-	if has_jenkins "$key"; then
-		wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr checks /$CI_CHECK_PATTERN/" ci_passed "$key" "$pr"
+	re="$(check_pattern "$key")"
+	if [[ -n "$re" ]]; then
+		wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr checks /$re/" ci_passed "$key" "$pr" "$re"
 	fi
 	log "$key" "merging PR #$pr"
 	gh_in "$key" pr merge "$pr" --merge || gh_in "$key" pr merge "$pr" --merge --auto ||
@@ -304,14 +357,21 @@ merge_pr() {
 publish_tag() {
 	local key="$1" tag="$2" prerelease=false
 	tag_on_remote "$key" "$tag" && return
-	if jenkins_releases "$key"; then
+	case "$(releaser "$key")" in
+	actions)
+		log "$key" "waiting for the Actions main run (if it failed or never ran, re-run it)"
+		wait_until "$TAG_TIMEOUT_SECONDS" "Actions to release $key $tag" tag_on_remote "$key" "$tag"
+		;;
+	jenkins)
 		log "$key" "waiting for Jenkins' main build (if it failed, re-run it in Jenkins)"
 		wait_until "$TAG_TIMEOUT_SECONDS" "Jenkins to release $key $tag" tag_on_remote "$key" "$tag"
-	else
+		;;
+	*)
 		[[ "$tag" =~ alpha|beta ]] && prerelease=true
 		gh_in "$key" release create "$tag" --target main --title "Release $tag" \
 			--generate-notes --prerelease="$prerelease"
-	fi
+		;;
+	esac
 }
 
 # Fast-forward develop onto main (picks up the release merge commit).
@@ -398,12 +458,13 @@ release() {
 }
 
 plan() {
-	local key="$1" cur ahead tag reason by="script" note=""
+	local key="$1" cur ahead tag reason by check note=""
 	local -a bumps=()
 	in_repo "$key" fetch -q --tags origin
 	cur="$(latest_tag "$key")"
 	ahead="$(in_repo "$key" rev-list --count "$cur..origin/develop")"
-	jenkins_releases "$key" && by="jenkins"
+	by="$(releaser "$key")"
+	check="$(check_pattern "$key")"
 
 	if [[ -n "${MODULE_OF[$key]:-}" ]]; then
 		mapfile -t bumps < <(pending_bumps "$key")
@@ -426,13 +487,17 @@ plan() {
 		reason="unchanged"
 	fi
 	NEWTAG[$key]="$tag"
-	printf '%-32s %-15s -> %-15s %-12s %-8s %s%s\n' "$key" "$cur" "$tag" "$reason" "$by" "$note" "${bumps[*]#github.com/CodeClarityCE/}"
+	printf '%-32s %-15s -> %-15s %-12s %-8s %-9s %s%s\n' "$key" "$cur" "$tag" "$reason" "$by" "/${check:--}/" "$note" "${bumps[*]#github.com/CodeClarityCE/}"
 }
 
 preflight
 # shellcheck disable=SC2076 # literal match of a whole name in the list
 [[ -n "$ONLY" && ! " ${ORDER[*]} " =~ " $ONLY " ]] && die "unknown repo '$ONLY' (expected one of: ${ORDER[*]})"
 
+if [[ $DRY_RUN -eq 1 ]]; then
+	log plan "PR checks: /$CI_CHECK_PATTERN/ with an Actions caller, /$JENKINS_CHECK_PATTERN/ with only a Jenkinsfile"
+	printf '%-32s %-15s    %-15s %-12s %-8s %-9s %s\n' repo current next reason releaser check notes
+fi
 for key in "${ORDER[@]}"; do
 	[[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
 	if [[ $DRY_RUN -eq 1 ]]; then plan "$key"; else release "$key"; fi

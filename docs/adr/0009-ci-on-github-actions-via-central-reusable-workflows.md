@@ -46,3 +46,15 @@ Every workflow ends in a job named `ci` that needs every other job and fails if 
 - The Go image digest lives once in the central repo. The "keep in sync with the Dockerfiles and `go.mod`" rule now points there instead of at the Jenkins helpers.
 - Release jobs run only in a `release` environment limited to `main`, which alone holds the Docker Hub token, and only when the repo variable `CI_RELEASE` is `true`. Until a repo's first release through Actions is tested, Jenkins stays its releaser.
 - The Jenkins agent requirements (Docker with buildx and QEMU, Pipeline Utility Steps, an authenticated `gh`, a `dockerhub` credential, the `inToolchain()` and `inGo()` helpers) are superseded once a repo switches. ADR 0006 governs the devcontainer agent's dev stack, not CI, and stays in force; only the Jenkins toolchain statements next to it in `CLAUDE.md` are superseded.
+
+## Departures found while building it
+
+The pilot changed a few details of spec #95. The decision above stands; these are how it is wired:
+
+- **The `ci` job lives in each caller, not in the central workflows.** Jobs of a called workflow report as `<caller job> / <job>`, so a central `ci` job would show as `go / ci` and differ per repo. Each caller ends in its own top-level `ci` job that needs the call job.
+- **Concurrency is set in the caller**, keyed on workflow and ref, cancelling in progress for PRs only. Set inside a called workflow it would not cancel the caller's whole run.
+- **Central workflows call their siblings with the `$/` self-repository syntax**, so a call from `v1` reaches the sibling at the same ref instead of a hard-coded one.
+- **No `secrets: inherit`.** Release jobs read `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` from the `release` environment (deployment branches limited to `main`) and run only when the repo variable `CI_RELEASE` is `true`. Callers pass no secrets.
+- **Callers of the image workflows grant `contents: write`, `id-token: write` and `attestations: write`** even on PRs, because GitHub validates the permissions of skipped nested jobs too.
+- **Per-repo rulesets instead of one org ruleset.** Org rulesets need a paid plan; `scripts/setup-github-actions-org.sh` creates one ruleset per repo on the Free plan, adding a repo only once its caller reports `ci`.
+- **Known release risk:** GitHub keeps one pending run per concurrency group, so back-to-back merges to `main` can drop the queued middle run, and with it that version's release. Re-run the dropped run; `docs/ci-release-test.md` covers it.

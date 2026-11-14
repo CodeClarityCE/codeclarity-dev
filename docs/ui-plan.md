@@ -72,7 +72,7 @@ Each step below is one issue. A step is done when its files are off the lint all
 
    Add a `⌘K` command palette built on the existing `command` component. Remove the top nav.
 
-8. **Guardrail.** An ESLint rule, enforced in Jenkins, that rejects the following in new code. Unmigrated files sit on an allowlist that only shrinks.
+8. **Guardrail.** An ESLint rule, enforced in CI, that rejects the following in new code. Unmigrated files sit on an allowlist that only shrinks.
    - hex literals;
    - raw Tailwind palette classes and `bg-theme-*`;
    - Iconify imports outside the logo sets;

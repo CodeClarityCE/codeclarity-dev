@@ -77,16 +77,18 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
 
-## CI (Jenkins)
+## CI (GitHub Actions)
 
-Each repo has `.cloud/jenkins/Jenkinsfile`. Toolchains never come from the agent host:
+Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its README documents each workflow, its inputs and the caller template). Each repo's `.github/workflows/ci.yml` is a short caller referencing them at the moving `v1` tag; third-party actions and images are pinned by SHA or digest.
 
-- **api / frontend**: Test steps run through `inToolchain()` inside the Dockerfile's `toolchain` target (pinned Node, corepack, and the pnpm version from `package.json` `packageManager`, the single source of truth for pnpm).
-- **Go**: Go steps run through `inGo()` in the digest-pinned `golang:1.27.4` image (keep in sync with the Dockerfiles and `go.mod`). Image repos test with `GOWORK=off` like the image build, so they pass only after `scripts/release-all.sh` has bumped utility versions.
-- Both helpers use plain `docker run`, not `agent { docker }` / `agent { dockerfile }`: the Docker Pipeline plugin is up for adoption and deliberately not used.
-- **Releases**: PRs to `main` must bump the version (`package.json` / `config.json`). Main builds push the image, then `gh release create --target $GIT_COMMIT`; an existing version tag is never re-pushed.
+- **Toolchains**: Go steps run in the digest-pinned `golang:1.27.4` image with `GOTOOLCHAIN=local`; the digest lives in `.github`'s `go-checks.yml`, keep it in sync with the Dockerfiles and `go.mod`. Node steps run in the Dockerfile's `toolchain` target, so `package.json` `packageManager` stays the single source of truth for pnpm. Go image repos test with `GOWORK=off` like the image build, so they pass only after `scripts/release-all.sh` has bumped utility versions.
+- **`ci` gate**: the required check on `main` is a job named `ci` in the caller itself, since called jobs report as `<caller job> / <job>`. The caller also sets concurrency (cancel in progress for PRs only). Rulesets, `scripts/release-all.sh` and the callers all depend on that name.
+- **Permissions**: a caller job using `go-image.yml` or `node-image.yml` grants `contents: write`, `id-token: write` and `attestations: write`, because GitHub validates the skipped release jobs too. Callers pass no secrets.
+- **Releases**: PRs to `main` must bump the version (`config.json` / `package.json`). On `main`, release jobs run only when the repo variable `CI_RELEASE` is `true`, in the `release` environment (main only) that holds `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`. They build amd64 and arm64 natively, attest provenance, then create the tag and release at the built commit; an existing tag is never re-released.
+- **Transition**: Jenkins (`.cloud/jenkins/Jenkinsfile`) still releases every repo whose `CI_RELEASE` is not on. Turn it on with `docs/ci-release-test.md`, which also disables that repo's Jenkins job.
+- **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
 
-The `codeclarity` agent must provide: docker with buildx and QEMU (arm64), the Pipeline Utility Steps plugin (`readJSON`), an authenticated `gh`, and a `dockerhub` credential.
+Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.
 
 ## Database Commands
 
