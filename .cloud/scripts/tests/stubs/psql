@@ -1,0 +1,23 @@
+#!/bin/sh
+# Test stand-in for psql: answers the dump and restore scripts' queries with fixed JSON.
+db="" sql=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-d) db="$2"; shift ;;
+	-c) sql="$2"; shift ;;
+	esac
+	shift
+done
+[ -z "$sql" ] && sql=$(cat)
+case "$sql" in
+*pg_database*)
+	# Every database exists except STUB_MISSING_DB.
+	case "$sql" in *"'$STUB_MISSING_DB'"*) ;; *) echo 1 ;; esac
+	;;
+*server_version*) echo "18.6" ;;
+*knowledge_source_sync*)
+	echo '[{"source":"nvd","watermark":"2026-11-10T08:00:00+00:00","last_outcome":"success","upstream_total":421910,"rows":402754,"stored_records":421910}]'
+	;;
+*migrations*) echo "[\"Baseline-$db\",\"Second-$db\"]" ;;
+*) echo "psql stub: unexpected query: $sql" >&2; exit 1 ;;
+esac

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Test stand-in for pg_restore: logs "<db> <sha256 of the archive>" to STUB_RESTORE_LOG.
+db="" file=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-d) db="$2"; shift ;;
+	-*) ;;
+	*) file="$1" ;;
+	esac
+	shift
+done
+[ "$STUB_PG_RESTORE_FAIL" = "$db" ] && { echo "pg_restore: error: stub failure for $db" >&2; exit 1; }
+echo "$db $(sha256sum "$file" | cut -d' ' -f1)" >>"$STUB_RESTORE_LOG"

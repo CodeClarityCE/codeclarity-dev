@@ -1,12 +1,14 @@
 {
   "name": "codeclarity-dev (Claude Code sandbox)",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "shutdownAction": "stopCompose",
   "workspaceFolder": "/workspaces/codeclarity-dev",
   "remoteUser": "vscode",
   "containerEnv": {
-    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"
+    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+    "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH": "/usr/bin/chromium",
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
   },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
@@ -17,9 +19,12 @@
       "version": "26"
     },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.27.3"
+      "version": "1.27.4"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {}
+    "ghcr.io/devcontainers/features/git-lfs:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "2.103.3"
+    }
   },
   "postCreateCommand": "npm install -g corepack@latest --force && corepack enable && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive",
   "customizations": {
@@ -36,17 +41,5 @@
       }
     }
   },
-  "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached"
-  ],
-  "runArgs": [
-    "--cap-drop=ALL",
-    "--cap-add=CHOWN",
-    "--cap-add=SETUID",
-    "--cap-add=SETGID",
-    "--cap-add=DAC_OVERRIDE",
-    "--security-opt=no-new-privileges"
-  ],
   "forwardPorts": []
 }

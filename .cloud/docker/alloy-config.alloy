@@ -8,10 +8,27 @@ discovery.docker "containers" {
   refresh_interval = "5s"
 }
 
+// Labels each log line with its container and Compose service.
+discovery.relabel "containers" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
 loki.source.docker "containers" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.docker.containers.targets
-  forward_to = [loki.write.loki.receiver]
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  forward_to    = [loki.write.loki.receiver]
+  relabel_rules = discovery.relabel.containers.rules
 }
 
 loki.write "loki" {

@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
 	-f ../../frontend/.cloud/docker/docker-compose.yaml \
@@ -11,4 +12,4 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
-	down $1
+	down ${1:+"$1"}

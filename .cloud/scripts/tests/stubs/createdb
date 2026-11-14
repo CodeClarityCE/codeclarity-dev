@@ -1,0 +1,4 @@
+#!/bin/sh
+# Test stand-in for createdb: logs the database it would create.
+for last; do :; done
+echo "createdb $last" >>"$STUB_RESTORE_LOG"

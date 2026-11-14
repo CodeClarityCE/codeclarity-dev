@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: Knowledge Postgres
+    type: grafana-postgresql-datasource
+    uid: knowledge-postgres
+    access: proxy
+    url: db:5432
+    user: postgres
+    editable: false
+    jsonData:
+      database: knowledge
+      sslmode: disable
+      postgresVersion: 1800
+      maxOpenConns: 2
+    secureJsonData:
+      password: $PG_DB_PASSWORD
