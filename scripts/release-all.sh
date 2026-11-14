@@ -316,8 +316,12 @@ bump_submodules() {
 # Succeeds once every check matching the regex passed; dies on failure.
 ci_passed() {
 	local key="$1" pr="$2" re="$3" checks failed
-	checks="$(gh_in "$key" pr checks "$pr" --json name,bucket 2>/dev/null || true)"
+	checks="$(gh_in "$key" pr checks "$pr" --json name,bucket,event 2>/dev/null || true)"
 	checks="$(jq -c --arg re "$re" '[.[]? | select(.name | test($re; "i"))]' <<<"${checks:-[]}")"
+	# Actions also runs ci for the develop push; only the PR's own run counts.
+	if [[ "$re" == "$CI_CHECK_PATTERN" ]]; then
+		checks="$(jq -c '[.[] | select(.event == "pull_request")]' <<<"$checks")"
+	fi
 	failed="$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")"
 	[[ -n "$failed" ]] && die "$key: PR #$pr checks failed: $failed"
 	[[ "$(jq 'length' <<<"$checks")" -gt 0 ]] &&
@@ -335,6 +339,12 @@ tag_on_remote() {
 	[[ -n "$(in_repo "$1" ls-remote --tags origin "refs/tags/$2")" ]]
 }
 
+# Succeeds once the merge is accepted; dies when the PR is closed.
+try_merge() {
+	pr_merged "$1" "$2" && return
+	gh_in "$1" pr merge "$2" --merge
+}
+
 merge_pr() {
 	local key="$1" tag="$2" pr re
 	pr="$(gh_in "$key" pr list --base main --head develop --state open --json number -q '.[0].number')"
@@ -349,8 +359,8 @@ merge_pr() {
 		wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr checks /$re/" ci_passed "$key" "$pr" "$re"
 	fi
 	log "$key" "merging PR #$pr"
-	gh_in "$key" pr merge "$pr" --merge || gh_in "$key" pr merge "$pr" --merge --auto ||
-		die "$key: cannot merge PR #$pr"
+	# A required check can still be settling right after ci passes, so retry.
+	wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr to accept the merge" try_merge "$key" "$pr"
 	wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr to merge" pr_merged "$key" "$pr"
 }
 
