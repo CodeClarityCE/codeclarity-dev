@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2059 # color codes in the format string need printf to expand them
 
 # Color codes for better output (using printf for portability)
 RED='\033[0;31m'
@@ -13,8 +14,8 @@ SETUP_LOG="setup.log"
 ERROR_LOG="setup-errors.log"
 
 # Clear previous logs
-> "$SETUP_LOG"
-> "$ERROR_LOG"
+: >"$SETUP_LOG"
+: >"$ERROR_LOG"
 
 # Log function
 log() {

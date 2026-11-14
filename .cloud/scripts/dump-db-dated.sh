@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Dumps dated snapshots of the knowledge and config databases for the ladder
 # experiment. Produces deployment/dump/knowledge-<LABEL>.dump and
 # deployment/dump/config-<LABEL>.dump. Refuses to overwrite existing dumps.

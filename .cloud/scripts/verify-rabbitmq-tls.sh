@@ -27,6 +27,7 @@ bad()  { printf '  ✗ %s\n' "$1"; fail=1; }
 echo
 echo "1) Listeners — TLS-only?"
 listeners=$(docker exec "$RMQ" rabbitmq-diagnostics listeners 2>/dev/null)
+# shellcheck disable=SC2001 # indents every line
 echo "$listeners" | sed 's/^/     /'
 if echo "$listeners" | grep -q "protocol: amqp/ssl"; then
   pass "TLS AMQP listener present (5671 / amqp/ssl)"
@@ -46,6 +47,7 @@ conns=$(docker exec "$RMQ" rabbitmqctl -q list_connections name peer_host protoc
 if [ -z "$conns" ]; then
   echo "     (no client connections currently open)"
 else
+  # shellcheck disable=SC2001 # indents every line
   echo "$conns" | sed 's/^/     /'
   # The ssl status is the last column (true/false). Count rows explicitly.
   # A non-TLS connection has ssl = false; ignore the header row and any banners

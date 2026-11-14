@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Ensure the dev RabbitMQ TLS certificate exists before starting (idempotent).
 sh ../docker/scripts/generate-rabbitmq-dev-certs.sh
 
@@ -14,4 +15,4 @@ docker compose -f ../docker/docker-compose.yaml \
 	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
 	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
-	up -d $1
+	up -d ${1:+"$1"}

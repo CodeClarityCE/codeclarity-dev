@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Restores the knowledge and config databases from a dated dump pair
 # (deployment/dump/knowledge-<LABEL>.dump + config-<LABEL>.dump) produced by
 # dump-db-dated.sh. Restores knowledge and config ONLY — never codeclarity.

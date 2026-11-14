@@ -61,6 +61,7 @@ corrupt() {
 }
 
 listing() {
+	# shellcheck disable=SC2012 # test dirs hold only plain file names
 	(cd "$1" && ls -A | LC_ALL=C sort)
 }
 
@@ -97,6 +98,7 @@ test_a_corrupted_part_is_refused() {
 	grep -q "knowledge.dump.part-aab" "$work/out" || result=bad
 	restore "$dir" knowledge knowledge && result=bad
 	[ -s "$STUB_RESTORE_LOG" ] && result=bad
+	# shellcheck disable=SC2010 # test dirs hold only plain file names
 	[ -z "$(cd "$dir" && ls -A | grep '^\.restore')" ] || result=bad
 	check "a corrupted part is refused by verify and by restore, and nothing is restored" $result
 }
@@ -192,6 +194,7 @@ test_a_failed_pg_restore_fails_the_restore() {
 	result=ok
 	STUB_PG_RESTORE_FAIL=knowledge restore "$dir" knowledge knowledge && result=bad
 	grep -q "stub failure" "$work/out" || result=bad
+	# shellcheck disable=SC2010 # test dirs hold only plain file names
 	[ -z "$(cd "$dir" && ls -A | grep '^\.restore')" ] || result=bad
 	check "a pg_restore error fails the restore and cleans up" $result
 }

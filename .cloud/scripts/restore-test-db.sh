@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Restores the knowledge, config and codeclarity dumps into their _test databases.
 # Usage: sh restore-test-db.sh (from .cloud/scripts)
 

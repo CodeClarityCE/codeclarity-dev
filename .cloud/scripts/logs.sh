@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 docker compose -f ../docker/docker-compose.yaml \
 	-f ../../api/.cloud/docker/docker-compose.yaml \
 	-f ../../frontend/.cloud/docker/docker-compose.yaml \

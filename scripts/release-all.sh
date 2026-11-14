@@ -218,6 +218,7 @@ preflight() {
 	for key in "${ORDER[@]}"; do
 		[[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
 		[[ "$(in_repo "$key" branch --show-current)" == develop ]] || $fail "$key is not on develop"
+		# shellcheck disable=SC2015 # fail runs when either diff finds changes, as intended
 		in_repo "$key" diff --quiet --ignore-submodules=all &&
 			in_repo "$key" diff --cached --quiet --ignore-submodules=all ||
 			$fail "$key has uncommitted changes"
@@ -429,6 +430,7 @@ plan() {
 }
 
 preflight
+# shellcheck disable=SC2076 # literal match of a whole name in the list
 [[ -n "$ONLY" && ! " ${ORDER[*]} " =~ " $ONLY " ]] && die "unknown repo '$ONLY' (expected one of: ${ORDER[*]})"
 
 for key in "${ORDER[@]}"; do
