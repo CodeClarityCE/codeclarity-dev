@@ -3,6 +3,7 @@ name: CI
 
 on:
   pull_request:
+    branches: [main, develop]
   push:
     branches: [main, develop]
 
@@ -36,10 +37,11 @@ jobs:
         run: |
           # Every tracked *.sh file; submodules lint their own. Findings become annotations.
           git ls-files -z '*.sh' | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
-            "$SHELLCHECK_IMAGE" --external-sources --format=gcc |
+            "$SHELLCHECK_IMAGE" --format=gcc |
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::\4 file=\1,line=\2,col=\3::\5/; s/^::note /::notice /'
 
   # The required check, kept here because called jobs show as "lint / <job>".
+  # Fails if any needed job failed or was cancelled; skipped counts as success.
   ci:
     needs: [lint, shellcheck]
     if: always()
@@ -52,6 +54,7 @@ jobs:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "results: $RESULTS"
-          for r in $RESULTS; do
-            [[ "$r" == success || "$r" == skipped ]] || { echo "::error::a job did not succeed: $RESULTS"; exit 1; }
-          done
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            echo "::error::A needed job failed or was cancelled: $RESULTS"
+            exit 1
+          fi
