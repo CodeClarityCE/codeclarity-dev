@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Verifies the dumps in deployment/dump against their manifest, or restores one of them,
 # by running deployment/scripts/restore-dump.sh inside the db container.
 #

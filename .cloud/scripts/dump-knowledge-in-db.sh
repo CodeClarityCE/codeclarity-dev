@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Dumps knowledge and config with a manifest. Runs inside the db container (busybox sh).
 # Reads the completeness gate's JSON report on stdin and writes nothing unless it passed.
 # Manifest format: docs/knowledge-dump.md.

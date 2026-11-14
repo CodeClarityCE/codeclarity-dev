@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Defines compose(): docker compose with the dev stack's files. Source it from .cloud/scripts.
 # Keep the file list equal to composeFiles in .devcontainer/broker/main.go.
 

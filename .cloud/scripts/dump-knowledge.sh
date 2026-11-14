@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Dumps knowledge and config to deployment/dump with a manifest, only if the completeness gate passes.
 # The devcontainer runs the same two steps through the broker (make dump-knowledge).
 #

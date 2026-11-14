@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Dumps one database to deployment/dump/<db>.dump. knowledge and config go through
 # dump-knowledge.sh instead, so they are only dumped after the completeness gate passes.
 case "$1" in

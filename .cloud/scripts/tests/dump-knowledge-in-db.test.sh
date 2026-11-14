@@ -50,6 +50,7 @@ dump() {
 }
 
 listing() {
+	# shellcheck disable=SC2012 # test dirs hold only plain file names
 	(cd "$1" && ls -A | LC_ALL=C sort)
 }
 
@@ -128,6 +129,7 @@ test_failed_pg_dump_keeps_the_previous_dump() {
 	result=ok
 	printf '%s\n' "$pass_report" | STUB_PG_DUMP_FAIL=config dump "$dir" && result=bad
 	[ "$(cd "$dir" && sha256sum ./* | LC_ALL=C sort)" = "$before" ] || result=bad
+	# shellcheck disable=SC2010 # test dirs hold only plain file names
 	[ -z "$(cd "$dir" && ls -A | grep '^\.')" ] || result=bad
 	check "a failed pg_dump leaves the previous dump untouched and no staging files" $result
 }
