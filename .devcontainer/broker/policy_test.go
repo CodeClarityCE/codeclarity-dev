@@ -321,6 +321,23 @@ func TestMigrateArgsRunTheMigrateJob(t *testing.T) {
 	}
 }
 
+// The one-shot knowledge restore job runs from the pulled knowledge dump image, migrate waiting on it.
+func TestAcceptsTheKnowledgeRestoreJob(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	cfg["services"].(map[string]any)["knowledge-restore"] = map[string]any{
+		"image":       "codeclarityce/knowledge-dump:2026-11-11",
+		"restart":     "no",
+		"env_file":    []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}},
+		"environment": map[string]any{"PGHOST": "db", "PGPORT": "5432"},
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+	}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
+	}
+}
+
 // The one-shot migrate job as Compose resolves it, with the API waiting on it.
 func TestAcceptsTheMigrateJob(t *testing.T) {
 	cfg, repo := goodConfig(t)
