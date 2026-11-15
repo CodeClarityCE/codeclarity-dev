@@ -1,7 +1,8 @@
 #!/bin/sh
 # Fresh-install test, production variant: on a Docker daemon with no codeclarity stack, runs
 # the deployment Compose file with DOMAIN=localhost (`docker compose up -d` twice), creates a
-# user with create-user, then checks what an operator and that user see after each run.
+# user with create-user, then checks what an operator and that user see after each run, and
+# runs the Default Analyzer on a tiny uploaded npm project as that user.
 # With UPGRADE_FROM, it first installs a previous deployment release from its release assets
 # and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
 # and the user and its data must be kept and the new migrations applied.
@@ -13,7 +14,8 @@
 #      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see knowledge-dump-fixture.sh),
 #      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold),
 #      UPGRADE_FROM (a deployment release tag, or "latest" for the newest release with a
-#      Compose file; needs gh. It skips the test when there is no such release).
+#      Compose file; needs gh. It skips the test when there is no such release),
+#      ANALYSIS_WAIT_SECONDS (default 1200).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -32,6 +34,13 @@ DEPLOYMENT_REPO=CodeClarityCE/deployment
 UPGRADE_FROM=${UPGRADE_FROM:-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+WORK=$work
+API_BASE="$URL/api"
+CURL_CA="$work/ca.crt"
+LOGIN_EMAIL=$EMAIL
+LOGIN_PASSWORD=$CREATE_USER_PASSWORD
+LOGIN_WAIT_SECONDS=300
+ANALYSIS_SERVICES="service-dispatcher service-downloader service-follower plugin-js-sbom plugin-php-sbom plugin-vuln-finder plugin-license-finder api"
 # The version the stack runs; the previous release's own .env sets it while that one runs.
 unset CODECLARITY_VERSION
 # The Compose project directory in use: the previous release's, then this checkout's.
@@ -41,26 +50,8 @@ compose() {
 	docker compose --project-directory "$cdir" -f "$cdir/docker-compose.yaml" "$@"
 }
 
-passed=0 failed=0
-
-check() {
-	if [ "$2" = ok ]; then
-		passed=$((passed + 1))
-		echo "ok   $1"
-	else
-		failed=$((failed + 1))
-		echo "FAIL $1"
-	fi
-}
-
-# Prints the stack state and the setup jobs' logs, for a failed run.
-report() {
-	compose ps -a || true
-	for service in $JOBS db api frontend; do
-		echo "--- logs: $service"
-		compose logs --no-color --tail=100 "$service" || true
-	done
-}
+# shellcheck source=lib.sh
+. "$root/.cloud/scripts/tests/fresh-install/lib.sh"
 
 # Prints "<service> <state> <exit code> <health>" for every container, one per line.
 states() {
@@ -111,11 +102,6 @@ wait_settled() {
 	[ -z "$(unsettled)" ] && cmp -s "$work/restarts.before" "$work/restarts.after"
 }
 
-sql() {
-	# shellcheck disable=SC2016
-	compose exec -T db sh -c '. /run/codeclarity/env && PGPASSWORD="$POSTGRES_PASSWORD" psql -XqtA -U postgres -d "$1" -c "$2"' sql "$1" "$2"
-}
-
 # Checksums of every generated secret and service view.
 secrets_snapshot() {
 	compose run --rm --no-deps -T --entrypoint sh generate-secrets -c \
@@ -138,25 +124,6 @@ wait_for_cert() {
 		[ "$(date +%s)" -lt "$deadline" ] || return 1
 		sleep 2
 	done
-}
-
-# Prints a token for the created user, or nothing if login fails.
-login() {
-	curl -fsS --cacert "$work/ca.crt" -X POST "$URL/api/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"$EMAIL\",\"password\":\"$CREATE_USER_PASSWORD\"}" 2>/dev/null | jq -er '.data.token' 2>/dev/null || true
-}
-
-wait_for_login() {
-	deadline=$(($(date +%s) + 300))
-	token=$(login)
-	while [ -z "$token" ] && [ "$(date +%s)" -lt "$deadline" ]; do
-		sleep 5
-		token=$(login)
-	done
-}
-
-get() {
-	curl -fsS --cacert "$work/ca.crt" "$URL/api$1" -H "Authorization: Bearer $token"
 }
 
 # Checks the stack after an `up -d`; $1 names the run.
@@ -285,6 +252,7 @@ result=ok
 fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
+if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 
 result=ok
 compose up -d || result=bad
@@ -323,7 +291,8 @@ wait_for_cert "$work/ca.crt" || result=bad
 check "with TLS_CERT and TLS_KEY unset again, Caddy serves $DOMAIN from its internal CA" $result
 
 if [ "$failed" -gt 0 ]; then
-	report
+	# shellcheck disable=SC2086 # a list of service names
+	report $JOBS db api frontend
 fi
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]
