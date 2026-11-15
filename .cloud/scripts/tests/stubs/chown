@@ -1,0 +1,10 @@
+#!/bin/sh
+# Stand-in chown: logs "<owner> <path>" to STUB_CHOWN_LOG and changes nothing.
+for arg; do
+	case "$arg" in
+	-*) ;;
+	*)
+		if [ -z "${owner:-}" ]; then owner=$arg; else echo "$owner $arg" >>"${STUB_CHOWN_LOG:-/dev/null}"; fi
+		;;
+	esac
+done
