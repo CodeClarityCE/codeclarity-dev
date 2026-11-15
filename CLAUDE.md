@@ -96,7 +96,7 @@ Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusab
 - `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key); in the devcontainer the broker reads it from the gitignored `.cloud/env/.env.secrets`. See `docs/knowledge-dump.md`
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
-- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first and reassemble split dumps; see `docs/knowledge-dump.md`
+- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first; see `docs/knowledge-dump.md`. `make up` restores knowledge from the `codeclarityce/knowledge-dump` image when the knowledge database is empty, no git-lfs needed
 - `make dump-knowledge` - Dumps `knowledge` + `config` with a manifest, only after the read-only completeness gate passes; also works in the devcontainer. `WAIVE=<checks> REASON=<why>` waives named source checks during an upstream outage, recorded in the manifest. See `docs/knowledge-dump.md`
 - `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 

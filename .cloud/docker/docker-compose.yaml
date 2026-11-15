@@ -79,6 +79,21 @@ services:
       timeout: 5s
       retries: 60
 
+  # One-shot job: restores knowledge and config from the knowledge dump image only
+  # when the knowledge database has no tables, then exits. Runs before migrate, and
+  # a dump failing its manifest fails it, which keeps the app services stopped.
+  knowledge-restore:
+    image: codeclarityce/knowledge-dump:2026-11-11
+    restart: "no"
+    env_file:
+      - ../env/.env.dev
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Dev-only one-shot job: creates the _test databases the API tests use; the
   # api compose file's migrate-test job then migrates them. A test database
   # without migration history was rebuilt by the tests, so it is recreated.

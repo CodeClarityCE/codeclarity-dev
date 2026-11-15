@@ -1,13 +1,21 @@
 #!/bin/sh
-# Test stand-in for pg_restore: logs "<db> <sha256 of the archive>" to STUB_RESTORE_LOG.
-db="" file=""
+# Test stand-in for pg_restore: logs "<db> <sha256 of the archive>" to STUB_RESTORE_LOG,
+# and its arguments to STUB_RESTORE_ARGS_LOG when set. With -l it prints a small archive listing.
+[ -n "$STUB_RESTORE_ARGS_LOG" ] && echo "$*" >>"$STUB_RESTORE_ARGS_LOG"
+db="" file="" list=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-d) db="$2"; shift ;;
+	-L) shift ;;
+	-l) list=1 ;;
 	-*) ;;
 	*) file="$1" ;;
 	esac
 	shift
 done
+if [ -n "$list" ]; then
+	printf '%s\n' '2; 3079 16385 EXTENSION - uuid-ossp ' '4120; 0 0 COMMENT - EXTENSION "uuid-ossp" ' '220; 1259 16400 TABLE public nvd postgres'
+	exit 0
+fi
 [ "$STUB_PG_RESTORE_FAIL" = "$db" ] && { echo "pg_restore: error: stub failure for $db" >&2; exit 1; }
 echo "$db $(sha256sum "$file" | cut -d' ' -f1)" >>"$STUB_RESTORE_LOG"

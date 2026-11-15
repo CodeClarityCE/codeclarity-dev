@@ -336,7 +336,7 @@ func verifyDumpsArgs(script string) []string {
 	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "verify"}
 }
 
-// restoreDumpArgs restores one dump, reassembling a split one, and creates the database if missing.
+// restoreDumpArgs restores one dump, creating the database if missing.
 func restoreDumpArgs(script, dump, db string) []string {
 	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
 }

@@ -323,6 +323,23 @@ func TestMigrateArgsRunTheMigrateJob(t *testing.T) {
 	}
 }
 
+// The one-shot knowledge restore job runs from the pulled knowledge dump image, migrate waiting on it.
+func TestAcceptsTheKnowledgeRestoreJob(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	cfg["services"].(map[string]any)["knowledge-restore"] = map[string]any{
+		"image":       "codeclarityce/knowledge-dump:2026-11-11",
+		"restart":     "no",
+		"env_file":    []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}},
+		"environment": map[string]any{"PGHOST": "db", "PGPORT": "5432"},
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+	}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
+	}
+}
+
 // The one-shot migrate job as Compose resolves it, with the API waiting on it.
 func TestAcceptsTheMigrateJob(t *testing.T) {
 	cfg, repo := goodConfig(t)
@@ -686,5 +703,45 @@ func TestOnlyDumpKnowledgeTakesAWaiver(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 			}
 		})
+	}
+}
+
+// The dev-only setup jobs: test-databases runs psql from the db image, dev-user and
+// migrate-test run scripts from the api-dev image, and the API waits on them.
+func TestAcceptsTheDevSetupJobs(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	completed := map[string]any{"condition": "service_completed_successfully", "required": true}
+	envFile := []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}}
+	services := cfg["services"].(map[string]any)
+	services["test-databases"] = map[string]any{
+		"image":      "postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+		"restart":    "no",
+		"entrypoint": []any{"/bin/sh", "-c", "createdb codeclarity_test"},
+		"env_file":   envFile,
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+	}
+	for name, script := range map[string]string{"dev-user": "create-user", "migrate-test": "migrate"} {
+		services[name] = map[string]any{
+			"image":       "codeclarityce/api-dev:latest",
+			"restart":     "no",
+			"entrypoint":  []any{"node_modules/.bin/ts-node", "-r", "tsconfig-paths/register", "src/scripts/" + script + ".ts"},
+			"env_file":    envFile,
+			"environment": map[string]any{"PG_DB_HOST": "db", "PG_DB_PORT": "5432", "PG_DB_NAME_SUFFIX": "_test"},
+			"build": map[string]any{
+				"context": filepath.Join(repo, "api"), "dockerfile": ".cloud/docker/Dockerfile", "target": "api-dev",
+			},
+			"depends_on": map[string]any{"test-databases": completed},
+			"volumes": []any{
+				map[string]any{"type": "bind", "source": filepath.Join(repo, "api"), "target": "/app"},
+				map[string]any{"type": "volume", "source": "api_node_modules", "target": "/app/node_modules", "volume": map[string]any{}},
+			},
+		}
+	}
+	svc(cfg, "api")["depends_on"] = map[string]any{"dev-user": completed, "migrate-test": completed}
+	cfg["volumes"].(map[string]any)["api_node_modules"] = map[string]any{"name": "codeclarity-dev_api_node_modules"}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
 	}
 }

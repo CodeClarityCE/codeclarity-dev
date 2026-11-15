@@ -1,0 +1,130 @@
+# Publishes the knowledge dump image, codeclarityce/knowledge-dump:<date>, from a dump set.
+# Manual runs only, on main with CI_RELEASE == 'true', in the release environment.
+#
+# dump-files: takes the dump set (today the Git LFS dump in deployment/dump), verifies it
+# against its manifest and hands it on as an artifact.
+# image: builds the image for amd64 and arm64, pushes it under the manifest's build date,
+# never over an existing tag, and attests its provenance.
+name: Knowledge dump
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: codeclarityce/knowledge-dump
+
+jobs:
+  dump-files:
+    name: dump files
+    if: github.ref == 'refs/heads/main' && vars.CI_RELEASE == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Fetch the dump set
+        run: git -C deployment lfs pull --include="dump/*.dump"
+      - name: Verify the dump set
+        run: |
+          set -euo pipefail
+          [ -f deployment/dump/knowledge-manifest.json ] || { echo "::error::deployment/dump has no knowledge-manifest.json"; exit 1; }
+          DUMP_DIR=deployment/dump sh deployment/scripts/restore-dump.sh verify
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: knowledge-dump-set
+          path: |
+            deployment/dump/knowledge.dump
+            deployment/dump/config.dump
+            deployment/dump/knowledge-manifest.json
+            deployment/dump/knowledge-manifest.sha256
+          if-no-files-found: error
+          # pg_dump -Fc output is already compressed.
+          compression-level: 0
+          retention-days: 1
+
+  image:
+    name: image
+    needs: [dump-files]
+    if: github.ref == 'refs/heads/main' && vars.CI_RELEASE == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: knowledge-dump-set
+          path: ${{ runner.temp }}/context/dump
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: meta
+        name: Stage the build context and name the image
+        env:
+          CONTEXT: ${{ runner.temp }}/context
+        run: |
+          set -euo pipefail
+          cp deployment/scripts/restore-dump.sh "$CONTEXT/"
+          DUMP_DIR="$CONTEXT/dump" sh "$CONTEXT/restore-dump.sh" verify
+          manifest="$CONTEXT/dump/knowledge-manifest.json"
+          date=$(jq -er '.build_date[0:10]' "$manifest")
+          [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Unexpected build_date: $date"; exit 1; }
+          # The dump must come from the Postgres major version the image is built on.
+          dump_major=$(jq -er '.postgres_version | split(".")[0]' "$manifest")
+          image_major=$(sed -n 's/^FROM postgres:\([0-9]*\)\..*/\1/p' .cloud/docker/knowledge-dump/Dockerfile)
+          [[ -n "$image_major" && "$dump_major" == "$image_major" ]] ||
+            { echo "::error::Dump is from Postgres $dump_major, the image is built on Postgres $image_major"; exit 1; }
+          tag="$IMAGE:$date"
+          if docker buildx imagetools inspect "$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists; a published dump is never replaced"
+            exit 1
+          fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+      # No layer cache on release builds. The image only copies files, so arm64 needs no emulation.
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ runner.temp }}/context
+          file: .cloud/docker/knowledge-dump/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: index.docker.io/${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Summary
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Published \`$TAG\`"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Manifest digest | \`$DIGEST\` |"
+          } >>"$GITHUB_STEP_SUMMARY"
