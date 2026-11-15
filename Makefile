@@ -32,7 +32,7 @@ restart: ## Restarts one service in the devcontainer (SERVICE=name)
 ps: ## Lists the agent stack's containers in the devcontainer
 	@$(BROKER) ps
 
-seed: ## Verifies deployment/dump against its manifest, then restores all databases in the devcontainer
+seed: ## Verifies deployment/dump against its manifest, then replaces the databases with it in the devcontainer
 	@$(BROKER) seed
 
 reset: ## Wipes the agent stack's data, then starts and seeds it in the devcontainer
@@ -94,17 +94,17 @@ endif
 	@cd .cloud/scripts && sh restore-knowledge-dated.sh $(LABEL)
 
 ## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
-migrate: ## Run all database migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate; else cd api && make migrate; fi
+migrate: ## Run all database migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate; else cd .cloud/scripts && sh migrate.sh; fi
 
-migrate-codeclarity: ## Run codeclarity DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate codeclarity; else cd api && make migrate-codeclarity; fi
+migrate-codeclarity: ## Run codeclarity DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate codeclarity; else cd .cloud/scripts && sh migrate.sh codeclarity; fi
 
-migrate-knowledge: ## Run knowledge DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate knowledge; else cd api && make migrate-knowledge; fi
+migrate-knowledge: ## Run knowledge DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate knowledge; else cd .cloud/scripts && sh migrate.sh knowledge; fi
 
-migrate-plugins: ## Run plugins DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate plugins; else cd api && make migrate-plugins; fi
+migrate-plugins: ## Run plugins DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate plugins; else cd .cloud/scripts && sh migrate.sh plugins; fi
 
-migrate-config: ## Run config DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate config; else cd api && make migrate-config; fi
+migrate-config: ## Run config DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate config; else cd .cloud/scripts && sh migrate.sh config; fi
