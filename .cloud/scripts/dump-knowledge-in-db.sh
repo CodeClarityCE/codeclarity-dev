@@ -4,12 +4,11 @@
 # Manifest format: docs/knowledge-dump.md.
 #
 # Usage: sh -c "$(cat dump-knowledge-in-db.sh)" dump-knowledge <gate-report.json
-# Env: DUMP_DIR (default /dump), SPLIT_BYTES (default 1900 MiB, under GitHub's 2 GB LFS file limit).
+# Env: DUMP_DIR (default /dump).
 
 set -eu
 
 DUMP_DIR=${DUMP_DIR:-/dump}
-SPLIT_BYTES=${SPLIT_BYTES:-1992294400}
 DATABASES="knowledge config"
 MANIFEST=knowledge-manifest.json
 SUMS=knowledge-manifest.sha256
@@ -76,22 +75,8 @@ for db in $DATABASES; do
 	pg_dump -w -U postgres -d "$db" $no_data -Fc -f "$staging/$name"
 	size=$(stat -c %s "$staging/$name")
 	whole=$(sha "$staging/$name")
-	parts=""
-	if [ "$size" -gt "$SPLIT_BYTES" ]; then
-		# Parts sort in order (part-aaa, part-aab, ...) so cat part-* rebuilds the file.
-		(cd "$staging" && split -b "$SPLIT_BYTES" -a 3 "$name" "$name.part-")
-		rm "$staging/$name"
-		for part in "$staging/$name.part-"*; do
-			part_name=${part##*/}
-			part_sha=$(sha "$part")
-			printf '%s  %s\n' "$part_sha" "$part_name" >>"$staging/$SUMS"
-			part_entry=$(printf '{"name":"%s","size":%s,"sha256":"%s"}' "$part_name" "$(stat -c %s "$part")" "$part_sha")
-			parts="${parts:+$parts,}$part_entry"
-		done
-	else
-		printf '%s  %s\n' "$whole" "$name" >>"$staging/$SUMS"
-	fi
-	entry=$(printf '{"name":"%s","database":"%s","size":%s,"sha256":"%s","parts":[%s]}' "$name" "$db" "$size" "$whole" "$parts")
+	printf '%s  %s\n' "$whole" "$name" >>"$staging/$SUMS"
+	entry=$(printf '{"name":"%s","database":"%s","size":%s,"sha256":"%s"}' "$name" "$db" "$size" "$whole")
 	files="${files:+$files,}$entry"
 done
 
@@ -101,7 +86,6 @@ cat >"$staging/$MANIFEST" <<JSON
   "build_date": "$build_date",
   "postgres_version": "$postgres_version",
   "pg_dump_version": "$pg_dump_version",
-  "split_bytes": $SPLIT_BYTES,
   "files": [$files],
   "sources": $sources,
   "migrations": {"knowledge": $knowledge_migrations, "config": $config_migrations},
@@ -111,7 +95,7 @@ JSON
 
 # Replace the previous dump only once everything is ready.
 for db in $DATABASES; do
-	rm -f "$DUMP_DIR/$db.dump" "$DUMP_DIR/$db.dump.part-"*
+	rm -f "$DUMP_DIR/$db.dump"
 done
 rm -f "$DUMP_DIR/$MANIFEST" "$DUMP_DIR/$SUMS"
 mv "$staging"/* "$DUMP_DIR/"
