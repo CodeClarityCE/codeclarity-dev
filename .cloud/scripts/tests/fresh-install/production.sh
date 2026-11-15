@@ -5,6 +5,7 @@
 # With UPGRADE_FROM, it first installs a previous deployment release from its release assets
 # and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
 # and the user and its data must be kept and the new migrations applied.
+# Last, it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
@@ -125,6 +126,15 @@ secrets_snapshot() {
 fetch_ca() {
 	deadline=$(($(date +%s) + 120))
 	until compose exec -T frontend cat /data/caddy/pki/authorities/local/root.crt >"$work/ca.crt" 2>/dev/null && [ -s "$work/ca.crt" ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || return 1
+		sleep 2
+	done
+}
+
+# Waits until $URL serves a certificate that verifies against the CA file $1.
+wait_for_cert() {
+	deadline=$(($(date +%s) + 120))
+	until curl -fsS -o /dev/null --cacert "$1" "$URL/"; do
 		[ "$(date +%s)" -lt "$deadline" ] || return 1
 		sleep 2
 	done
@@ -294,6 +304,23 @@ secrets_snapshot >"$work/secrets.second" || result=bad
 [ -s "$work/secrets.first" ] || result=bad
 cmp -s "$work/secrets.first" "$work/secrets.second" || result=bad
 check "second up -d: no secret is generated or changed" $result
+
+# An operator's own certificate, set in the environment as it would be in .env.
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN="$DOMAIN" \
+	-addext "subjectAltName=DNS:$DOMAIN" -keyout "$work/supplied.key" -out "$work/supplied.crt" 2>/dev/null
+TLS_CERT=$(cat "$work/supplied.crt")
+TLS_KEY=$(cat "$work/supplied.key")
+export TLS_CERT TLS_KEY
+result=ok
+compose up -d || result=bad
+wait_for_cert "$work/supplied.crt" || result=bad
+check "with TLS_CERT and TLS_KEY set, Caddy serves the supplied certificate" $result
+
+unset TLS_CERT TLS_KEY
+result=ok
+compose up -d || result=bad
+wait_for_cert "$work/ca.crt" || result=bad
+check "with TLS_CERT and TLS_KEY unset again, Caddy serves $DOMAIN from its internal CA" $result
 
 if [ "$failed" -gt 0 ]; then
 	report
