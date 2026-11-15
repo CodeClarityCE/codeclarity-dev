@@ -50,18 +50,24 @@ report() {
 	done
 }
 
-# Prints "<service> <state> <health> <exit code>" for every container, one per line.
+# Prints "<service> <state> <exit code> <health>" for every container, one per line.
 states() {
-	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.Health // "") \(.ExitCode)"'
+	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.ExitCode) \(.Health // "")"'
 }
 
 # Prints what keeps the stack from being settled: a job not exited 0, or a service not
 # running and healthy (when it has a healthcheck). Prints nothing when it is settled.
 unsettled() {
-	states | while read -r service state health code; do
+	states | while read -r service state code health; do
 		case " $JOBS " in
-		*" $service "*) [ "$state" = exited ] && [ "$code" = 0 ] || echo "$service $state $code" ;;
-		*) [ "$state" = running ] && { [ -z "$health" ] || [ "$health" = healthy ]; } || echo "$service $state $health" ;;
+		*" $service "*)
+			if [ "$state" != exited ] || [ "$code" != 0 ]; then echo "$service $state $code"; fi
+			;;
+		*)
+			if [ "$state" != running ] || { [ -n "$health" ] && [ "$health" != healthy ]; }; then
+				echo "$service $state $health"
+			fi
+			;;
 		esac
 	done
 }
@@ -218,7 +224,8 @@ check "second up -d: the knowledge restore finds its work done" $result
 
 result=ok
 secrets_snapshot >"$work/secrets.second" || result=bad
-[ -s "$work/secrets.first" ] && cmp -s "$work/secrets.first" "$work/secrets.second" || result=bad
+[ -s "$work/secrets.first" ] || result=bad
+cmp -s "$work/secrets.first" "$work/secrets.second" || result=bad
 check "second up -d: no secret is generated or changed" $result
 
 if [ "$failed" -gt 0 ]; then

@@ -105,7 +105,8 @@ test_each_role_gets_its_own_password_and_services_agree_on_it() {
 		CC_KNOWLEDGE_PASSWORD CC_EXPORTER_PASSWORD PGBOUNCER_AUTH_PASSWORD; do pw $v; done | grep -c .)
 	distinct=$(for v in POSTGRES_PASSWORD CC_API_PASSWORD CC_SERVICE_PASSWORD CC_PLUGIN_PASSWORD \
 		CC_KNOWLEDGE_PASSWORD CC_EXPORTER_PASSWORD PGBOUNCER_AUTH_PASSWORD; do pw $v; done | sort -u | grep -c .)
-	[ "$n" = 7 ] && [ "$distinct" = 7 ] || result=bad
+	[ "$n" = 7 ] || result=bad
+	[ "$distinct" = 7 ] || result=bad
 	[ "$(env_value "$s/api/.env.prod" PG_DB_PASSWORD)" = "$(pw CC_API_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/service/env" PG_DB_PASSWORD)" = "$(pw CC_SERVICE_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/plugin/env" PG_DB_PASSWORD)" = "$(pw CC_PLUGIN_PASSWORD)" ] || result=bad
@@ -182,7 +183,7 @@ EOF
 	chmod +x "$work/bin/openssl"
 	result=ok
 	PATH="$work/bin:$PATH" generate "$s" && result=bad
-	ls -A "$s/.store" | grep -q jwt_private && result=bad
+	[ -z "$(find "$s/.store" -name "*jwt_private*")" ] || result=bad
 	generate "$s" || result=bad
 	[ "$(openssl ec -in "$s/api-jwt/private.pem" -pubout 2>/dev/null)" = "$(cat "$s/api-jwt/public.pem")" ] || result=bad
 	check "a failed generation fails the job, leaves no partial secret, and the next run completes" $result
