@@ -135,7 +135,8 @@ clip() {
 	sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$@" | awk 1
 }
 
-# Prints the inline content of a top-level config, with Compose's $$ escapes undone.
+# Prints the inline content of a top-level config, with Compose's $$ escapes undone
+# (left as they are with RAW=1).
 config_content() {
 	awk -v name="$2" '
 	/^[^ ]/ { top = $0 }
@@ -144,7 +145,7 @@ config_content() {
 	body && ($0 == "" || /^      /) { print substr($0, 7); next }
 	body { exit }
 	want && /^  [^ ]/ { exit }
-	' "$1" | sed 's/\$\$/$/g' | clip
+	' "$1" | if [ -n "${RAW:-}" ]; then cat; else sed 's/\$\$/$/g'; fi | clip
 }
 
 test_every_config_file_is_inlined_with_its_dollar_signs_escaped() {
@@ -162,7 +163,12 @@ test_every_config_file_is_inlined_with_its_dollar_signs_escaped() {
 			echo bad
 		}
 	done | grep -q bad && result=bad
-	grep -Fq '{$$SERVER_NAME}' "$out/docker-compose.yaml" 2>/dev/null || result=bad
+	# A $ left single would be interpolated from the operator's .env; the Caddyfile has some.
+	echo "$files" | while read -r name file; do
+		RAW=1 config_content "$out/docker-compose.yaml" "$name"
+	done >"$work/raw"
+	grep -Fq '$$' "$work/raw" || result=bad
+	sed 's/\$\$//g' "$work/raw" | grep -Fq '$' && result=bad
 	check "every config file is inlined as content, unchanged once Compose undoes the \$\$ escapes" $result
 }
 
