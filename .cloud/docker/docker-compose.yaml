@@ -82,8 +82,9 @@ services:
   # One-shot job: restores knowledge and config from the knowledge dump image only
   # when the knowledge database has no tables, then exits. Runs before migrate, and
   # a dump failing its manifest fails it, which keeps the app services stopped.
+  # KNOWLEDGE_DUMP_IMAGE swaps in another dump image, such as the fresh-install test's fixture.
   knowledge-restore:
-    image: codeclarityce/knowledge-dump:2026-11-11
+    image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-11}
     restart: "no"
     env_file:
       - ../env/.env.dev

@@ -237,14 +237,15 @@ restore_database() {
 	DUMP_DIR="$1" make --no-print-directory -C "$root" restore-database >>"$work/out" 2>&1
 }
 
+# The dev account and the _test databases come from setup jobs, so codeclarity.dump is never restored.
 test_restore_database_restores_every_database() {
 	dump_set make_ok
 	echo codeclarity >"$dir/codeclarity.dump"
 	result=ok
 	restore_database "$dir" || result=bad
-	[ "$(cut -d' ' -f1 "$STUB_RESTORE_LOG" | tr '\n' ' ')" = "codeclarity knowledge config knowledge_test config_test codeclarity_test " ] || result=bad
+	[ "$(cut -d' ' -f1 "$STUB_RESTORE_LOG" | tr '\n' ' ')" = "knowledge config " ] || result=bad
 	grep -q "^knowledge $sha_2500\$" "$STUB_RESTORE_LOG" || result=bad
-	check "make restore-database verifies, then restores every database" $result
+	check "make restore-database verifies, then restores knowledge and config only" $result
 }
 
 test_restore_database_restores_nothing_from_a_corrupted_set() {
@@ -254,7 +255,7 @@ test_restore_database_restores_nothing_from_a_corrupted_set() {
 	result=ok
 	restore_database "$dir" && result=bad
 	[ -s "$STUB_RESTORE_LOG" ] && result=bad
-	check "make restore-database restores nothing, not even codeclarity, from a corrupted set" $result
+	check "make restore-database restores nothing from a corrupted set" $result
 }
 
 # restore_if_empty runs the setup job's command on a dump directory.
