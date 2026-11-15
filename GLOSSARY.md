@@ -4,6 +4,16 @@ CodeClarity analyses software projects for vulnerable and non-compliant dependen
 
 ## Language
 
+### Instances
+
+**Instance**:
+One running deployment of CodeClarity, with its own users, knowledge database and installed plugins.
+_Avoid_: Installation, server, environment
+
+**Operator**:
+Whoever installs, upgrades and administers an instance; distinct from a user, who runs analyses on it, and from a developer, who works on CodeClarity's code.
+_Avoid_: Admin (that is a role a user holds), sysadmin, maintainer
+
 ### Analysis
 
 **Analysis**:
