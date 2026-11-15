@@ -178,13 +178,30 @@ The dev Compose file runs it as the `knowledge-restore` job, pinned to one tag; 
 and caches the image, so dev needs no separate download step. To ship a newer dump, publish its image and
 change that tag.
 
-The **Knowledge dump** workflow (`.github/workflows/knowledge-dump.yml`) publishes it. It runs only when dispatched by hand
-on `main` with `CI_RELEASE` set to `true`, and pushes in the `release` environment. Its `release` input names a GitHub
-release of this repo whose assets are the dump set `make dump-knowledge` wrote (`knowledge.dump`, `config.dump`,
-`knowledge-manifest.json`, `knowledge-manifest.sha256`); a maintainer creates that release and uploads the four files
-first. The workflow downloads them, verifies them against their manifest, refuses a dump from another Postgres major version than
-the image's, builds the image for amd64 and arm64, pushes it under a tag that must not exist yet, and attests its build
-provenance on Docker Hub.
+The **Knowledge dump** workflow (`.github/workflows/knowledge-dump.yml`) builds and publishes it, so a published dump never
+comes from a developer's machine. It runs every Monday and when dispatched by hand, only on `main` with `CI_RELEASE` set
+to `true`, and every job runs in the `release` environment, which only `main` can use. It has no pull request trigger, so
+no pull request run can read the environment's secrets. Its jobs:
+
+1. **update and dump**: starts an empty Postgres (the knowledge dump image's base, with the deployment init script) and a
+   RabbitMQ, migrates every database with the API image built from the `api` submodule, builds the knowledge tooling from
+   `backend/services/knowledge` in that service's pinned Go image, and runs the full update (`-knowledge -action update`)
+   with `NVD_API_KEY` from the environment. Update failures are only warnings: the completeness gate runs next, as
+   `make dump-knowledge` runs it (same expected API migrations), and if it fails the run stops and nothing is published.
+   Otherwise `dump-knowledge-in-db.sh` dumps knowledge and config with their manifest. A manual run's `waive` and `reason`
+   inputs are the gate's `WAIVE` and `REASON`, recorded in the manifest's `gate.waiver`; scheduled runs waive nothing.
+2. **image**: verifies the dump set against its manifest, refuses a dump from another Postgres major version than the
+   image's, builds the image for amd64 and arm64, pushes it under a tag that must not exist yet, and attests its build
+   provenance on Docker Hub.
+3. **prune old tags**: `.cloud/scripts/prune-knowledge-dump-tags.sh` keeps the newest 8 dated tags and every tag that the
+   `docker-compose.yaml` asset of any `CodeClarityCE/deployment` release names, and deletes every other dated tag through the
+   Docker Hub API. Tags that are not dates are left alone. If any release or its Compose file cannot be read, it deletes nothing
+   and fails.
+
+The `release` environment needs `NVD_API_KEY`, and `DOCKERHUB_USERNAME` with a `DOCKERHUB_TOKEN` that can read, write
+and delete (pruning deletes tags). Without `NVD_API_KEY` the update still runs, at NVD's lower rate.
+
+A run has no way to publish a dump built elsewhere: during an upstream outage, dispatch it with a waiver instead.
 
 ## Tests
 
@@ -193,5 +210,7 @@ provenance on Docker Hub.
 `sh .cloud/scripts/tests/restore-dump.test.sh` restores dump sets made by that script, refuses damaged ones, and covers
 `restore-if-empty` (restore only into an empty knowledge database, and a failing manifest stopping the job), with stand-in
 `pg_restore`, `psql`, `createdb` and `docker` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).
+`sh .cloud/scripts/tests/prune-knowledge-dump-tags.test.sh` runs the tag pruning against stand-in `gh` (deployment
+releases) and `curl` (Docker Hub).
 `sh .cloud/scripts/tests/reset.test.sh` checks that `make reset` refuses without `CONFIRM=reset`.
 The broker commands are covered by `cd .devcontainer/broker && GOWORK=off go test ./...`.
