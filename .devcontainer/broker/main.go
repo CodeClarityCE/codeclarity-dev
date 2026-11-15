@@ -333,6 +333,11 @@ func restoreDumpArgs(script, dump, db string) []string {
 	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
 }
 
+// dropDatabaseArgs drops one database, closing its connections, so a dump restores into an empty one.
+func dropDatabaseArgs(db string) []string {
+	return []string{"exec", "-T", "db", "sh", "-c", `PGPASSWORD="$POSTGRES_PASSWORD" dropdb -w -U postgres --force --if-exists "$1"`, "dropdb", db}
+}
+
 func (b *broker) seed(w io.Writer, _ string) int {
 	script, err := os.ReadFile(filepath.Join(repoRoot, restoreDumpScript))
 	if err != nil {
@@ -345,7 +350,11 @@ func (b *broker) seed(w io.Writer, _ string) int {
 	verify := func() int {
 		return docker(w, resolved(verifyDumpsArgs(string(script))...)...)
 	}
+	// make up has already migrated the databases, so each restore starts from an empty one.
 	restore := func(dump, db string) int {
+		if code := docker(w, resolved(dropDatabaseArgs(db)...)...); code != 0 {
+			return code
+		}
 		return docker(w, resolved(restoreDumpArgs(string(script), dump, db)...)...)
 	}
 	worst, verified := seedRestores(w, verify, restore)
@@ -584,22 +593,19 @@ func migrationTargets(db string) ([]string, bool) {
 	return nil, false
 }
 
-// runMigrations tries every database and returns the last failure.
+// runMigrations runs the migrate job once for the given databases.
 func (b *broker) runMigrations(w io.Writer, dbs []string) int {
-	worst := 0
-	for _, db := range dbs {
-		fmt.Fprintf(w, "broker: migrating %s\n", db)
-		if code := docker(w, resolved(migrateArgs(db)...)...); code != 0 {
-			fmt.Fprintf(w, "broker: migration of %s exited %d\n", db, code)
-			worst = code
-		}
+	fmt.Fprintf(w, "broker: migrating %s\n", strings.Join(dbs, ", "))
+	code := docker(w, resolved(migrateArgs(dbs...)...)...)
+	if code != 0 {
+		fmt.Fprintf(w, "broker: the migrate job exited %d\n", code)
 	}
-	return worst
+	return code
 }
 
-// migrateArgs runs one database's migrations in the api container, straight on Postgres.
-func migrateArgs(db string) []string {
-	return []string{"exec", "-T", "-e", "PG_DB_HOST=db", "-e", "PG_DB_PORT=5432", "api", "pnpm", "migration:run:" + db}
+// migrateArgs runs the one-shot migrate job, which talks straight to Postgres.
+func migrateArgs(dbs ...string) []string {
+	return append([]string{"run", "--rm", "migrate"}, dbs...)
 }
 
 func (b *broker) reset(w io.Writer, service string) int {

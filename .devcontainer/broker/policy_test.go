@@ -254,6 +254,15 @@ func TestRestoreDumpRunsTheScriptInTheDBContainer(t *testing.T) {
 	}
 }
 
+// make up has already migrated the databases, so seed drops each one before restoring into it.
+func TestDropDatabaseRunsInTheDBContainer(t *testing.T) {
+	got := strings.Join(dropDatabaseArgs("codeclarity_test"), " ")
+	want := `exec -T db sh -c PGPASSWORD="$POSTGRES_PASSWORD" dropdb -w -U postgres --force --if-exists "$1" dropdb codeclarity_test`
+	if got != want {
+		t.Errorf("dropDatabaseArgs = %q, want %q", got, want)
+	}
+}
+
 func TestRestoreDumpScriptIsInTheDeploymentRepo(t *testing.T) {
 	if _, err := os.Stat("../../deployment/scripts"); err != nil {
 		t.Skip("the deployment submodule is not checked out")
@@ -303,11 +312,42 @@ func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
 	}
 }
 
-func TestMigrateArgsRunInTheAPIContainer(t *testing.T) {
-	got := strings.Join(migrateArgs("plugins"), " ")
-	want := "exec -T -e PG_DB_HOST=db -e PG_DB_PORT=5432 api pnpm migration:run:plugins"
-	if got != want {
-		t.Errorf("migrateArgs = %q, want %q", got, want)
+func TestMigrateArgsRunTheMigrateJob(t *testing.T) {
+	if got, want := strings.Join(migrateArgs(), " "), "run --rm migrate"; got != want {
+		t.Errorf("migrateArgs() = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(migrateArgs("plugins"), " "), "run --rm migrate plugins"; got != want {
+		t.Errorf("migrateArgs(plugins) = %q, want %q", got, want)
+	}
+}
+
+// The one-shot migrate job as Compose resolves it, with the API waiting on it.
+func TestAcceptsTheMigrateJob(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	completed := map[string]any{"condition": "service_completed_successfully", "required": true}
+	cfg["services"].(map[string]any)["migrate"] = map[string]any{
+		"image":       "codeclarityce/api-dev:latest",
+		"restart":     "no",
+		"entrypoint":  []any{"/bin/sh", "-c", `pnpm install && exec pnpm run migrate "$@"`, "migrate"},
+		"command":     []any{},
+		"env_file":    []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}},
+		"environment": map[string]any{"PG_DB_HOST": "db", "PG_DB_PORT": "5432"},
+		"build": map[string]any{
+			"context": filepath.Join(repo, "api"), "dockerfile": ".cloud/docker/Dockerfile", "target": "api-dev",
+		},
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+		"volumes": []any{
+			map[string]any{"type": "bind", "source": filepath.Join(repo, "api"), "target": "/app"},
+			map[string]any{"type": "volume", "source": "api_node_modules", "target": "/app/node_modules", "volume": map[string]any{}},
+			map[string]any{"type": "volume", "source": "pnpm-store", "target": "/pnpm/store", "volume": map[string]any{}},
+		},
+	}
+	svc(cfg, "api")["depends_on"] = map[string]any{"migrate": completed}
+	cfg["volumes"].(map[string]any)["api_node_modules"] = map[string]any{"name": "codeclarity-dev_api_node_modules"}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
 	}
 }
 
