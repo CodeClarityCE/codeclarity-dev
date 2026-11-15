@@ -49,14 +49,12 @@ up-prod: ## Starts the Docker images in prod mode
 down-prod: ## Stops the Docker images in prod mode
 	@cd deployment && make down
 
-## —— Commands to update the knowledge database 💾 ———————————————————————————————————————————————————————————————
-knowledge-update: export PG_DB_PORT = 6433
-knowledge-update: ## Updates the database (NVD_API_KEY; in the devcontainer from .cloud/env/.env.secrets)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -; fi
+## -- Commands to update the knowledge database 💾 ---------------------------------------------------------------
+knowledge-update: ## Updates the database in the stack (NVD_API_KEY from .cloud/env/.env.secrets)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else cd .cloud/scripts && sh knowledge-update.sh update; fi
 
-knowledge-update-osv: export PG_DB_PORT = 6433
 knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update-osv; fi
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else cd .cloud/scripts && sh knowledge-update.sh update-osv; fi
 
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
 dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes (WAIVE=<checks> REASON=<why> records waived checks)
