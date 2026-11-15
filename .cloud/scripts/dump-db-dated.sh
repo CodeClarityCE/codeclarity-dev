@@ -21,6 +21,8 @@ esac
 
 DUMP_DIR=../../deployment/dump
 
+. ./compose.sh
+
 for db in knowledge config; do
 	if [ -e "$DUMP_DIR/$db-$LABEL.dump" ]; then
 		echo "Error: $DUMP_DIR/$db-$LABEL.dump already exists, refusing to overwrite" >&2
@@ -28,35 +30,9 @@ for db in knowledge config; do
 	fi
 done
 
-docker compose -f ../docker/docker-compose.yaml \
-	-f ../../api/.cloud/docker/docker-compose.yaml \
-	-f ../../frontend/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/packageFollower/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/notifier/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/downloader/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/dispatcher/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/codeql/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/license-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d knowledge -Fc > /dump/knowledge-$LABEL.dump" || exit 1
+compose exec db sh -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d knowledge -Fc > /dump/knowledge-$LABEL.dump" || exit 1
 
-docker compose -f ../docker/docker-compose.yaml \
-	-f ../../api/.cloud/docker/docker-compose.yaml \
-	-f ../../frontend/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/packageFollower/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/notifier/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/downloader/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/services/dispatcher/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/codeql/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/license-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-patching/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml \
-	-f ../../backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml \
-	exec db sh -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d config -Fc > /dump/config-$LABEL.dump" || exit 1
+compose exec db sh -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d config -Fc > /dump/config-$LABEL.dump" || exit 1
 
 echo "Produced:"
 ls -lh "$DUMP_DIR/knowledge-$LABEL.dump" "$DUMP_DIR/config-$LABEL.dump"
