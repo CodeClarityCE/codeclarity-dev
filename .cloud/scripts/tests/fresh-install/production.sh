@@ -192,10 +192,10 @@ install_previous() {
 	cp "$prev/env.example" "$prev/.env"
 	cdir=$prev
 	result=ok
-	compose up -d || result=bad
+	compose up -d || { result=bad; report_unsettled; }
 	check "previous release $UPGRADE_FROM: up -d succeeds" $result
 	result=ok
-	wait_settled || result=bad
+	wait_settled || { result=bad; report_unsettled; }
 	check "previous release $UPGRADE_FROM: every job succeeds and every service runs" $result
 	result=ok
 	compose run --rm -T -e CREATE_USER_PASSWORD api create-user --email "$EMAIL" --name "$NAME" || result=bad
@@ -225,10 +225,10 @@ CODECLARITY_VERSION=$(jq -er .version "$dir/config.json")
 export CODECLARITY_VERSION
 
 result=ok
-compose up -d || result=bad
+compose up -d || { result=bad; report_unsettled; }
 check "first up -d succeeds" $result
 result=ok
-wait_settled || result=bad
+wait_settled || { result=bad; report_unsettled; }
 check "first up -d: every job succeeds and every service runs, healthy where it has a healthcheck" $result
 check_stack "first up -d"
 secrets_snapshot >"$work/secrets.first" || true
@@ -255,10 +255,10 @@ check_user "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 
 result=ok
-compose up -d || result=bad
+compose up -d || { result=bad; report_unsettled; }
 check "second up -d succeeds" $result
 result=ok
-wait_settled || result=bad
+wait_settled || { result=bad; report_unsettled; }
 check "second up -d: every job succeeds and every service runs" $result
 check_stack "second up -d"
 check_user "second up -d"
@@ -280,13 +280,13 @@ TLS_CERT=$(cat "$work/supplied.crt")
 TLS_KEY=$(cat "$work/supplied.key")
 export TLS_CERT TLS_KEY
 result=ok
-compose up -d || result=bad
+compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/supplied.crt" || result=bad
 check "with TLS_CERT and TLS_KEY set, Caddy serves the supplied certificate" $result
 
 unset TLS_CERT TLS_KEY
 result=ok
-compose up -d || result=bad
+compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/ca.crt" || result=bad
 check "with TLS_CERT and TLS_KEY unset again, Caddy serves $DOMAIN from its internal CA" $result
 

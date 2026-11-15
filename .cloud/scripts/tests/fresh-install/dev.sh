@@ -81,7 +81,7 @@ fi
 
 for run in first second; do
 	result=ok
-	make up || result=bad
+	make up || { result=bad; report_unsettled; }
 	check "$run make up succeeds" $result
 	[ "$result" = ok ] || continue
 	check_stack "$run make up"

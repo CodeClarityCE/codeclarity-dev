@@ -29,6 +29,21 @@ report() {
 	done
 }
 
+# Prints the logs of every service that is neither running (and healthy, if it has a check) nor exited 0.
+report_unsettled() {
+	compose ps -a || true
+	compose ps -a --format '{{.Service}} {{.State}} {{.Health}} {{.ExitCode}}' 2>/dev/null |
+		while read -r service state health code; do
+			case "$state:$health:$code" in
+			running:healthy:* | running::* | exited:*:0) ;;
+			*)
+				echo "--- logs: $service ($state $health exit $code)"
+				compose logs --no-color --tail=80 "$service" || true
+				;;
+			esac
+		done
+}
+
 # Runs one SQL statement on database $1 as postgres, printing bare rows.
 sql() {
 	# shellcheck disable=SC2016 # expanded in the db container

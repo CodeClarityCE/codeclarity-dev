@@ -27,7 +27,8 @@ openssl req -new -x509 -days "$SERVER_DAYS" -nodes -text \
   -addext "subjectAltName=DNS:rabbitmq,DNS:localhost,IP:127.0.0.1" 2>/dev/null
 rm -f "$SAN_EXT"
 
-chmod 600 "$CERT_DIR/server.key"
+# Readable by the rabbitmq user in the container; a throwaway dev-only key.
+chmod 644 "$CERT_DIR/server.key"
 chmod 644 "$CERT_DIR/server.crt"
 
 echo "Dev RabbitMQ certificate generated: $CERT_DIR/server.{crt,key}"
