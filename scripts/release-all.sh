@@ -16,7 +16,8 @@
 # central workflows in CodeClarityCE/.github and ends in the required `ci` job.
 # Who creates the release in step 4:
 #   actions  the caller uses a releasing workflow (go-library, go-image,
-#            node-image) and the repo variable CI_RELEASE is true;
+#            node-image) or has its own release job (deployment), and the
+#            repo variable CI_RELEASE is true;
 #   script   the caller has no release jobs, so this script creates the
 #            release itself.
 # A releasing caller with CI_RELEASE off stops the run, since no image would ship.
@@ -66,7 +67,7 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-h | --help)
-		sed -n '2,43p' "$0"
+		sed -n '2,42p' "$0"
 		exit 0
 		;;
 	*)
@@ -126,10 +127,10 @@ ORDER+=("${SUPER_KEYS[@]}")
 
 actions_caller() { echo "$ROOT/$1/.github/workflows/ci.yml"; }
 has_actions() { [[ -f "$(actions_caller "$1")" ]]; }
-# The caller uses a central workflow that has release jobs.
+# The caller uses a central workflow that has release jobs, or has its own (deployment's).
 actions_can_release() {
 	has_actions "$1" &&
-		grep -qE 'CodeClarityCE/\.github/.+/(go-library|go-image|node-image)\.yml@' "$(actions_caller "$1")"
+		grep -qE "CodeClarityCE/\.github/.+/(go-library|go-image|node-image)\.yml@|vars\.CI_RELEASE == 'true'" "$(actions_caller "$1")"
 }
 
 # Actions releases once the repo variable CI_RELEASE is true (looked up once per repo).

@@ -2,12 +2,17 @@
 # Fresh-install test, production variant: on a Docker daemon with no codeclarity stack, runs
 # the deployment Compose file with DOMAIN=localhost (`docker compose up -d` twice), creates a
 # user with create-user, then checks what an operator and that user see after each run.
+# With UPGRADE_FROM, it first installs a previous deployment release from its release assets
+# and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
+# and the user and its data must be kept and the new migrations applied.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
 # Env: DEPLOYMENT_DIR (default: the deployment submodule), WAIT_SECONDS (default 900),
 #      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see knowledge-dump-fixture.sh),
-#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold).
+#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold),
+#      UPGRADE_FROM (a deployment release tag, or "latest" for the newest release with a
+#      Compose file; needs gh. It skips the test when there is no such release).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -21,12 +26,18 @@ NAME="Fresh Install"
 CREATE_USER_PASSWORD="fresh-install-$(date +%s)"
 export CREATE_USER_PASSWORD
 ANALYZER="Default Analyzer"
-JOBS="generate-secrets knowledge-restore migrate default-analyzer"
+JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer"
+DEPLOYMENT_REPO=CodeClarityCE/deployment
+UPGRADE_FROM=${UPGRADE_FROM:-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+# The version the stack runs; the previous release's own .env sets it while that one runs.
+unset CODECLARITY_VERSION
+# The Compose project directory in use: the previous release's, then this checkout's.
+cdir=$dir
 
 compose() {
-	docker compose --project-directory "$dir" -f "$dir/docker-compose.yaml" "$@"
+	docker compose --project-directory "$cdir" -f "$cdir/docker-compose.yaml" "$@"
 }
 
 passed=0 failed=0
@@ -183,10 +194,58 @@ check_user() {
 	check "$1: the instance has exactly one user and one organization" $result
 }
 
+# Row counts of what an upgrade must keep.
+kept_rows() {
+	for table in '"user"' organization analyzer project analysis; do
+		printf '%s %s\n' "$table" "$(sql codeclarity "SELECT count(*) FROM $table")"
+	done
+}
+
+# Prints the newest deployment release that has a Compose file, or nothing.
+latest_release() {
+	gh api "repos/$DEPLOYMENT_REPO/releases?per_page=50" \
+		--jq '[.[] | select(any(.assets[]; .name == "docker-compose.yaml"))][0].tag_name // empty'
+}
+
+# Installs the previous release from its assets and creates the user there.
+install_previous() {
+	prev="$work/previous"
+	mkdir -p "$prev"
+	gh release download "$UPGRADE_FROM" -R "$DEPLOYMENT_REPO" -D "$prev" -p docker-compose.yaml -p env.example
+	cp "$prev/env.example" "$prev/.env"
+	cdir=$prev
+	result=ok
+	compose up -d || result=bad
+	check "previous release $UPGRADE_FROM: up -d succeeds" $result
+	result=ok
+	wait_settled || result=bad
+	check "previous release $UPGRADE_FROM: every job succeeds and every service runs" $result
+	result=ok
+	compose run --rm -T -e CREATE_USER_PASSWORD api create-user --email "$EMAIL" --name "$NAME" || result=bad
+	check "previous release $UPGRADE_FROM: create-user succeeds" $result
+	kept_rows >"$work/rows.before" || true
+	cdir=$dir
+}
+
 if [ -n "$(compose ps -aq)" ]; then
 	echo "fresh-install: a codeclarity stack already exists on this daemon; this test needs an empty one" >&2
 	exit 1
 fi
+
+if [ "$UPGRADE_FROM" = latest ]; then
+	UPGRADE_FROM=$(latest_release)
+	if [ -z "$UPGRADE_FROM" ]; then
+		echo "skip: $DEPLOYMENT_REPO has no release with a docker-compose.yaml asset yet, so there is nothing to upgrade from"
+		exit 0
+	fi
+fi
+if [ -n "$UPGRADE_FROM" ]; then
+	install_previous
+fi
+
+# The version this checkout's Compose file is released as; the upgrade bumps .env to it.
+CODECLARITY_VERSION=$(jq -er .version "$dir/config.json")
+export CODECLARITY_VERSION
 
 result=ok
 compose up -d || result=bad
@@ -197,9 +256,17 @@ check "first up -d: every job succeeds and every service runs, healthy where it 
 check_stack "first up -d"
 secrets_snapshot >"$work/secrets.first" || true
 
-result=ok
-[ "$(sql codeclarity 'SELECT count(*) FROM "user"')" = 0 ] || result=bad
-check "first up -d: the instance has no accounts" $result
+if [ -n "$UPGRADE_FROM" ]; then
+	result=ok
+	kept_rows >"$work/rows.after" || result=bad
+	[ -s "$work/rows.before" ] || result=bad
+	cmp -s "$work/rows.before" "$work/rows.after" || result=bad
+	check "upgrade from $UPGRADE_FROM keeps every user, organization, analyzer, project and analysis" $result
+else
+	result=ok
+	[ "$(sql codeclarity 'SELECT count(*) FROM "user"')" = 0 ] || result=bad
+	check "first up -d: the instance has no accounts" $result
+fi
 
 result=ok
 compose run --rm -T -e CREATE_USER_PASSWORD api create-user --email "$EMAIL" --name "$NAME" || result=bad
