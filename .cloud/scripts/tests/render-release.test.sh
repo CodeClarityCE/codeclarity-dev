@@ -121,6 +121,7 @@ test_an_image_the_registry_does_not_know_fails_the_release() {
 
 test_an_image_set_only_by_a_variable_fails_the_release() {
 	registry_with_every_image
+	# shellcheck disable=SC2016 # the variable must reach the file unexpanded
 	source_with_images variable codeclarityce/api '${API_IMAGE}'
 	out="$work/variable-out"
 	result=ok

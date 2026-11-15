@@ -10,6 +10,7 @@ trap 'rm -rf "$work"' EXIT
 
 # A docker stand-in that only logs its arguments.
 mkdir -p "$work/bin"
+# shellcheck disable=SC2016 # expands inside the stub, not here
 printf '#!/bin/sh\necho "$*" >>"$STUB_DOCKER_LOG"\n' >"$work/bin/docker"
 chmod +x "$work/bin/docker"
 PATH="$work/bin:$PATH"
