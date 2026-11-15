@@ -49,8 +49,6 @@ calls "compose_debug adds each file's debug overlay after it" \
 calls "down.sh stops one service" 'sh down.sh api' "compose $files down api"
 calls "build.sh builds everything" 'sh build.sh' "compose $files build"
 calls "logs.sh follows the logs" 'sh logs.sh' "compose $files logs -f"
-calls "dump-db.sh dumps one database" 'sh dump-db.sh codeclarity' \
-	"compose $files exec db sh -c PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d codeclarity -Fc > /dump/codeclarity.dump"
 calls "dump-db-dated.sh dumps knowledge then config" 'sh dump-db-dated.sh compose-test-label' \
 	"compose $files exec db sh -c PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d knowledge -Fc > /dump/knowledge-compose-test-label.dump
 compose $files exec db sh -c PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -w -U postgres -d config -Fc > /dump/config-compose-test-label.dump"

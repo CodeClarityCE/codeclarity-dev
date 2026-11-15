@@ -1,14 +1,20 @@
 # Publishes the knowledge dump image, codeclarityce/knowledge-dump:<date>, from a dump set.
 # Manual runs only, on main with CI_RELEASE == 'true', in the release environment.
 #
-# dump-files: takes the dump set (today the Git LFS dump in deployment/dump), verifies it
-# against its manifest and hands it on as an artifact.
+# dump-files: downloads the dump set that make dump-knowledge wrote (knowledge.dump, config.dump
+# and the two manifest files), attached to a GitHub release of this repo named by the `release`
+# input, verifies it against its manifest and hands it on as an artifact.
 # image: builds the image for amd64 and arm64, pushes it under the manifest's build date,
 # never over an existing tag, and attests its provenance.
 name: Knowledge dump
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Tag of the release in this repo whose assets are the dump set
+        required: true
+        type: string
 
 permissions: {}
 
@@ -33,7 +39,15 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Fetch the dump set
-        run: git -C deployment lfs pull --include="dump/*.dump"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "::error::Unexpected release tag: $RELEASE"; exit 1; }
+          gh release download "$RELEASE" --repo "$GITHUB_REPOSITORY" --dir deployment/dump \
+            --pattern knowledge.dump --pattern config.dump \
+            --pattern knowledge-manifest.json --pattern knowledge-manifest.sha256
       - name: Verify the dump set
         run: |
           set -euo pipefail

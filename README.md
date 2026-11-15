@@ -47,12 +47,11 @@ CodeClarity consists of several components:
   - [📋 Prerequisites](#-prerequisites)
   - [⚡ Quick Start Guide](#-quick-start-guide)
   - [🛠️ Detailed Setup Instructions](#️-detailed-setup-instructions)
-    - [1. Clone and Setup Development Environment](#1-clone-and-setup-development-environment)
-    - [2. Configure Knowledge Database (Optional)](#2-configure-knowledge-database-optional)
-    - [3. Available Make Commands](#3-available-make-commands)
+    - [1. Update the Knowledge Database (Optional)](#1-update-the-knowledge-database-optional)
+    - [2. Available Make Commands](#2-available-make-commands)
       - [🔧 Development Commands](#-development-commands)
       - [🎯 Production Testing Commands](#-production-testing-commands)
-      - [💾 Database Management Commands](#-database-management-commands)
+      - [💾 Knowledge Database Commands](#-knowledge-database-commands)
   - [🎯 Development Workflow](#-development-workflow)
     - [Daily Development Routine](#daily-development-routine)
     - [Component Development](#component-development)
@@ -73,66 +72,48 @@ CodeClarity consists of several components:
 
 ## 📋 Prerequisites
 
-Before setting up your development environment, ensure you have the following tools installed:
+You need only two tools on your machine:
 
-- **curl** - For downloading setup scripts
-- **git-lfs** - For fetching database dumps (stored in Git LFS). [Install instructions](https://git-lfs.com/)
-- **make** - For automating build and deployment tasks
-- **Go >= 1.27.4** - Required for backend plugins. [Download here](https://go.dev/dl/)
-- **Docker** - Containerization platform. [Installation guide](https://docs.docker.com/engine/install/)
-- **Docker Compose** - Multi-container orchestration. [Installation guide](https://docs.docker.com/compose/install/)
+- **git** - [Install instructions](https://git-scm.com/downloads)
+- **Docker** with the Compose plugin - [Docker Desktop](https://docs.docker.com/get-started/get-docker/) on macOS and Windows (WSL2), or [Docker Engine](https://docs.docker.com/engine/install/) on Linux
 
-> [!TIP]
-> **New to Docker?** Check out the [Docker Getting Started guide](https://docs.docker.com/get-started/) for a quick introduction.
+Go, Node, pnpm and Postgres all run inside the containers. The `make` commands below need `make`, which macOS (Xcode command line tools) and most Linux distributions already have.
 
 > [!NOTE]
 > **System Requirements:**
 >
 > - Minimum 8GB RAM (16GB recommended for full development)
 > - At least 10GB free disk space
-> - macOS, Linux, or Windows with WSL2
+> - macOS, Linux, or Windows with WSL2 (run the commands inside your WSL2 distribution)
 
 ## ⚡ Quick Start Guide
 
-**Want to start developing in 5 minutes?** Run this one-liner:
-
 ```bash
-curl -O https://raw.githubusercontent.com/CodeClarityCE/codeclarity-dev/main/setup.sh && sh setup.sh
+git clone --recursive https://github.com/CodeClarityCE/codeclarity-dev.git
+cd codeclarity-dev
+make up
 ```
 
-This will:
+That is the whole setup. The first `make up` builds the images and runs the setup jobs before the app starts:
 
-1. Clone the development repository
-2. Set up all Docker containers
-3. Initialize databases with sample data
-4. Start the development environment
+1. Creates the databases and their roles
+2. Restores the knowledge database (vulnerability data) from the knowledge dump image, when it is empty
+3. Runs the migrations of every database
+4. Creates the `_test` databases for the API tests, the default developer account and the global default analyzer
 
-Once complete, visit [https://localhost:443](https://localhost:443) to access your local CodeClarity instance!
+Every job finds its work done on later runs, so `make up` is always safe to run again and never asks a question. If a job fails, the app services stay stopped and `make logs SERVICE=<job>` shows why.
+
+Once it is up, visit [https://localhost:443](https://localhost:443) and log in with the [default development credentials](#default-development-credentials).
 
 ## 🛠️ Detailed Setup Instructions
 
-### 1. Clone and Setup Development Environment
+### 1. Update the Knowledge Database (Optional)
 
-The setup script automates the entire development environment setup process:
-
-```bash
-curl -O https://raw.githubusercontent.com/CodeClarityCE/codeclarity-dev/main/setup.sh && sh setup.sh
-```
-
-**What this script does:**
-
-1. **Environment Setup** - Clones the development repository and configures environment variables
-2. **Container Orchestration** - Builds and starts all required Docker containers (frontend, API, backend, database, message queue)
-3. **Database Initialization** - Downloads and restores sample data for immediate development
-4. **Service Verification** - Ensures all services are running and properly connected
-
-### 2. Configure Knowledge Database (Optional)
-
-To work with the latest vulnerability data and enhance your development experience:
+The restored knowledge database is a recent snapshot. To bring it up to date:
 
 1. **Get an NVD API Key**: Apply for a free API key from the [National Vulnerability Database](https://nvd.nist.gov/developers/request-an-api-key)
 
-2. **Configure the API Key**: Add your key to `codeclarity-dev/.cloud/env/.env.makefile`:
+2. **Configure the API Key**: Add your key to `.cloud/env/.env.makefile`:
 
    ```bash
    NVD_API_KEY=your-api-key-here
@@ -145,11 +126,9 @@ To work with the latest vulnerability data and enhance your development experien
    ```
 
 > [!NOTE]
-> The knowledge database update can take 15-30 minutes depending on your internet connection. This step is optional for basic development but recommended for working with vulnerability detection features.
+> A full update takes hours. On the host it runs with Go from `backend/services/knowledge`; `make knowledge-update-osv` refreshes only the OSV advisories and needs no key. See [docs/knowledge-dump.md](docs/knowledge-dump.md).
 
-### 3. Available Make Commands
-
-Once setup is complete, use these commands to manage your development environment:
+### 2. Available Make Commands
 
 ```bash
 make help  # Show all available commands
@@ -158,12 +137,16 @@ make help  # Show all available commands
 #### 🔧 Development Commands
 
 ```bash
-make build                    # Build all Docker images
-make up                       # Start development environment
-make down                     # Stop development environment
-make pull                     # Pull latest Docker images
+make up                       # Set up and start the development environment (SERVICE=name for one service)
+make down                     # Stop the development environment, keeping its data
+make build                    # Build the Docker images
+make pull                     # Pull the latest Docker images
 make logs                     # View container logs
+make migrate                  # Apply new migrations (make migrate-<db> for one database)
+make reset CONFIRM=reset      # Delete all data of the dev stack, then set it up again
 ```
+
+`make reset` refuses to run without `CONFIRM=reset` on the command line.
 
 #### 🎯 Production Testing Commands
 
@@ -173,14 +156,12 @@ make up-prod                  # Start in production mode
 make down-prod                # Stop production environment
 ```
 
-#### 💾 Database Management Commands
+#### 💾 Knowledge Database Commands
 
 ```bash
-make knowledge-setup          # Initialize knowledge database
-make knowledge-update         # Update vulnerability data
-make download-dumps           # Download database dumps
-make dump-database            # Create database backup
-make restore-database         # Restore from backup
+make knowledge-update         # Update vulnerability data (needs an NVD API key)
+make knowledge-update-osv     # Update only the OSV advisories
+make dump-knowledge           # Dump knowledge + config with a manifest, after the completeness gate
 ```
 
 ## 🎯 Development Workflow
@@ -258,11 +239,13 @@ Your development environment is ready! Access CodeClarity at [https://localhost:
 
 ### Default Development Credentials
 
+`make up` creates this account in the development stack only:
+
 - **Username**: `john.doe@codeclarity.io`
 - **Password**: `ThisIs4Str0ngP4ssW0rd?`
 
 > [!IMPORTANT]
-> These are development-only credentials. Change them for any production-like testing.
+> A production instance has no pre-existing account; its operator creates the first user.
 
 ### Next Steps
 
