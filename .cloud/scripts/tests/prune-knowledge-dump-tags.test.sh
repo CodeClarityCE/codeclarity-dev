@@ -1,7 +1,7 @@
 #!/bin/sh
-# Tests the knowledge dump tag pruning: the newest 8 dated tags and every tag a deployment
-# release pins stay, every other dated tag is deleted, and nothing is deleted when the
-# releases cannot be read. Uses stand-ins for gh (releases) and curl (Docker Hub).
+# Tests the knowledge dump tag pruning: dated tags from the 8 weeks up to the newest, every tag
+# a deployment release pins and the tag the dev Compose file on main pins stay, every other
+# dated tag is deleted, and nothing is deleted when the pins cannot be read. Uses stand-ins for gh (releases) and curl (Docker Hub).
 # Usage: sh .cloud/scripts/tests/prune-knowledge-dump-tags.test.sh
 here=$(cd "$(dirname "$0")" && pwd)
 script="$here/../prune-knowledge-dump-tags.sh"
@@ -16,8 +16,9 @@ STUB_RELEASES="$work/releases.json"
 STUB_ASSETS="$work/assets"
 STUB_HUB_DELETED="$work/deleted"
 STUB_CURL_LOG="$work/curl.log"
+STUB_CONTENTS="$work/dev-compose.yaml"
 DOCKERHUB_USERNAME=ci DOCKERHUB_TOKEN=secret
-export STUB_RELEASES STUB_ASSETS STUB_HUB_DELETED STUB_CURL_LOG DOCKERHUB_USERNAME DOCKERHUB_TOKEN
+export STUB_CONTENTS STUB_RELEASES STUB_ASSETS STUB_HUB_DELETED STUB_CURL_LOG DOCKERHUB_USERNAME DOCKERHUB_TOKEN
 
 # Twelve weekly builds, oldest first.
 WEEKLY="2026-08-29 2026-09-05 2026-09-12 2026-09-19 2026-09-26 2026-10-03 2026-10-10 2026-10-17 2026-10-24 2026-10-31 2026-11-07 2026-11-14"
@@ -37,6 +38,7 @@ reset() {
 	rm -rf "$STUB_ASSETS" "$STUB_HUB_DELETED" "$STUB_CURL_LOG"
 	mkdir -p "$STUB_ASSETS"
 	: >"$STUB_HUB_DELETED"
+	dev_compose_pinning 2026-11-14
 	unset STUB_GH_FAIL STUB_HUB_AUTH_FAIL STUB_HUB_LIST_FAIL STUB_HUB_DELETE_FAIL
 }
 
@@ -58,6 +60,12 @@ releases_pinning() {
 	printf '[%s]\n' "${json%,}" >"$STUB_RELEASES"
 }
 
+# The dev Compose file on main, pinning the knowledge dump tag given.
+dev_compose_pinning() {
+	# shellcheck disable=SC2016 # the Compose variable is written as it is
+	printf '  knowledge-restore:\n    image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:%s}\n' "$1" >"$STUB_CONTENTS"
+}
+
 prune() {
 	sh "$script" >"$work/out" 2>&1
 }
@@ -74,7 +82,7 @@ test_only_old_unpinned_dated_tags_are_deleted() {
 	result=ok
 	prune || result=bad
 	[ "$(deleted)" = "2026-08-29 2026-09-12 2026-09-19" ] || result=bad
-	check "the dated tags older than the newest 8 are deleted, except one a release pins and non-date tags" $result
+	check "dated tags older than 8 weeks before the newest are deleted, except one a release pins and non-date tags" $result
 }
 
 test_every_tag_any_release_pins_is_kept() {
@@ -87,6 +95,40 @@ test_every_tag_any_release_pins_is_kept() {
 	check "a tag pinned by an older release is kept as well as one pinned by the newest" $result
 }
 
+test_manual_builds_do_not_push_weekly_tags_out() {
+	reset
+	releases_pinning
+	export STUB_HUB_TAGS="$WEEKLY 2026-11-10 2026-11-11 2026-11-12 2026-10-29"
+	result=ok
+	prune || result=bad
+	[ "$(deleted)" = "2026-08-29 2026-09-05 2026-09-12 2026-09-19" ] || result=bad
+	check "extra manual builds keep every weekly tag of the last 8 weeks" $result
+}
+
+test_the_tag_the_dev_compose_file_pins_is_kept() {
+	reset
+	releases_pinning
+	dev_compose_pinning 2026-09-12
+	export STUB_HUB_TAGS="$WEEKLY"
+	result=ok
+	prune || result=bad
+	[ "$(deleted)" = "2026-08-29 2026-09-05 2026-09-19" ] || result=bad
+	check "the tag the dev Compose file on main pins is kept" $result
+}
+
+test_nothing_is_deleted_when_the_dev_compose_file_cannot_be_read() {
+	reset
+	releases_pinning
+	rm "$STUB_CONTENTS"
+	export STUB_HUB_TAGS="$WEEKLY"
+	result=ok
+	prune && result=bad
+	[ -s "$STUB_HUB_DELETED" ] && result=bad
+	grep -q DELETE "$STUB_CURL_LOG" 2>/dev/null && result=bad
+	grep -q 'deleting nothing' "$work/out" || result=bad
+	check "nothing is deleted, and the run fails, when the dev Compose file on main cannot be read" $result
+}
+
 test_nothing_is_deleted_with_eight_tags_or_fewer() {
 	reset
 	releases_pinning
@@ -94,7 +136,7 @@ test_nothing_is_deleted_with_eight_tags_or_fewer() {
 	result=ok
 	prune || result=bad
 	[ -s "$STUB_HUB_DELETED" ] && result=bad
-	check "nothing is deleted while there are 8 dated tags or fewer" $result
+	check "nothing is deleted while every dated tag is within 8 weeks of the newest" $result
 }
 
 test_nothing_is_deleted_when_the_releases_cannot_be_listed() {
@@ -144,6 +186,9 @@ test_a_failed_delete_fails_the_run_after_the_others() {
 
 test_only_old_unpinned_dated_tags_are_deleted
 test_every_tag_any_release_pins_is_kept
+test_manual_builds_do_not_push_weekly_tags_out
+test_the_tag_the_dev_compose_file_pins_is_kept
+test_nothing_is_deleted_when_the_dev_compose_file_cannot_be_read
 test_nothing_is_deleted_with_eight_tags_or_fewer
 test_nothing_is_deleted_when_the_releases_cannot_be_listed
 test_nothing_is_deleted_when_a_release_compose_file_cannot_be_read

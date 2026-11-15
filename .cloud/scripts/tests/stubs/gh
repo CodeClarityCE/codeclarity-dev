@@ -2,7 +2,8 @@
 # Test stand-in for gh: logs its arguments to STUB_GH_LOG. "api --paginate repos/<r>/releases"
 # prints STUB_RELEASES (a JSON file), or fails when STUB_GH_FAIL is set. An asset download,
 # "api -H Accept: application/octet-stream repos/<r>/releases/assets/<id>", prints
-# STUB_ASSETS/<id> and fails when that file does not exist.
+# STUB_ASSETS/<id> and fails when that file does not exist. A file read,
+# "api ... repos/<r>/contents/<path>?ref=<ref>", prints STUB_CONTENTS and fails when it does not exist.
 echo "$*" >>"${STUB_GH_LOG:-/dev/null}"
 last=$(for arg; do :; done; printf '%s' "$arg")
 case "$last" in
@@ -14,6 +15,10 @@ repos/*/releases/assets/*)
 	file="${STUB_ASSETS:-/nonexistent}/${last##*/}"
 	[ -f "$file" ] || { echo "HTTP 404: Not Found" >&2; exit 1; }
 	cat "$file"
+	;;
+repos/*/contents/*)
+	[ -f "${STUB_CONTENTS:-/nonexistent}" ] || { echo "HTTP 404: Not Found" >&2; exit 1; }
+	cat "$STUB_CONTENTS"
 	;;
 *) echo "gh stub: unexpected call: $*" >&2; exit 1 ;;
 esac

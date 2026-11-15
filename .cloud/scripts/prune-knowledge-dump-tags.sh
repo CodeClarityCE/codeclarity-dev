@@ -1,18 +1,21 @@
 #!/bin/sh
-# Deletes old knowledge dump tags from Docker Hub. Keeps the newest KEEP dated (YYYY-MM-DD)
-# tags and every tag a deployment release's docker-compose.yaml pins; other tags are not
-# touched. Reads every release first and deletes nothing if any of them cannot be read.
+# Deletes old knowledge dump tags from Docker Hub. Keeps every dated (YYYY-MM-DD) tag from the
+# KEEP_WEEKS weeks up to the newest one, every tag a deployment release's docker-compose.yaml
+# pins and the tag the dev Compose file on main pins; other tags are not touched. Deletes
+# nothing if any of those pins cannot be read.
 #
 # Usage: sh .cloud/scripts/prune-knowledge-dump-tags.sh
 # Env: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (a token allowed to delete), GH_TOKEN for gh,
-#      KEEP (default 8), IMAGE (default codeclarityce/knowledge-dump),
-#      RELEASES_REPO (default CodeClarityCE/deployment).
+#      KEEP_WEEKS (default 8), IMAGE (default codeclarityce/knowledge-dump),
+#      RELEASES_REPO (default CodeClarityCE/deployment), DEV_REPO (default CodeClarityCE/codeclarity-dev).
 # Needs gh, curl and jq.
 set -eu
 
-KEEP=${KEEP:-8}
+KEEP_WEEKS=${KEEP_WEEKS:-8}
 IMAGE=${IMAGE:-codeclarityce/knowledge-dump}
 RELEASES_REPO=${RELEASES_REPO:-CodeClarityCE/deployment}
+DEV_REPO=${DEV_REPO:-CodeClarityCE/codeclarity-dev}
+DEV_COMPOSE=.cloud/docker/docker-compose.yaml
 HUB=https://hub.docker.com
 
 fail() {
@@ -20,7 +23,7 @@ fail() {
 	exit 1
 }
 
-case "$KEEP" in "" | *[!0-9]* | 0) fail "KEEP must be a positive number, not $KEEP" ;; esac
+case "$KEEP_WEEKS" in "" | *[!0-9]* | 0) fail "KEEP_WEEKS must be a positive number, not $KEEP_WEEKS" ;; esac
 case "$IMAGE" in */*) ;; *) fail "IMAGE must be <namespace>/<repository>, not $IMAGE" ;; esac
 : "${DOCKERHUB_USERNAME:?}" "${DOCKERHUB_TOKEN:?}"
 namespace=${IMAGE%%/*} repository=${IMAGE#*/}
@@ -39,6 +42,9 @@ while IFS= read -r asset; do
 		fail "cannot download release asset $asset of $RELEASES_REPO, deleting nothing"
 	grep -o "$IMAGE:[A-Za-z0-9._-]*" "$tmp/compose" | sed "s|^$IMAGE:||" >>"$tmp/pinned" || true
 done <"$tmp/assets"
+gh api -H "Accept: application/vnd.github.raw" "repos/$DEV_REPO/contents/$DEV_COMPOSE?ref=main" >"$tmp/compose" ||
+	fail "cannot read $DEV_COMPOSE on main of $DEV_REPO, deleting nothing"
+grep -o "$IMAGE:[A-Za-z0-9._-]*" "$tmp/compose" | sed "s|^$IMAGE:||" >>"$tmp/pinned" || true
 
 # A bearer token, kept in a header file so it stays out of the process list.
 jq -n --arg u "$DOCKERHUB_USERNAME" --arg t "$DOCKERHUB_TOKEN" '{identifier: $u, secret: $t}' |
@@ -59,12 +65,14 @@ while [ -n "$url" ]; do
 done
 
 grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "$tmp/tags" | sort -ru >"$tmp/dated" || true
+# Tags dated after this cutoff are kept, so manual builds never push weekly ones out.
+newest=$(head -n 1 "$tmp/dated")
+cutoff=$(jq -rn --arg d "${newest:-1970-01-01}" --argjson w "$KEEP_WEEKS" \
+	'($d + "T00:00:00Z" | fromdate) - $w * 7 * 86400 | strftime("%Y%m%d")') || fail "bad tag date $newest"
 status=0
-n=0
 while IFS= read -r tag; do
-	n=$((n + 1))
-	if [ "$n" -le "$KEEP" ]; then
-		echo "keep $IMAGE:$tag (one of the newest $KEEP)"
+	if [ "$(echo "$tag" | tr -d -)" -gt "$cutoff" ]; then
+		echo "keep $IMAGE:$tag (within $KEEP_WEEKS weeks of $newest)"
 	elif grep -qxF "$tag" "$tmp/pinned"; then
 		echo "keep $IMAGE:$tag (pinned by a release)"
 	elif curl -fsS -X DELETE -H "@$tmp/auth.header" "$HUB/v2/namespaces/$namespace/repositories/$repository/tags/$tag"; then
