@@ -7,7 +7,7 @@ Make the platform look and feel like www.codeclarity.io, consolidate a UI that h
 - **Identity comes from the landing page:** colour, button shape, accents, voice. The platform keeps its own choices only for density, state colours, the dark theme, and keyboard and focus behaviour.
 - **Researchers come first.** The Dataset and Experiment flow gets design priority. Projects and analysis results come second and must not regress.
 - **WCAG 2.2 AA** is an acceptance criterion for every UI change. Colour is never the only signal.
-- **Desktop only:** viewports 1024px and wider, designed for 1280 to 1920px.
+- **Desktop first:** designed for 1280 to 1920px. On a phone (390px and wider) every page fits the screen without sideways scrolling, and the sidebar opens as a drawer from a menu button.
 - **Keep the stack** (Vue 3, Tailwind v4, Reka UI, shadcn-vue). Reduce dependencies by deleting duplicates, not by switching.
 - **Personality:** the owl and green-highlighted words belong in titles, empty states and onboarding. Data views stay calm and respect `prefers-reduced-motion`.
 
@@ -102,6 +102,6 @@ Each step below is one issue. A step is done when its files are off the lint all
 
 ## Out of scope
 
-- Phone layouts.
+- Phone layouts beyond fitting the screen and the drawer sidebar.
 - Changing the landing page itself.
 - Using the darkmode-on font (see ADR 0008).
