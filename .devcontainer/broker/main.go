@@ -29,21 +29,8 @@ const (
 	exitMarker   = "__BROKER_EXIT__"
 )
 
-var composeFiles = []string{
-	".cloud/docker/docker-compose.yaml",
-	"api/.cloud/docker/docker-compose.yaml",
-	"frontend/.cloud/docker/docker-compose.yaml",
-	"backend/services/packageFollower/.cloud/docker/docker-compose.yaml",
-	"backend/services/notifier/.cloud/docker/docker-compose.yaml",
-	"backend/services/downloader/.cloud/docker/docker-compose.yaml",
-	"backend/services/dispatcher/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/codeql/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/license-finder/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/js-patching/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml",
-}
+// The dev stack's Compose file list, relative to the repo root, read on every request.
+const composeFilesList = ".cloud/docker/compose-files.txt"
 
 // Dump name and the database it restores into, for seed.
 var restores = [][2]string{
@@ -210,11 +197,12 @@ func dockerEnv(w io.Writer, env []string, stdin io.Reader, stdout io.Writer, arg
 
 // resolve renders the Compose files, validates the result and saves what passed.
 func resolve(w io.Writer) bool {
-	args := []string{"compose"}
-	for _, f := range composeFiles {
-		args = append(args, "-f", filepath.Join(repoRoot, f))
+	files, err := composeFileArgs(repoRoot)
+	if err != nil {
+		fmt.Fprintf(w, "broker: %v\n", err)
+		return false
 	}
-	args = append(args, "config", "--format", "json")
+	args := append(append([]string{"compose"}, files...), "config", "--format", "json")
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("docker", args...)
@@ -244,6 +232,29 @@ func resolve(w io.Writer) bool {
 		return false
 	}
 	return true
+}
+
+// composeFileArgs reads the list under root and returns "-f <file>" pairs, skipping blanks and # comments.
+func composeFileArgs(root string) ([]string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, composeFilesList))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the compose file list: %w", err)
+	}
+	var args []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		f := strings.TrimSpace(line)
+		if f == "" || strings.HasPrefix(f, "#") {
+			continue
+		}
+		if !filepath.IsLocal(f) {
+			return nil, fmt.Errorf("compose file list: %q is not a path inside the repo", f)
+		}
+		args = append(args, "-f", filepath.Join(root, f))
+	}
+	if len(args) == 0 {
+		return nil, fmt.Errorf("compose file list %s names no files", composeFilesList)
+	}
+	return args, nil
 }
 
 func withService(args []string, service string) []string {

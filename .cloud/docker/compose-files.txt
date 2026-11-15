@@ -1,0 +1,15 @@
+# The dev stack's Compose files, one repo-relative path per line, in merge order.
+# The broker and .cloud/scripts/compose.sh both read this list; the first file names the project.
+.cloud/docker/docker-compose.yaml
+api/.cloud/docker/docker-compose.yaml
+frontend/.cloud/docker/docker-compose.yaml
+backend/services/packageFollower/.cloud/docker/docker-compose.yaml
+backend/services/notifier/.cloud/docker/docker-compose.yaml
+backend/services/downloader/.cloud/docker/docker-compose.yaml
+backend/services/dispatcher/.cloud/docker/docker-compose.yaml
+backend/plugins/codeql/.cloud/docker/docker-compose.yaml
+backend/plugins/license-finder/.cloud/docker/docker-compose.yaml
+backend/plugins/js-patching/.cloud/docker/docker-compose.yaml
+backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml
+backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml
+backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml

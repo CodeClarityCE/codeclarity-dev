@@ -21,6 +21,7 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
+- The dev stack's Compose files are listed once, in `.cloud/docker/compose-files.txt`. The broker and `.cloud/scripts/compose.sh` both read it, the broker on every request, so adding a file there needs no rebuild (its services still have to pass the policy).
 
 ## Architecture Overview
 
