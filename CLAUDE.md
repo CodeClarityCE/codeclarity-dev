@@ -77,6 +77,7 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
+- **Fresh install (dev)**: `.cloud/scripts/tests/fresh-install/dev.sh` runs `make up` twice on an empty Docker daemon and logs in as the dev account; CI only (`fresh-install-dev` job), never against a stack you use
 
 ## CI (GitHub Actions)
 

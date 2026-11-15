@@ -32,14 +32,11 @@ const (
 // The dev stack's Compose file list, relative to the repo root, read on every request.
 const composeFilesList = ".cloud/docker/compose-files.txt"
 
-// Dump name and the database it restores into, for seed.
+// Dump name and the database it restores into, for seed. Setup jobs create
+// the dev account and the _test databases, so codeclarity.dump is not restored.
 var restores = [][2]string{
-	{"codeclarity", "codeclarity"},
 	{"knowledge", "knowledge"},
 	{"config", "config"},
-	{"knowledge", "knowledge_test"},
-	{"config", "config_test"},
-	{"codeclarity", "codeclarity_test"},
 }
 
 // Databases with migrations, in the order they run.
