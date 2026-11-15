@@ -14,12 +14,8 @@ packages:
 # builds and the node-image CI workflow stage. All three must move together.
 minimumReleaseAge: 4320
 
-# Disable pnpm 11's pre-run dependency check, which would run an automatic
-# `pnpm install` before host scripts. Under CI=true that auto-install does NOT
-# honor `allowBuilds` below and fails every build-script package with
-# ERR_PNPM_IGNORED_BUILDS (and without CI it prompts to purge node_modules and
-# aborts non-interactively). Migrations no longer run on the host; they run in
-# the migrate job.
+# Disable pnpm 11's pre-run dependency check: its automatic install ignores
+# `allowBuilds` below and fails with ERR_PNPM_IGNORED_BUILDS.
 verifyDepsBeforeRun: false
 
 # pnpm 11 replaces `onlyBuiltDependencies` with `allowBuilds` (explicit per-package

@@ -65,9 +65,9 @@ onto a small server-side connection set, so replica count no longer drives `max_
   for the Go services/plugins (applied via `DatabaseConfig.ApplyPool` in
   `backend/utilities/boilerplates/`), and `PG_DB_POOL_MAX` (10) for each NestJS API DataSource.
 - **Pooler config**: dev is inline in `.cloud/docker/docker-compose.yaml`; prod uses
-  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. Prod prereqs: regenerate
-  certs so the SAN includes `pgbouncer` (`make setup-pg-certs`) and keep `PGBOUNCER_AUTH_PASSWORD`
-  (`.env.database`) in sync with `deployment/config/userlist.txt`.
+  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
+  (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
+  its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
 - **Budget**: `default_pool_size(20) × (roles × databases)` stays under `max_connections`
   (300 dev / 200 prod, kept as headroom). Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4.
 
@@ -77,7 +77,7 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
-- **Fresh install (dev)**: `.cloud/scripts/tests/fresh-install/dev.sh` runs `make up` twice on an empty Docker daemon and logs in as the dev account; CI only (`fresh-install-dev` job), never against a stack you use
+- **Fresh install (dev)**: `.cloud/scripts/tests/fresh-install/dev.sh` runs `make up` twice on an empty Docker daemon, logs in as the dev account and runs the Default Analyzer on an uploaded npm project; CI only (`fresh-install-dev` job), never against a stack you use
 
 ## CI (GitHub Actions)
 
@@ -103,7 +103,7 @@ Empty `knowledge` and `config` databases need no dump: running the API migration
 
 Migration workflow: see `.claude/rules/database-migrations.md`.
 
-Production deployment: see `deployment/CLAUDE.md`.
+Production deployment: see `deployment/README.md`.
 
 ## License
 

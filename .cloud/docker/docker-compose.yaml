@@ -79,10 +79,8 @@ services:
       timeout: 5s
       retries: 60
 
-  # One-shot job: restores knowledge and config from the knowledge dump image only
-  # when the knowledge database has no tables, then exits. Runs before migrate, and
-  # a dump failing its manifest fails it, which keeps the app services stopped.
-  # KNOWLEDGE_DUMP_IMAGE swaps in another dump image, such as the fresh-install test's fixture.
+  # One-shot job: restores knowledge and config from the dump image when knowledge is empty.
+  # KNOWLEDGE_DUMP_IMAGE swaps in another dump image.
   knowledge-restore:
     image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-11}
     restart: "no"
@@ -95,9 +93,8 @@ services:
       db:
         condition: service_healthy
 
-  # Dev-only one-shot job: creates the _test databases the API tests use; the
-  # api compose file's migrate-test job then migrates them. A test database
-  # without migration history was rebuilt by the tests, so it is recreated.
+  # Dev-only one-shot job: creates the API tests' _test databases, recreating any without
+  # migration history; the migrate-test job then migrates them.
   test-databases:
     image: *postgres-image
     restart: "no"
@@ -185,8 +182,7 @@ services:
     ports:
       - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
-    # Every backend service and plugin waits on adminer, so waiting here keeps
-    # them all stopped until the migrate job (api compose file) has succeeded.
+    # Every backend service and plugin waits on adminer, so they all wait for migrate.
     depends_on:
       migrate:
         condition: service_completed_successfully
