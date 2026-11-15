@@ -12,8 +12,6 @@ node_modules
 .pnpm-store
 .pnp.*
 .yarn
-dump/*
-!dump/README.md
 dump.zip
 *.couch
 *.view
@@ -29,7 +27,6 @@ yarn.lock
 /frontend/pnpm-workspace.yaml
 .env
 private
-setup*.log
 # Progress of scripts/release-all.sh (resume state)
 scripts/.release-state
 .cloud/env/.env.secrets

@@ -4,7 +4,7 @@
 `codeclarityce/knowledge-dump:<date>` image (see [The knowledge dump image](#the-knowledge-dump-image)), which `make up`
 restores into an empty knowledge database.
 It works from a host stack and from the devcontainer (through the broker's `dump-knowledge` command).
-The broker's code is baked into its image, so a change to its `dump-knowledge` or `seed` commands only takes effect after a
+The broker's code is baked into its image, so a change to its `dump-knowledge` command only takes effect after a
 developer rebuilds the devcontainer.
 Nothing is needed where you run it beyond the running stack: Go and Postgres tools come from its containers.
 
@@ -16,7 +16,7 @@ which runs it in `service-package-follower` with the key from `.cloud/env/.env.s
 
 1. `cp .cloud/env/.env.secrets.example .cloud/env/.env.secrets` and set `NVD_API_KEY`. The file is gitignored; never put the key
    in `.env.dev` or `.env.makefile`, which are tracked.
-2. `make up` (and `make seed` on an empty stack), then `make knowledge-update`, then `make dump-knowledge`.
+2. `make up`, then `make knowledge-update`, then `make dump-knowledge`.
 
 The broker reads only `NVD_API_KEY` from that file, at run time, and refuses to start if the file or key is missing, empty or
 `!ChangeMe!`. It passes the key to `docker compose exec` as `-e NVD_API_KEY` with the value in docker's environment, so it is
@@ -37,7 +37,7 @@ logs from Loki meanwhile. If the client stops or its terminal closes, the update
    - writes `knowledge-manifest.json` and `knowledge-manifest.sha256`;
    - only then replaces the previous `knowledge.dump`, `config.dump` and the manifest files.
 
-Any failure leaves the previous dump untouched. `make dump-database` dumps `codeclarity` and then runs `make dump-knowledge`; `dump-db.sh` refuses `knowledge` and `config`.
+Any failure leaves the previous dump untouched. `deployment/dump` is gitignored: dumps ship only as the knowledge dump image.
 
 Dated dumps (`make dump-knowledge-dated`) are separate experiment files and are not gated.
 
@@ -145,13 +145,10 @@ dumps stopped splitting also carry `split_bytes` and `files[].parts[]` (empty); 
 Every restore goes through `deployment/scripts/restore-dump.sh`, run inside the `db` container or, for the setup job,
 inside the knowledge dump image:
 
-| Path                                           | What runs                                                                  |
-| ---------------------------------------------- | -------------------------------------------------------------------------- |
-| `make up` (`knowledge-restore` setup job)      | `restore-if-empty` from the knowledge dump image, before `migrate`         |
-| `make download-dumps` (`download-dumps.sh`)    | Pulls any file that is still a Git LFS pointer, then `verify` on the host  |
-| `make restore-database` (umbrella, deployment) | `verify`, then `restore` for each database; stops at the first failure     |
-| `make seed` (devcontainer broker)              | `verify`, then `restore` for each database; nothing is restored on failure |
-| `deployment/setup.sh`, umbrella `setup.sh`     | `download-dumps.sh`, then each restore; setup stops on any error           |
+| Path                                           | What runs                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| `make up` (`knowledge-restore` setup job)      | `restore-if-empty` from the knowledge dump image, before `migrate`     |
+| `make restore-database` (umbrella, deployment) | `verify`, then `restore` for each database; stops at the first failure |
 
 - `verify` checks every line of `knowledge-manifest.sha256` and that each dump matches `files[].sha256`. It refuses a
   manifest format other than 1, and any split dump part.
@@ -164,9 +161,9 @@ inside the knowledge dump image:
   the roles migrations run as. It leaves out the extensions and the pgbouncer auth function, which the Postgres init script
   already made. A dump failing its manifest, or a database it cannot read, fails the job, and the services waiting on
   `migrate` stay stopped; `make logs SERVICE=knowledge-restore` shows why.
-- A stack whose knowledge database was migrated before it held any data has tables, so the job leaves it empty; `make reset`
-  rebuilds it.
-- `codeclarity.dump` is not in the manifest, so it restores unverified.
+- A stack whose knowledge database was migrated before it held any data has tables, so the job leaves it empty;
+  `make reset CONFIRM=reset` wipes the stack and restores it again.
+- A dump that is not in the manifest restores unverified.
 - **Old dump layout.** Without `knowledge-manifest.json`, `restore` still restores whole dumps, with a warning that they are
   not verified. `restore-if-empty` refuses them.
 
@@ -177,13 +174,15 @@ inside the knowledge dump image:
 carries a matching `pg_restore`. Its default command is `restore-if-empty`; it reaches the database through `PGHOST` and
 `POSTGRES_PASSWORD`. `<date>` is the manifest's `build_date` day.
 
-The dev Compose file runs it as the `knowledge-restore` job, pinned to one tag; `migrate` waits for it to succeed. Dev needs
-neither git-lfs nor `download-dumps.sh`: Docker pulls and caches the image. To ship a newer dump, publish its image and
+The dev Compose file runs it as the `knowledge-restore` job, pinned to one tag; `migrate` waits for it to succeed. Docker pulls
+and caches the image, so dev needs no separate download step. To ship a newer dump, publish its image and
 change that tag.
 
 The **Knowledge dump** workflow (`.github/workflows/knowledge-dump.yml`) publishes it. It runs only when dispatched by hand
-on `main` with `CI_RELEASE` set to `true`, and pushes in the `release` environment. It takes the dump set in
-`deployment/dump` (from Git LFS), verifies it against its manifest, refuses a dump from another Postgres major version than
+on `main` with `CI_RELEASE` set to `true`, and pushes in the `release` environment. Its `release` input names a GitHub
+release of this repo whose assets are the dump set `make dump-knowledge` wrote (`knowledge.dump`, `config.dump`,
+`knowledge-manifest.json`, `knowledge-manifest.sha256`); a maintainer creates that release and uploads the four files
+first. The workflow downloads them, verifies them against their manifest, refuses a dump from another Postgres major version than
 the image's, builds the image for amd64 and arm64, pushes it under a tag that must not exist yet, and attests its build
 provenance on Docker Hub.
 
@@ -193,5 +192,6 @@ provenance on Docker Hub.
 `sh .cloud/scripts/tests/dump-knowledge-in-db.test.sh` runs the in-container script with stand-in `pg_dump` and `psql` (needs `jq`).
 `sh .cloud/scripts/tests/restore-dump.test.sh` restores dump sets made by that script, refuses damaged ones, and covers
 `restore-if-empty` (restore only into an empty knowledge database, and a failing manifest stopping the job), with stand-in
-`pg_restore`, `psql`, `createdb`, `docker` and `git` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).
+`pg_restore`, `psql`, `createdb` and `docker` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).
+`sh .cloud/scripts/tests/reset.test.sh` checks that `make reset` refuses without `CONFIRM=reset`.
 The broker commands are covered by `cd .devcontainer/broker && GOWORK=off go test ./...`.

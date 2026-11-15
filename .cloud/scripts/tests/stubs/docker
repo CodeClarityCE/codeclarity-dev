@@ -1,7 +1,8 @@
 #!/bin/sh
 # Test stand-in for docker: logs its arguments to STUB_DOCKER_LOG, answers the completeness gate
 # with STUB_GATE_REPORT (exit 1 unless it passed), exits STUB_MIGRATE_EXIT (default 0) for the
-# migrate job, and runs "compose ... exec [-T] db" commands here.
+# migrate job, succeeds for stack commands (volume create, down, up -d), and runs
+# "compose ... exec [-T] db" commands here.
 echo "$*" >>"${STUB_DOCKER_LOG:-/dev/null}"
 case " $* " in
 *" service-package-follower "*)
@@ -9,6 +10,7 @@ case " $* " in
 	case "$STUB_GATE_REPORT" in *'"passed": true'*) exit 0 ;; *) exit 1 ;; esac
 	;;
 *" run --rm migrate"*) exit "${STUB_MIGRATE_EXIT:-0}" ;;
+" volume create "* | *" down "* | *" up -d "*) exit 0 ;;
 esac
 while [ $# -gt 0 ] && [ "$1" != db ]; do shift; done
 [ $# -gt 0 ] || { echo "docker stub: no db command" >&2; exit 1; }

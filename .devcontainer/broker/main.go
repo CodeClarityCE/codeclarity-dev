@@ -32,13 +32,6 @@ const (
 // The dev stack's Compose file list, relative to the repo root, read on every request.
 const composeFilesList = ".cloud/docker/compose-files.txt"
 
-// Dump name and the database it restores into, for seed. Setup jobs create
-// the dev account and the _test databases, so codeclarity.dump is not restored.
-var restores = [][2]string{
-	{"knowledge", "knowledge"},
-	{"config", "config"},
-}
-
 // Databases with migrations, in the order they run.
 var migrated = []string{"codeclarity", "knowledge", "plugins", "config"}
 
@@ -59,6 +52,8 @@ type command struct {
 	needService bool
 	// runWaived replaces run for a command that takes a gate waiver, given as environment.
 	runWaived func(b *broker, w io.Writer, waiver []string) int
+	// confirmed commands run only when the request carries confirm=<command name>.
+	confirmed bool
 }
 
 var commands = map[string]command{
@@ -69,8 +64,7 @@ var commands = map[string]command{
 	"pull":             {run: (*broker).pull},
 	"down":             {run: (*broker).down},
 	"ps":               {run: (*broker).ps},
-	"seed":             {run: (*broker).seed},
-	"reset":            {run: (*broker).reset},
+	"reset":            {run: (*broker).reset, confirmed: true},
 	"migrate":          {run: (*broker).migrate, takes: true},
 	"knowledge-osv":    {run: (*broker).knowledgeOSV},
 	"knowledge-update": {run: (*broker).knowledgeUpdate},
@@ -114,6 +108,11 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 	if (service != "" && (!cmd.takes || !validServiceName(service))) || (cmd.needService && service == "") {
 		entry.Warn("rejected bad service argument")
 		http.Error(w, "bad service argument", http.StatusBadRequest)
+		return
+	}
+	if confirm := r.URL.Query().Get("confirm"); (cmd.confirmed && confirm != name) || (!cmd.confirmed && confirm != "") {
+		entry.Warn("rejected a missing or unexpected confirmation")
+		http.Error(w, "reset needs confirm=reset (make reset CONFIRM=reset); no other command takes confirm", http.StatusBadRequest)
 		return
 	}
 	waive, reason := r.URL.Query().Get("waive"), r.URL.Query().Get("reason")
@@ -326,77 +325,6 @@ func waitForDB(w io.Writer) bool {
 	}
 	fmt.Fprintln(w, "broker: database did not become ready")
 	return false
-}
-
-// restoreDumpScript verifies and restores dumps; it runs inside the db container.
-const restoreDumpScript = "deployment/scripts/restore-dump.sh"
-
-// verifyDumpsArgs checks every dump against its manifest before anything is restored.
-func verifyDumpsArgs(script string) []string {
-	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "verify"}
-}
-
-// restoreDumpArgs restores one dump, creating the database if missing.
-func restoreDumpArgs(script, dump, db string) []string {
-	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
-}
-
-// dropDatabaseArgs drops one database, closing its connections, so a dump restores into an empty one.
-func dropDatabaseArgs(db string) []string {
-	return []string{"exec", "-T", "db", "sh", "-c", `PGPASSWORD="$POSTGRES_PASSWORD" dropdb -w -U postgres --force --if-exists "$1"`, "dropdb", db}
-}
-
-func (b *broker) seed(w io.Writer, _ string) int {
-	script, err := os.ReadFile(filepath.Join(repoRoot, restoreDumpScript))
-	if err != nil {
-		fmt.Fprintf(w, "broker: cannot read the restore script: %v\n", err)
-		return 1
-	}
-	if !resolve(w) || !waitForDB(w) {
-		return 1
-	}
-	verify := func() int {
-		return docker(w, resolved(verifyDumpsArgs(string(script))...)...)
-	}
-	// make up has already migrated the databases, so each restore starts from an empty one.
-	restore := func(dump, db string) int {
-		if code := docker(w, resolved(dropDatabaseArgs(db)...)...); code != 0 {
-			return code
-		}
-		return docker(w, resolved(restoreDumpArgs(string(script), dump, db)...)...)
-	}
-	worst, verified := seedRestores(w, verify, restore)
-	if !verified {
-		return worst
-	}
-	// Dumps are older than the schema, so bring every database up to date.
-	if code := b.runMigrations(w, migrated); code != 0 {
-		worst = code
-	}
-	// Dumps also carry old advisories. Being offline should not fail the seed.
-	fmt.Fprintln(w, "broker: refreshing OSV advisories")
-	if code := docker(w, resolved(knowledgeOSVArgs()...)...); code != 0 {
-		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
-	}
-	return worst
-}
-
-// seedRestores verifies the dumps, then restores each one; verified is false if nothing was restored.
-func seedRestores(w io.Writer, verify func() int, restore func(dump, db string) int) (worst int, verified bool) {
-	fmt.Fprintln(w, "broker: verifying the dumps against their manifest")
-	if code := verify(); code != 0 {
-		fmt.Fprintf(w, "broker: dump verification failed (exit %d), nothing was restored\n", code)
-		return code, false
-	}
-	for _, r := range restores {
-		dump, db := r[0], r[1]
-		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
-		if code := restore(dump, db); code != 0 {
-			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
-			worst = code
-		}
-	}
-	return worst, true
 }
 
 // migrate applies pending migrations without touching existing data.
@@ -616,12 +544,15 @@ func migrateArgs(dbs ...string) []string {
 	return append([]string{"run", "--rm", "migrate"}, dbs...)
 }
 
-func (b *broker) reset(w io.Writer, service string) int {
-	if code := docker(w, project("down", "-v")...); code != 0 {
+// reset wipes the stack's containers and volumes, then sets it up again with up.
+func (b *broker) reset(w io.Writer, _ string) int {
+	if code := docker(w, resetDownArgs()...); code != 0 {
 		return code
 	}
-	if code := b.up(w, ""); code != 0 {
-		return code
-	}
-	return b.seed(w, service)
+	return b.up(w, "")
+}
+
+// resetDownArgs removes the stack with its named volumes; the external pnpm store stays.
+func resetDownArgs() []string {
+	return project("down", "-v")
 }
