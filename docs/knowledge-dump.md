@@ -10,9 +10,10 @@ Nothing is needed where you run it beyond the running stack: Go and Postgres too
 
 ## Building the knowledge data
 
-`make knowledge-update` runs the full update (`-knowledge -action update`) that a dump is built from. On the host it reads
-`NVD_API_KEY` from `.cloud/env/.env.makefile`. In the devcontainer it goes through the broker's `knowledge-update` command,
-which runs it in `service-package-follower` with the key from `.cloud/env/.env.secrets`:
+`make knowledge-update` runs the full update (`-knowledge -action update`) that a dump is built from, in the stack's
+`service-package-follower` container with the key from `.cloud/env/.env.secrets`. On the host it runs
+`.cloud/scripts/knowledge-update.sh` (an `NVD_API_KEY` in your environment wins over the file); in the devcontainer it goes
+through the broker's `knowledge-update` command:
 
 1. `cp .cloud/env/.env.secrets.example .cloud/env/.env.secrets` and set `NVD_API_KEY`. The file is gitignored; never put the key
    in `.env.dev` or `.env.makefile`, which are tracked.
@@ -193,10 +194,11 @@ no pull request run can read the environment's secrets. Its jobs:
 2. **image**: verifies the dump set against its manifest, refuses a dump from another Postgres major version than the
    image's, builds the image for amd64 and arm64, pushes it under a tag that must not exist yet, and attests its build
    provenance on Docker Hub.
-3. **prune old tags**: `.cloud/scripts/prune-knowledge-dump-tags.sh` keeps the newest 8 dated tags and every tag that the
-   `docker-compose.yaml` asset of any `CodeClarityCE/deployment` release names, and deletes every other dated tag through the
-   Docker Hub API. Tags that are not dates are left alone. If any release or its Compose file cannot be read, it deletes nothing
-   and fails.
+3. **prune old tags**: `.cloud/scripts/prune-knowledge-dump-tags.sh` keeps every dated tag from the 8 weeks up to the newest
+   one (so manual builds never push weekly ones out), every tag that the `docker-compose.yaml` asset of any
+   `CodeClarityCE/deployment` release names, and the tag `.cloud/docker/docker-compose.yaml` on `main` names. It deletes every
+   other dated tag through the Docker Hub API. Tags that are not dates are left alone. If any of those Compose files cannot be
+   read, it deletes nothing and fails.
 
 The `release` environment needs `NVD_API_KEY`, and `DOCKERHUB_USERNAME` with a `DOCKERHUB_TOKEN` that can read, write
 and delete (pruning deletes tags). Without `NVD_API_KEY` the update still runs, at NVD's lower rate.
@@ -211,6 +213,7 @@ A run has no way to publish a dump built elsewhere: during an upstream outage, d
 `restore-if-empty` (restore only into an empty knowledge database, and a failing manifest stopping the job), with stand-in
 `pg_restore`, `psql`, `createdb` and `docker` (set `DEPLOYMENT_DIR` when the deployment submodule is checked out elsewhere).
 `sh .cloud/scripts/tests/prune-knowledge-dump-tags.test.sh` runs the tag pruning against stand-in `gh` (deployment
-releases) and `curl` (Docker Hub).
+releases and the dev Compose file on `main`) and `curl` (Docker Hub).
+`sh .cloud/scripts/tests/knowledge-update.test.sh` runs the host `knowledge-update.sh` with a stand-in `docker`.
 `sh .cloud/scripts/tests/reset.test.sh` checks that `make reset` refuses without `CONFIRM=reset`.
 The broker commands are covered by `cd .devcontainer/broker && GOWORK=off go test ./...`.

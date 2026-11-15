@@ -1,74 +1,37 @@
 #!/bin/sh
 # Fresh-install test, dev variant: on a Docker daemon with no codeclarity-dev stack, runs
-# `make up` twice, then checks what a developer sees through the API after each run.
+# `make up` twice, then checks what a developer sees through the API after each run, and
+# runs the Default Analyzer on a tiny uploaded npm project after the first.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
 # Usage: sh .cloud/scripts/tests/fresh-install/dev.sh
 # Env: API_URL (default http://localhost:3000), API_WAIT_SECONDS (default 900),
 #      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see knowledge-dump-fixture.sh),
-#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold).
+#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold),
+#      ANALYSIS_WAIT_SECONDS (default 1200).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
-API_URL=${API_URL:-http://localhost:3000}
-API_WAIT_SECONDS=${API_WAIT_SECONDS:-900}
+API_BASE=${API_URL:-http://localhost:3000}
+LOGIN_WAIT_SECONDS=${API_WAIT_SECONDS:-900}
 EMAIL=john.doe@codeclarity.io
-PASSWORD='ThisIs4Str0ngP4ssW0rd?'
+LOGIN_EMAIL=$EMAIL
+LOGIN_PASSWORD='ThisIs4Str0ngP4ssW0rd?'
+CURL_CA=
 ANALYZER="Default Analyzer"
+JOBS="knowledge-restore test-databases migrate migrate-test dev-user default-analyzer"
+ANALYSIS_SERVICES="service-dispatcher service-downloader service-package-follower plugin-js-sbom plugin-php-sbom plugin-vuln-finder plugin-license-finder api"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
 
 COMPOSE_ROOT=$root
 export COMPOSE_ROOT
 cd "$root/.cloud/scripts" || exit 1
 # shellcheck disable=SC1091
 . ./compose.sh
+# shellcheck source=lib.sh
+. "$root/.cloud/scripts/tests/fresh-install/lib.sh"
 cd "$root" || exit 1
-
-passed=0 failed=0
-
-check() {
-	if [ "$2" = ok ]; then
-		passed=$((passed + 1))
-		echo "ok   $1"
-	else
-		failed=$((failed + 1))
-		echo "FAIL $1"
-	fi
-}
-
-# Prints the stack state and the setup jobs' logs, for a failed run.
-report() {
-	compose ps -a || true
-	for job in knowledge-restore test-databases migrate migrate-test dev-user default-analyzer; do
-		echo "--- logs: $job"
-		compose logs --no-color --tail=100 "$job" || true
-	done
-	echo "--- logs: api"
-	compose logs --no-color --tail=100 api || true
-}
-
-sql() {
-	compose exec -T db psql -XqtA -U postgres -d "$1" -c "$2"
-}
-
-# Prints a token for the default developer account, or nothing if login fails.
-login() {
-	curl -fsS -X POST "$API_URL/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" 2>/dev/null | jq -er '.data.token' 2>/dev/null || true
-}
-
-# Waits for the API to accept the default developer account, then sets token.
-wait_for_login() {
-	deadline=$(($(date +%s) + API_WAIT_SECONDS))
-	token=$(login)
-	while [ -z "$token" ] && [ "$(date +%s)" -lt "$deadline" ]; do
-		sleep 5
-		token=$(login)
-	done
-}
-
-get() {
-	curl -fsS "$API_URL$1" -H "Authorization: Bearer $token"
-}
 
 # Checks what a developer sees after a `make up`; $1 names the run.
 check_stack() {
@@ -120,7 +83,9 @@ for run in first second; do
 	result=ok
 	make up || result=bad
 	check "$run make up succeeds" $result
-	[ "$result" = ok ] && check_stack "$run make up"
+	[ "$result" = ok ] || continue
+	check_stack "$run make up"
+	if [ "$run" = first ] && [ -n "${org:-}" ]; then check_analysis "$run make up" "$org"; fi
 done
 
 result=ok
@@ -128,7 +93,8 @@ compose logs --no-color knowledge-restore | grep -q 'nothing to restore' || resu
 check "second make up: the knowledge restore finds its work done" $result
 
 if [ "$failed" -gt 0 ]; then
-	report
+	# shellcheck disable=SC2086 # a list of service names
+	report $JOBS api
 fi
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]

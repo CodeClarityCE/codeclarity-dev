@@ -41,7 +41,7 @@ jobs:
             "$SHELLCHECK_IMAGE" --format=gcc |
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::\4 file=\1,line=\2,col=\3::\5/; s/^::note /::notice /'
 
-  # make up twice on an empty daemon, then log in as the default developer account.
+  # make up twice on an empty daemon, log in as the default developer account and run an analysis.
   # The knowledge dump image is a small fixture built here, not the published one.
   fresh-install-dev:
     name: fresh install (dev)
@@ -83,9 +83,8 @@ jobs:
           done
           exit "$status"
 
-  # The deployment Compose file, up -d twice on an empty daemon with DOMAIN=localhost, then
-  # create-user and log in through Caddy. The API image is built from the api submodule, so
-  # its create-user command and migrations match; the other images come from Docker Hub.
+  # The deployment Compose file, up -d twice on an empty daemon, then create-user and log in
+  # through Caddy and run an analysis. The API image is built from the api submodule.
   fresh-install-production:
     name: fresh install (production)
     runs-on: ubuntu-24.04
@@ -107,9 +106,8 @@ jobs:
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
-  # The upgrade: installs the newest deployment release from its assets, creates a user, then
-  # runs this checkout's Compose file with the version bumped, and checks the data is kept and
-  # the new migrations applied. Skips while no release has a Compose file attached.
+  # Installs the newest deployment release, then upgrades to this checkout's Compose file and
+  # checks the data is kept. Skips while no release has a Compose file attached.
   upgrade-production:
     name: upgrade (production)
     runs-on: ubuntu-24.04

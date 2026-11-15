@@ -4,6 +4,7 @@
 # migrate job, succeeds for stack commands (volume create, down, up -d), and runs
 # "compose ... exec [-T] db" commands here. "buildx imagetools inspect <ref>" prints the digest
 # STUB_IMAGE_DIGESTS (a file of "<ref> <digest>" lines) gives the ref, and fails for any other ref.
+# Calls into service-package-follower also log NVD_API_KEY from docker's environment to STUB_ENV_LOG.
 echo "$*" >>"${STUB_DOCKER_LOG:-/dev/null}"
 case " $* " in
 " buildx imagetools inspect "*)
@@ -13,6 +14,7 @@ case " $* " in
 	exit 0
 	;;
 *" service-package-follower "*)
+	echo "NVD_API_KEY=${NVD_API_KEY:-}" >>"${STUB_ENV_LOG:-/dev/null}"
 	printf '%s\n' "$STUB_GATE_REPORT"
 	case "$STUB_GATE_REPORT" in *'"passed": true'*) exit 0 ;; *) exit 1 ;; esac
 	;;

@@ -113,7 +113,7 @@ The restored knowledge database is a recent snapshot. To bring it up to date:
 
 1. **Get an NVD API Key**: Apply for a free API key from the [National Vulnerability Database](https://nvd.nist.gov/developers/request-an-api-key)
 
-2. **Configure the API Key**: Add your key to `.cloud/env/.env.makefile`:
+2. **Configure the API Key**: Copy `.cloud/env/.env.secrets.example` to `.cloud/env/.env.secrets` (gitignored) and set your key:
 
    ```bash
    NVD_API_KEY=your-api-key-here
@@ -126,7 +126,7 @@ The restored knowledge database is a recent snapshot. To bring it up to date:
    ```
 
 > [!NOTE]
-> A full update takes hours. On the host it runs with Go from `backend/services/knowledge`; `make knowledge-update-osv` refreshes only the OSV advisories and needs no key. See [docs/knowledge-dump.md](docs/knowledge-dump.md).
+> A full update takes hours. It runs inside the running stack, so it needs `make up` first and nothing beyond git and Docker on your machine; `make knowledge-update-osv` refreshes only the OSV advisories and needs no key. See [docs/knowledge-dump.md](docs/knowledge-dump.md).
 
 ### 2. Available Make Commands
 

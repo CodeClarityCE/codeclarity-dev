@@ -171,6 +171,17 @@ test_postgres_owns_its_key_and_only_it_can_read_it() {
 	check "Postgres and pgbouncer own their key, readable by them only, and the store is closed" $result
 }
 
+test_rabbitmq_owns_its_key_and_only_it_can_read_it() {
+	: >"$work/out"
+	: >"$STUB_CHOWN_LOG"
+	s="$work/rabbit"
+	result=ok
+	generate "$s" || result=bad
+	grep -qx "100:101 $s/rabbitmq/server.key" "$STUB_CHOWN_LOG" || result=bad
+	[ "$(stat -c %a "$s/rabbitmq/server.key")" = 600 ] || result=bad
+	check "RabbitMQ owns its key, readable by it only" $result
+}
+
 test_a_failed_generation_leaves_no_partial_secret() {
 	: >"$work/out"
 	s="$work/broken"
@@ -197,6 +208,7 @@ test_two_instances_share_no_secret
 test_the_certificates_verify_for_the_names_clients_use
 test_the_jwt_keys_are_a_pair
 test_postgres_owns_its_key_and_only_it_can_read_it
+test_rabbitmq_owns_its_key_and_only_it_can_read_it
 test_a_failed_generation_leaves_no_partial_secret
 
 echo "$passed passed, $failed failed"

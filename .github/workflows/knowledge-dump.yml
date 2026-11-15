@@ -7,7 +7,7 @@
 # and dumps knowledge and config with their manifest. A failed gate stops the run: nothing is published.
 # image: builds the image for amd64 and arm64, pushes it under the manifest's build date,
 # never over an existing tag, and attests its provenance.
-# prune: deletes the dated tags older than the newest 8, except those a deployment release pins.
+# prune: deletes dated tags older than 8 weeks before the newest, except those a release or the dev Compose file pins.
 name: Knowledge dump
 
 on:
@@ -241,8 +241,7 @@ jobs:
             echo "| Manifest digest | \`$DIGEST\` |"
           } >>"$GITHUB_STEP_SUMMARY"
 
-  # Needs a Docker Hub token allowed to delete. Reads the deployment releases with this
-  # run's token, and deletes nothing if it cannot read every one of them.
+  # Needs a Docker Hub token allowed to delete. Reads the pinned tags with this run's token.
   prune:
     name: prune old tags
     needs: [image]
@@ -261,5 +260,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          KEEP: "8"
+          KEEP_WEEKS: "8"
         run: sh .cloud/scripts/prune-knowledge-dump-tags.sh
