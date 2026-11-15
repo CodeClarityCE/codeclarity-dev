@@ -44,7 +44,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    image: &postgres-image postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -78,6 +78,36 @@ services:
       interval: 2s
       timeout: 5s
       retries: 60
+
+  # Dev-only one-shot job: creates the _test databases the API tests use; the
+  # api compose file's migrate-test job then migrates them. A test database
+  # without migration history was rebuilt by the tests, so it is recreated.
+  test-databases:
+    image: *postgres-image
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export PGHOST=db PGUSER=postgres PGPASSWORD="$$POSTGRES_PASSWORD"
+        for db in codeclarity_test knowledge_test config_test; do
+          exists=$$(psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$$db'")
+          if [ "$$exists" = 1 ] && [ "$$(psql -d "$$db" -tAc "SELECT to_regclass('public.migrations') IS NULL")" = t ]; then
+            echo "$$db has no migration history, recreating it"
+            dropdb --force "$$db"
+            exists=
+          fi
+          if [ "$$exists" != 1 ]; then
+            createdb "$$db"
+            echo "created $$db"
+          fi
+        done
+    env_file:
+      - ../env/.env.dev
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Transaction-pooling connection pooler. All services/plugins/API connect here
   # (PG_DB_HOST=pgbouncer, PG_DB_PORT=6432) instead of directly to Postgres, so

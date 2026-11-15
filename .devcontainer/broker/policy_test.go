@@ -292,6 +292,7 @@ func TestSeedRestoresNothingWhenVerificationFails(t *testing.T) {
 	}
 }
 
+// Setup jobs create the dev account and the _test databases, so seed restores only the knowledge dumps.
 func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
 	var out bytes.Buffer
 	var restored [][2]string
@@ -307,8 +308,9 @@ func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
 	if code != 4 || !ok {
 		t.Errorf("a failed restore should give its exit code, got %d, %v", code, ok)
 	}
-	if !slices.Equal(restored, restores) {
-		t.Errorf("restored %v, want %v", restored, restores)
+	want := [][2]string{{"knowledge", "knowledge"}, {"config", "config"}}
+	if !slices.Equal(restored, want) {
+		t.Errorf("restored %v, want %v", restored, want)
 	}
 }
 

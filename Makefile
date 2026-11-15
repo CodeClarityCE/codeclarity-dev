@@ -74,12 +74,10 @@ dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowle
 	@cd .cloud/scripts && sh dump-db.sh codeclarity
 	@$(MAKE) --no-print-directory dump-knowledge
 
-restore-database: ## Verifies the dumps against their manifest, then restores the databases
+restore-database: ## Verifies the dumps against their manifest, then restores knowledge + config
 	@cd .cloud/scripts && sh restore-db.sh verify
-	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
-	@cd .cloud/scripts && sh restore-test-db.sh
 
 dump-knowledge-dated: ## Dumps the knowledge + config databases to dated files (LABEL=<label>)
 ifndef LABEL
