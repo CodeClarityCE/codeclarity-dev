@@ -1,0 +1,19 @@
+#!/bin/sh
+# Test stand-in for gh: logs its arguments to STUB_GH_LOG. "api --paginate repos/<r>/releases"
+# prints STUB_RELEASES (a JSON file), or fails when STUB_GH_FAIL is set. An asset download,
+# "api -H Accept: application/octet-stream repos/<r>/releases/assets/<id>", prints
+# STUB_ASSETS/<id> and fails when that file does not exist.
+echo "$*" >>"${STUB_GH_LOG:-/dev/null}"
+last=$(for arg; do :; done; printf '%s' "$arg")
+case "$last" in
+repos/*/releases)
+	[ -z "${STUB_GH_FAIL:-}" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+	cat "$STUB_RELEASES"
+	;;
+repos/*/releases/assets/*)
+	file="${STUB_ASSETS:-/nonexistent}/${last##*/}"
+	[ -f "$file" ] || { echo "HTTP 404: Not Found" >&2; exit 1; }
+	cat "$file"
+	;;
+*) echo "gh stub: unexpected call: $*" >&2; exit 1 ;;
+esac
