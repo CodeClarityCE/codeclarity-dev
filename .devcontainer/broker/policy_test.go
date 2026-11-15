@@ -241,79 +241,6 @@ func TestAlloyMatchesStackCompose(t *testing.T) {
 	}
 }
 
-func TestRestoreDumpRunsTheScriptInTheDBContainer(t *testing.T) {
-	got := restoreDumpArgs("echo restoring", "knowledge", "knowledge_test")
-	want := []string{"exec", "-T", "db", "sh", "-c", "echo restoring", "restore-dump", "restore", "knowledge", "knowledge_test"}
-	if !slices.Equal(got, want) {
-		t.Errorf("restoreDumpArgs = %q, want %q", got, want)
-	}
-	got = verifyDumpsArgs("echo verifying")
-	want = []string{"exec", "-T", "db", "sh", "-c", "echo verifying", "restore-dump", "verify"}
-	if !slices.Equal(got, want) {
-		t.Errorf("verifyDumpsArgs = %q, want %q", got, want)
-	}
-}
-
-// make up has already migrated the databases, so seed drops each one before restoring into it.
-func TestDropDatabaseRunsInTheDBContainer(t *testing.T) {
-	got := strings.Join(dropDatabaseArgs("codeclarity_test"), " ")
-	want := `exec -T db sh -c PGPASSWORD="$POSTGRES_PASSWORD" dropdb -w -U postgres --force --if-exists "$1" dropdb codeclarity_test`
-	if got != want {
-		t.Errorf("dropDatabaseArgs = %q, want %q", got, want)
-	}
-}
-
-func TestRestoreDumpScriptIsInTheDeploymentRepo(t *testing.T) {
-	if _, err := os.Stat("../../deployment/scripts"); err != nil {
-		t.Skip("the deployment submodule is not checked out")
-	}
-	if _, err := os.Stat(filepath.Join("../..", restoreDumpScript)); err != nil {
-		t.Errorf("broker reads %s: %v", restoreDumpScript, err)
-	}
-}
-
-func TestSeedRestoresNothingWhenVerificationFails(t *testing.T) {
-	var out bytes.Buffer
-	var restored []string
-	verify := func() int { return 1 }
-	restore := func(dump, db string) int {
-		restored = append(restored, db)
-		return 0
-	}
-	code, ok := seedRestores(&out, verify, restore)
-	if code == 0 || ok {
-		t.Errorf("a failed verification should fail the seed, got %d, %v", code, ok)
-	}
-	if len(restored) > 0 {
-		t.Errorf("nothing should be restored, got %v", restored)
-	}
-	if !strings.Contains(out.String(), "nothing was restored") {
-		t.Errorf("the seed should say nothing was restored, got %q", out.String())
-	}
-}
-
-// Setup jobs create the dev account and the _test databases, so seed restores only the knowledge dumps.
-func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
-	var out bytes.Buffer
-	var restored [][2]string
-	verify := func() int { return 0 }
-	restore := func(dump, db string) int {
-		restored = append(restored, [2]string{dump, db})
-		if db == "config" {
-			return 4
-		}
-		return 0
-	}
-	code, ok := seedRestores(&out, verify, restore)
-	if code != 4 || !ok {
-		t.Errorf("a failed restore should give its exit code, got %d, %v", code, ok)
-	}
-	want := [][2]string{{"knowledge", "knowledge"}, {"config", "config"}}
-	if !slices.Equal(restored, want) {
-		t.Errorf("restored %v, want %v", restored, want)
-	}
-}
-
 func TestMigrateArgsRunTheMigrateJob(t *testing.T) {
 	if got, want := strings.Join(migrateArgs(), " "), "run --rm migrate"; got != want {
 		t.Errorf("migrateArgs() = %q, want %q", got, want)
@@ -743,5 +670,45 @@ func TestAcceptsTheDevSetupJobs(t *testing.T) {
 	cfg["volumes"].(map[string]any)["api_node_modules"] = map[string]any{"name": "codeclarity-dev_api_node_modules"}
 	if found := run(t, cfg, repo); len(found) != 0 {
 		t.Fatalf("expected no violations, got %v", found)
+	}
+}
+
+// make up runs every setup job, so there is no separate seed command.
+func TestSeedIsNotACommand(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&broker{}).handle(rec, httptest.NewRequest(http.MethodPost, "/seed", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// reset wipes every volume, so it runs only with confirm=reset, and no other command takes confirm.
+func TestResetNeedsItsConfirmation(t *testing.T) {
+	cases := []string{
+		"/reset",
+		"/reset?confirm=",
+		"/reset?confirm=yes",
+		"/reset?confirm=RESET",
+		"/reset?confirm=reset&service=api",
+		"/up?confirm=reset",
+		"/down?confirm=reset",
+	}
+	for _, target := range cases {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			(&broker{}).handle(rec, httptest.NewRequest(http.MethodPost, target, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+			if strings.Contains(rec.Body.String(), exitMarker) {
+				t.Errorf("a refused reset ran something: %q", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestResetRemovesTheStackVolumes(t *testing.T) {
+	if got, want := strings.Join(resetDownArgs(), " "), "compose -p codeclarity-dev down -v"; got != want {
+		t.Errorf("resetDownArgs() = %q, want %q", got, want)
 	}
 }

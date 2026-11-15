@@ -2,14 +2,14 @@
 
 ## Development Environment
 
-- **One-time host setup**: `docker volume create pnpm-store` (creates the shared external volume mounted into `api-dev` and `frontend-dev` for a deduped pnpm content-addressable store)
-- `make up` / `make down` - Start/stop all services
+- **Setup**: `git clone --recursive`, then `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
+- `make up` / `make down` - Start/stop all services (`down` keeps data)
 - `make build` - Build all Docker images
 - `make logs` - View container logs
-- `make stop-all` - Full container cleanup
 - `make pull` - Pull latest images
+- `make reset CONFIRM=reset` - Wipe the dev stack's volumes, then `make up` again. Without `CONFIRM=reset` on the command line it exits non-zero and changes nothing
 - Access at <https://localhost:443>
-- Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
+- Dev account (dev stack only): `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
 - Knowledge daemon: off in dev by default. Run `KNOWLEDGE_DAEMON_REPLICAS=1 make up` on the host to start it (`service-knowledge`, default 0 replicas); the devcontainer broker does not read the caller's shell, so the variable has no effect through it.
 - IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
@@ -17,8 +17,8 @@
 
 The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
 
-- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
-- First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
+- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make reset CONFIRM=reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
+- First run on an empty daemon: `make up`; the setup jobs do the rest. `make reset CONFIRM=reset` wipes the agent stack's data and runs `up` again; the broker refuses `reset` without that confirmation.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
 - The dev stack's Compose files are listed once, in `.cloud/docker/compose-files.txt`. The broker and `.cloud/scripts/compose.sh` both read it, the broker on every request, so adding a file there needs no rebuild (its services still have to pass the policy).
@@ -94,12 +94,10 @@ Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusab
 
 ## Database Commands
 
-- `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key); in the devcontainer the broker reads it from the gitignored `.cloud/env/.env.secrets`. See `docs/knowledge-dump.md`
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
-- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first; see `docs/knowledge-dump.md`. `make up` restores knowledge from the `codeclarityce/knowledge-dump` image when the knowledge database is empty, no git-lfs needed
+- `make up` restores knowledge + config from the `codeclarityce/knowledge-dump` image when the knowledge database is empty. `make restore-database` restores a local dump set from `deployment/dump` into empty `knowledge` and `config` databases, after verifying its manifest; see `docs/knowledge-dump.md`
 - `make dump-knowledge` - Dumps `knowledge` + `config` with a manifest, only after the read-only completeness gate passes; also works in the devcontainer. `WAIVE=<checks> REASON=<why>` waives named source checks during an upstream outage, recorded in the manifest. See `docs/knowledge-dump.md`
-- `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 
 Empty `knowledge` and `config` databases need no dump: running the API migrations creates every base table and the `config` row with null watermarks, so the first knowledge update does a full fetch.
 

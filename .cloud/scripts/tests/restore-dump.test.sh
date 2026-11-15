@@ -39,7 +39,7 @@ dump_set() {
 old_set() {
 	dir="$work/$1"
 	mkdir -p "$dir"
-	for db in codeclarity knowledge config; do
+	for db in knowledge config; do
 		echo "old $db" >"$dir/$db.dump"
 	done
 	: >"$STUB_RESTORE_LOG"
@@ -195,41 +195,13 @@ test_a_missing_database_is_created() {
 }
 
 test_a_dump_outside_the_manifest_restores_unverified() {
-	dump_set codeclarity
-	echo codeclarity >"$dir/codeclarity.dump"
+	dump_set unlisted
+	echo extra >"$dir/extra.dump"
 	result=ok
 	verify "$dir" || result=bad
-	restore "$dir" codeclarity codeclarity || result=bad
-	[ "$(cat "$STUB_RESTORE_LOG")" = "codeclarity $(sha256sum "$dir/codeclarity.dump" | cut -d' ' -f1)" ] || result=bad
-	check "codeclarity.dump, which the manifest does not cover, still restores" $result
-}
-
-# fake_deployment copies the deployment scripts next to a dump set, with a stand-in git.
-fake_deployment() {
-	dump_set "$1/dump"
-	cp -R "$DEPLOYMENT_DIR/scripts" "$work/$1/scripts"
-	dir="$work/$1"
-}
-
-test_download_dumps_verifies_the_set() {
-	fake_deployment download_ok
-	result=ok
-	STUB_GIT_LOG="$work/git-calls" sh "$dir/scripts/download-dumps.sh" >>"$work/out" 2>&1 || result=bad
-	[ -f "$work/git-calls" ] && result=bad
-	fake_deployment download_bad
-	corrupt "$dir/dump/knowledge.dump"
-	sh "$dir/scripts/download-dumps.sh" >>"$work/out" 2>&1 && result=bad
-	check "download-dumps passes a good set and fails on a corrupted dump" $result
-}
-
-test_download_dumps_pulls_lfs_pointers() {
-	fake_deployment download_pointer
-	printf 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 1000\n' >"$dir/dump/knowledge.dump"
-	result=ok
-	STUB_GIT_LOG="$work/git-calls" sh "$dir/scripts/download-dumps.sh" >>"$work/out" 2>&1 && result=bad
-	grep -q "lfs pull" "$work/git-calls" || result=bad
-	rm -f "$work/git-calls"
-	check "download-dumps pulls LFS pointer files, then still refuses what does not verify" $result
+	restore "$dir" extra extra || result=bad
+	[ "$(cat "$STUB_RESTORE_LOG")" = "extra $(sha256sum "$dir/extra.dump" | cut -d' ' -f1)" ] || result=bad
+	check "a dump the manifest does not cover still restores" $result
 }
 
 # restore_database runs make restore-database with the stand-in docker on a dump directory.
@@ -237,10 +209,8 @@ restore_database() {
 	DUMP_DIR="$1" make --no-print-directory -C "$root" restore-database >>"$work/out" 2>&1
 }
 
-# The dev account and the _test databases come from setup jobs, so codeclarity.dump is never restored.
 test_restore_database_restores_every_database() {
 	dump_set make_ok
-	echo codeclarity >"$dir/codeclarity.dump"
 	result=ok
 	restore_database "$dir" || result=bad
 	[ "$(cut -d' ' -f1 "$STUB_RESTORE_LOG" | tr '\n' ' ')" = "knowledge config " ] || result=bad
@@ -250,7 +220,6 @@ test_restore_database_restores_every_database() {
 
 test_restore_database_restores_nothing_from_a_corrupted_set() {
 	dump_set make_bad
-	echo codeclarity >"$dir/codeclarity.dump"
 	corrupt "$dir/knowledge.dump"
 	result=ok
 	restore_database "$dir" && result=bad
@@ -331,8 +300,6 @@ test_parts_without_a_manifest_are_refused
 test_a_failed_pg_restore_fails_the_restore
 test_a_missing_database_is_created
 test_a_dump_outside_the_manifest_restores_unverified
-test_download_dumps_verifies_the_set
-test_download_dumps_pulls_lfs_pointers
 test_restore_database_restores_every_database
 test_restore_database_restores_nothing_from_a_corrupted_set
 test_an_empty_knowledge_database_gets_the_dump
