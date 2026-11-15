@@ -129,7 +129,9 @@ check_analysis() {
 	result=ok
 	analyzer=$(get "/org/$2/analyzers?page=0&entries_per_page=100" |
 		jq -er '[.data[] | select(.name == "Default Analyzer")][0].id') || result=bad
-	body='{"analyzer_id":"'"$analyzer"'","branch":"main","config":{"js-sbom":{"branch":"main"},"php-sbom":{"branch":"main"},"license-finder":{"licensePolicy":[]}}}'
+	# The same config the frontend sends: each SBOM plugin gets the uploaded project's path.
+	project_path="$2/projects/$project/main"
+	body='{"analyzer_id":"'"$analyzer"'","branch":"main","config":{"js-sbom":{"branch":"main","project":"'"$project_path"'"},"php-sbom":{"branch":"main","project":"'"$project_path"'"},"vuln-finder":{"vulnerabilityPolicy":[]},"license-finder":{"licensePolicy":[]}}}'
 	[ "$result" = ok ] && { analysis=$(post "/org/$2/projects/$project/analyses" "$body" | jq -er '.id') || result=bad; }
 	check "$1: an analysis with the Default Analyzer starts" $result
 	[ "$result" = ok ] || return 0
