@@ -703,6 +703,10 @@ func TestResetNeedsItsConfirmation(t *testing.T) {
 			if strings.Contains(rec.Body.String(), exitMarker) {
 				t.Errorf("a refused reset ran something: %q", rec.Body.String())
 			}
+			name := strings.TrimPrefix(strings.SplitN(target, "?", 2)[0], "/")
+			if !strings.Contains(target, "service=") && !strings.HasPrefix(rec.Body.String(), name+" ") {
+				t.Errorf("the refusal does not name %s: %q", name, rec.Body.String())
+			}
 		})
 	}
 }

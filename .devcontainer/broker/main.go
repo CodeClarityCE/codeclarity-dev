@@ -112,7 +112,11 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if confirm := r.URL.Query().Get("confirm"); (cmd.confirmed && confirm != name) || (!cmd.confirmed && confirm != "") {
 		entry.Warn("rejected a missing or unexpected confirmation")
-		http.Error(w, "reset needs confirm=reset (make reset CONFIRM=reset); no other command takes confirm", http.StatusBadRequest)
+		msg := name + " takes no confirm"
+		if cmd.confirmed {
+			msg = fmt.Sprintf("%s needs confirm=%s (make %s CONFIRM=%s)", name, name, name, name)
+		}
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	waive, reason := r.URL.Query().Get("waive"), r.URL.Query().Get("reason")
@@ -337,7 +341,12 @@ func (b *broker) migrate(w io.Writer, db string) int {
 	if !resolve(w) || !waitForDB(w) {
 		return 1
 	}
-	return b.runMigrations(w, targets)
+	fmt.Fprintf(w, "broker: migrating %s\n", strings.Join(targets, ", "))
+	code := docker(w, resolved(migrateArgs(targets...)...)...)
+	if code != 0 {
+		fmt.Fprintf(w, "broker: the migrate job exited %d\n", code)
+	}
+	return code
 }
 
 // knowledgeOSV refreshes OSV advisories using the stack's own database settings.
@@ -527,16 +536,6 @@ func migrationTargets(db string) ([]string, bool) {
 		return []string{db}, true
 	}
 	return nil, false
-}
-
-// runMigrations runs the migrate job once for the given databases.
-func (b *broker) runMigrations(w io.Writer, dbs []string) int {
-	fmt.Fprintf(w, "broker: migrating %s\n", strings.Join(dbs, ", "))
-	code := docker(w, resolved(migrateArgs(dbs...)...)...)
-	if code != 0 {
-		fmt.Fprintf(w, "broker: the migrate job exited %d\n", code)
-	}
-	return code
 }
 
 // migrateArgs runs the one-shot migrate job, which talks straight to Postgres.
