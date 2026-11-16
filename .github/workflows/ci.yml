@@ -133,6 +133,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
+  # The reference-machine baseline (#162): the default production stack on arm64 running a real npm
+  # analysis. It records memory, OOM kills, p95 latency and analysis time, and fails only if the
+  # analysis does not complete. Not in the ci gate, so an arm64 runner queue cannot block merges.
+  reference-machine-baseline:
+    name: reference machine baseline (arm64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Measure the default production stack
+        run: sh .cloud/scripts/measure/reference-baseline.sh run "$RUNNER_TEMP/baseline"
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/baseline/summary.md" ]; then cat "$RUNNER_TEMP/baseline/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
+      - name: Keep the measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reference-machine-baseline
+          path: ${{ runner.temp }}/baseline
+          if-no-files-found: warn
+
   # The required check, kept here because called jobs show as "lint / <job>".
   # Fails if any needed job failed or was cancelled; skipped counts as success.
   ci:
