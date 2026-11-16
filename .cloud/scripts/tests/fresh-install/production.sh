@@ -7,8 +7,10 @@
 # and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
 # and the user and its data must be kept and the new migrations applied.
 # Then it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
-# Last, it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
+# Then it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
 # API's public URLs use that port, then puts the ports back.
+# Monitoring is off until the last run, which turns on the monitoring profile and checks
+# Prometheus scrapes the stack and Grafana reads from it.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
@@ -192,6 +194,61 @@ check_user() {
 	check "$1: the instance has exactly one user and one organization" $result
 }
 
+MONITORING_SERVICES="prometheus grafana postgres_exporter"
+
+# Checks no monitoring container exists and Caddy's monitoring routes answer 503 with a
+# message naming the profile; $1 names the run.
+check_monitoring_off() {
+	for service in $MONITORING_SERVICES; do
+		result=ok
+		[ -z "$(docker ps -aq --filter "label=com.docker.compose.service=$service")" ] || result=bad
+		check "$1: no $service container exists while monitoring is off" $result
+	done
+	result=ok
+	code=$(curl -sS --cacert "$work/ca.crt" -o "$work/monitoring.body" -w '%{http_code}' "https://$DOMAIN:3001/") || result=bad
+	[ "$code" = 503 ] || result=bad
+	grep -q 'monitoring' "$work/monitoring.body" || result=bad
+	check "$1: https://$DOMAIN:3001 answers 503 naming the monitoring profile (got ${code:-nothing})" $result
+	result=ok
+	# Port 9091 is not published, so ask Caddy from inside its container; busybox wget prints only the status.
+	compose exec -T frontend wget -qO /dev/null --no-check-certificate "https://$DOMAIN:9091/" >"$work/monitoring.body" 2>&1 && result=bad
+	grep -q ' 503' "$work/monitoring.body" || result=bad
+	check "$1: Caddy's Prometheus route answers 503" $result
+}
+
+# Prints how many series of the PromQL query $1 Prometheus returns.
+prom_count() {
+	compose exec -T prometheus wget -qO- "http://localhost:9090/api/v1/query?query=$1" | jq -er '.data.result | length'
+}
+
+# Checks Prometheus scrapes the stack and Grafana, through Caddy, reads from Prometheus; $1 names the run.
+check_monitoring_on() {
+	deadline=$(($(date +%s) + 180))
+	until [ "$(prom_count 'up%7Bjob%3D%22rabbitmq%22%7D%3D%3D1' 2>/dev/null)" = 1 ] &&
+		[ "$(prom_count 'up%7Bjob%3D%22postgres%22%7D%3D%3D1' 2>/dev/null)" = 1 ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || break
+		sleep 5
+	done
+	for job in rabbitmq postgres; do
+		result=ok
+		[ "$(prom_count "up%7Bjob%3D%22$job%22%7D%3D%3D1" 2>/dev/null)" = 1 ] || result=bad
+		check "$1: Prometheus scrapes the $job target" $result
+	done
+
+	result=ok
+	curl -fsS --cacert "$work/ca.crt" "https://$DOMAIN:3001/api/health" | jq -e '.database == "ok"' >/dev/null || result=bad
+	check "$1: Grafana answers through Caddy at https://$DOMAIN:3001" $result
+
+	result=ok
+	password=$(compose run --rm --no-deps -T --entrypoint cat grafana /run/codeclarity/admin_password) || result=bad
+	frames=$(curl -fsS --cacert "$work/ca.crt" -u "admin:$password" -X POST "https://$DOMAIN:3001/api/ds/query" \
+		-H 'Content-Type: application/json' \
+		-d '{"from":"now-5m","to":"now","queries":[{"refId":"A","datasource":{"uid":"prometheus"},"expr":"up","instant":true}]}' |
+		jq -er '.results.A.frames | length') || result=bad
+	[ "${frames:-0}" -gt 0 ] || result=bad
+	check "$1: Grafana's Prometheus data source returns data" $result
+}
+
 # Row counts of what an upgrade must keep.
 kept_rows() {
 	for table in '"user"' organization analyzer project analysis; do
@@ -274,6 +331,8 @@ fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
+# An upgraded instance keeps the previous release's monitoring containers until removed.
+if [ -z "$UPGRADE_FROM" ]; then check_monitoring_off "first up -d"; fi
 
 result=ok
 compose up -d || { result=bad; report_unsettled; }
@@ -335,9 +394,19 @@ check_user "with the ports unset again"
 check_redirect "" "with the ports unset again"
 check_public_urls "with the ports unset again"
 
+# The monitoring profile, as an operator would turn it on in .env.
+COMPOSE_PROFILES=monitoring
+export COMPOSE_PROFILES
+result=ok
+compose up -d || { result=bad; report_unsettled; }
+wait_settled || { result=bad; report_unsettled; }
+check "with COMPOSE_PROFILES=monitoring: up -d succeeds and every service runs" $result
+check_monitoring_on "with COMPOSE_PROFILES=monitoring"
+check_user "with COMPOSE_PROFILES=monitoring"
+
 if [ "$failed" -gt 0 ]; then
 	# shellcheck disable=SC2086 # a list of service names
-	report $JOBS db api frontend
+	report $JOBS db api frontend $MONITORING_SERVICES
 fi
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]
