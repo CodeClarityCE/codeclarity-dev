@@ -29,31 +29,8 @@ const (
 	exitMarker   = "__BROKER_EXIT__"
 )
 
-var composeFiles = []string{
-	".cloud/docker/docker-compose.yaml",
-	"api/.cloud/docker/docker-compose.yaml",
-	"frontend/.cloud/docker/docker-compose.yaml",
-	"backend/services/packageFollower/.cloud/docker/docker-compose.yaml",
-	"backend/services/notifier/.cloud/docker/docker-compose.yaml",
-	"backend/services/downloader/.cloud/docker/docker-compose.yaml",
-	"backend/services/dispatcher/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/codeql/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/license-finder/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/js-patching/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml",
-	"backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml",
-}
-
-// Dump name and the database it restores into, for seed.
-var restores = [][2]string{
-	{"codeclarity", "codeclarity"},
-	{"knowledge", "knowledge"},
-	{"config", "config"},
-	{"knowledge", "knowledge_test"},
-	{"config", "config_test"},
-	{"codeclarity", "codeclarity_test"},
-}
+// The dev stack's Compose file list, relative to the repo root, read on every request.
+const composeFilesList = ".cloud/docker/compose-files.txt"
 
 // Databases with migrations, in the order they run.
 var migrated = []string{"codeclarity", "knowledge", "plugins", "config"}
@@ -75,6 +52,8 @@ type command struct {
 	needService bool
 	// runWaived replaces run for a command that takes a gate waiver, given as environment.
 	runWaived func(b *broker, w io.Writer, waiver []string) int
+	// confirmed commands run only when the request carries confirm=<command name>.
+	confirmed bool
 }
 
 var commands = map[string]command{
@@ -85,8 +64,7 @@ var commands = map[string]command{
 	"pull":             {run: (*broker).pull},
 	"down":             {run: (*broker).down},
 	"ps":               {run: (*broker).ps},
-	"seed":             {run: (*broker).seed},
-	"reset":            {run: (*broker).reset},
+	"reset":            {run: (*broker).reset, confirmed: true},
 	"migrate":          {run: (*broker).migrate, takes: true},
 	"knowledge-osv":    {run: (*broker).knowledgeOSV},
 	"knowledge-update": {run: (*broker).knowledgeUpdate},
@@ -130,6 +108,15 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 	if (service != "" && (!cmd.takes || !validServiceName(service))) || (cmd.needService && service == "") {
 		entry.Warn("rejected bad service argument")
 		http.Error(w, "bad service argument", http.StatusBadRequest)
+		return
+	}
+	if confirm := r.URL.Query().Get("confirm"); (cmd.confirmed && confirm != name) || (!cmd.confirmed && confirm != "") {
+		entry.Warn("rejected a missing or unexpected confirmation")
+		msg := name + " takes no confirm"
+		if cmd.confirmed {
+			msg = fmt.Sprintf("%s needs confirm=%s (make %s CONFIRM=%s)", name, name, name, name)
+		}
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	waive, reason := r.URL.Query().Get("waive"), r.URL.Query().Get("reason")
@@ -210,11 +197,12 @@ func dockerEnv(w io.Writer, env []string, stdin io.Reader, stdout io.Writer, arg
 
 // resolve renders the Compose files, validates the result and saves what passed.
 func resolve(w io.Writer) bool {
-	args := []string{"compose"}
-	for _, f := range composeFiles {
-		args = append(args, "-f", filepath.Join(repoRoot, f))
+	files, err := composeFileArgs(repoRoot)
+	if err != nil {
+		fmt.Fprintf(w, "broker: %v\n", err)
+		return false
 	}
-	args = append(args, "config", "--format", "json")
+	args := append(append([]string{"compose"}, files...), "config", "--format", "json")
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("docker", args...)
@@ -244,6 +232,29 @@ func resolve(w io.Writer) bool {
 		return false
 	}
 	return true
+}
+
+// composeFileArgs reads the list under root and returns "-f <file>" pairs, skipping blanks and # comments.
+func composeFileArgs(root string) ([]string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, composeFilesList))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the compose file list: %w", err)
+	}
+	var args []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		f := strings.TrimSpace(line)
+		if f == "" || strings.HasPrefix(f, "#") {
+			continue
+		}
+		if !filepath.IsLocal(f) {
+			return nil, fmt.Errorf("compose file list: %q is not a path inside the repo", f)
+		}
+		args = append(args, "-f", filepath.Join(root, f))
+	}
+	if len(args) == 0 {
+		return nil, fmt.Errorf("compose file list %s names no files", composeFilesList)
+	}
+	return args, nil
 }
 
 func withService(args []string, service string) []string {
@@ -320,68 +331,6 @@ func waitForDB(w io.Writer) bool {
 	return false
 }
 
-// restoreDumpScript verifies and restores dumps; it runs inside the db container.
-const restoreDumpScript = "deployment/scripts/restore-dump.sh"
-
-// verifyDumpsArgs checks every dump against its manifest before anything is restored.
-func verifyDumpsArgs(script string) []string {
-	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "verify"}
-}
-
-// restoreDumpArgs restores one dump, reassembling a split one, and creates the database if missing.
-func restoreDumpArgs(script, dump, db string) []string {
-	return []string{"exec", "-T", "db", "sh", "-c", script, "restore-dump", "restore", dump, db}
-}
-
-func (b *broker) seed(w io.Writer, _ string) int {
-	script, err := os.ReadFile(filepath.Join(repoRoot, restoreDumpScript))
-	if err != nil {
-		fmt.Fprintf(w, "broker: cannot read the restore script: %v\n", err)
-		return 1
-	}
-	if !resolve(w) || !waitForDB(w) {
-		return 1
-	}
-	verify := func() int {
-		return docker(w, resolved(verifyDumpsArgs(string(script))...)...)
-	}
-	restore := func(dump, db string) int {
-		return docker(w, resolved(restoreDumpArgs(string(script), dump, db)...)...)
-	}
-	worst, verified := seedRestores(w, verify, restore)
-	if !verified {
-		return worst
-	}
-	// Dumps are older than the schema, so bring every database up to date.
-	if code := b.runMigrations(w, migrated); code != 0 {
-		worst = code
-	}
-	// Dumps also carry old advisories. Being offline should not fail the seed.
-	fmt.Fprintln(w, "broker: refreshing OSV advisories")
-	if code := docker(w, resolved(knowledgeOSVArgs()...)...); code != 0 {
-		fmt.Fprintf(w, "broker: warning, OSV refresh exited %d; run make knowledge-update-osv later\n", code)
-	}
-	return worst
-}
-
-// seedRestores verifies the dumps, then restores each one; verified is false if nothing was restored.
-func seedRestores(w io.Writer, verify func() int, restore func(dump, db string) int) (worst int, verified bool) {
-	fmt.Fprintln(w, "broker: verifying the dumps against their manifest")
-	if code := verify(); code != 0 {
-		fmt.Fprintf(w, "broker: dump verification failed (exit %d), nothing was restored\n", code)
-		return code, false
-	}
-	for _, r := range restores {
-		dump, db := r[0], r[1]
-		fmt.Fprintf(w, "broker: restoring %s into %s\n", dump, db)
-		if code := restore(dump, db); code != 0 {
-			fmt.Fprintf(w, "broker: restore of %s exited %d\n", db, code)
-			worst = code
-		}
-	}
-	return worst, true
-}
-
 // migrate applies pending migrations without touching existing data.
 func (b *broker) migrate(w io.Writer, db string) int {
 	targets, ok := migrationTargets(db)
@@ -392,7 +341,12 @@ func (b *broker) migrate(w io.Writer, db string) int {
 	if !resolve(w) || !waitForDB(w) {
 		return 1
 	}
-	return b.runMigrations(w, targets)
+	fmt.Fprintf(w, "broker: migrating %s\n", strings.Join(targets, ", "))
+	code := docker(w, resolved(migrateArgs(targets...)...)...)
+	if code != 0 {
+		fmt.Fprintf(w, "broker: the migrate job exited %d\n", code)
+	}
+	return code
 }
 
 // knowledgeOSV refreshes OSV advisories using the stack's own database settings.
@@ -584,30 +538,20 @@ func migrationTargets(db string) ([]string, bool) {
 	return nil, false
 }
 
-// runMigrations tries every database and returns the last failure.
-func (b *broker) runMigrations(w io.Writer, dbs []string) int {
-	worst := 0
-	for _, db := range dbs {
-		fmt.Fprintf(w, "broker: migrating %s\n", db)
-		if code := docker(w, resolved(migrateArgs(db)...)...); code != 0 {
-			fmt.Fprintf(w, "broker: migration of %s exited %d\n", db, code)
-			worst = code
-		}
-	}
-	return worst
+// migrateArgs runs the one-shot migrate job, which talks straight to Postgres.
+func migrateArgs(dbs ...string) []string {
+	return append([]string{"run", "--rm", "migrate"}, dbs...)
 }
 
-// migrateArgs runs one database's migrations in the api container, straight on Postgres.
-func migrateArgs(db string) []string {
-	return []string{"exec", "-T", "-e", "PG_DB_HOST=db", "-e", "PG_DB_PORT=5432", "api", "pnpm", "migration:run:" + db}
+// reset wipes the stack's containers and volumes, then sets it up again with up.
+func (b *broker) reset(w io.Writer, _ string) int {
+	if code := docker(w, resetDownArgs()...); code != 0 {
+		return code
+	}
+	return b.up(w, "")
 }
 
-func (b *broker) reset(w io.Writer, service string) int {
-	if code := docker(w, project("down", "-v")...); code != 0 {
-		return code
-	}
-	if code := b.up(w, ""); code != 0 {
-		return code
-	}
-	return b.seed(w, service)
+// resetDownArgs removes the stack with its named volumes; the external pnpm store stays.
+func resetDownArgs() []string {
+	return project("down", "-v")
 }

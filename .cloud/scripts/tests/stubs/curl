@@ -1,0 +1,43 @@
+#!/bin/sh
+# Test stand-in for curl as a Docker Hub API: logs "<method> <url>" to STUB_CURL_LOG.
+# POST .../v2/auth/token answers a token (fails with STUB_HUB_AUTH_FAIL). GET .../tags lists
+# STUB_HUB_TAGS (space-separated), two per page, following "next" (fails with STUB_HUB_LIST_FAIL).
+# DELETE .../tags/<tag> appends the tag to STUB_HUB_DELETED, and needs the bearer token in a
+# header file (-H @file). Exits 22 as curl -f does on an HTTP error.
+method=GET url="" headers=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-X) method=$2; shift ;;
+	-H) case "$2" in @*) headers="$headers $(cat "${2#@}")" ;; *) headers="$headers $2" ;; esac; shift ;;
+	--data-binary | -d) [ "$method" = GET ] && method=POST; shift ;;
+	-*) ;;
+	*) url=$1 ;;
+	esac
+	shift
+done
+echo "$method $url" >>"${STUB_CURL_LOG:-/dev/null}"
+case "$method $url" in
+"POST https://hub.docker.com/v2/auth/token")
+	cat >/dev/null
+	[ -z "${STUB_HUB_AUTH_FAIL:-}" ] || exit 22
+	echo '{"access_token":"stub-token"}'
+	;;
+"GET https://hub.docker.com/v2/namespaces/"*"/tags?"*)
+	[ -z "${STUB_HUB_LIST_FAIL:-}" ] || exit 22
+	page=$(printf '%s' "$url" | sed -n 's/.*[?&]page=\([0-9]*\).*/\1/p')
+	page=${page:-1}
+	# shellcheck disable=SC2086
+	set -- $STUB_HUB_TAGS
+	start=$(((page - 1) * 2 + 1))
+	names=$(i=0; for t; do i=$((i + 1)); [ "$i" -ge "$start" ] && [ "$i" -lt $((start + 2)) ] && printf '{"name":"%s"},' "$t"; done)
+	next=null
+	[ $# -ge $((start + 2)) ] && next="\"${url%%\?*}?page_size=100&page=$((page + 1))\""
+	printf '{"count":%d,"next":%s,"results":[%s]}\n' $# "$next" "${names%,}"
+	;;
+"DELETE https://hub.docker.com/v2/namespaces/"*"/tags/"*)
+	case "$headers" in *"Authorization: Bearer stub-token"*) ;; *) exit 22 ;; esac
+	[ "${STUB_HUB_DELETE_FAIL:-}" != "${url##*/}" ] || exit 22
+	echo "${url##*/}" >>"$STUB_HUB_DELETED"
+	;;
+*) echo "curl stub: unexpected call: $method $url" >&2; exit 22 ;;
+esac

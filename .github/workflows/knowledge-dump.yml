@@ -1,0 +1,264 @@
+# Builds the knowledge dump from its sources and publishes it as codeclarityce/knowledge-dump:<date>.
+# Runs weekly and when dispatched by hand, only on main with CI_RELEASE == 'true', in the
+# release environment (main only), so no pull request run ever sees its secrets.
+#
+# dump: on an empty Postgres migrated by the API migrations, runs the full knowledge update,
+# then the completeness gate (waivers from the manual run's inputs, recorded in the manifest),
+# and dumps knowledge and config with their manifest. A failed gate stops the run: nothing is published.
+# image: builds the image for amd64 and arm64, pushes it under the manifest's build date,
+# never over an existing tag, and attests its provenance.
+# prune: deletes dated tags older than 8 weeks before the newest, except those a release or the dev Compose file pins.
+name: Knowledge dump
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      waive:
+        description: Gate checks to waive, comma-separated (<source>.<check> or <source>.*)
+        required: false
+        type: string
+      reason:
+        description: Why the checks are waived (required with waive); recorded in the manifest
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: codeclarityce/knowledge-dump
+
+jobs:
+  dump:
+    name: update and dump
+    if: github.ref == 'refs/heads/main' && vars.CI_RELEASE == 'true'
+    runs-on: ubuntu-24.04
+    # The full update takes 2 to 4 hours.
+    timeout-minutes: 350
+    # Holds NVD_API_KEY.
+    environment: release
+    permissions:
+      contents: read
+    env:
+      ENV: ci
+      PG_DB_HOST: 127.0.0.1
+      PG_DB_PORT: "5432"
+      PG_DB_USER: postgres
+      PG_DB_SSLMODE: disable
+      AMQP_HOST: 127.0.0.1
+      AMQP_PORT: "5672"
+      AMQP_USER: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # Postgres is the knowledge dump image's base, so the dump matches its pg_restore.
+      # The knowledge tooling also needs a RabbitMQ to connect to.
+      - name: Start Postgres and RabbitMQ
+        run: |
+          set -euo pipefail
+          pg_image=$(sed -n 's/^FROM \(postgres:[^ ]*\)$/\1/p' .cloud/docker/knowledge-dump/Dockerfile)
+          mq_image=$(sed -n 's/^x-rabbitmq-image: &rabbitmq-image //p' deployment/docker-compose.yaml)
+          [[ "$pg_image" == *@sha256:* && "$mq_image" == *@sha256:* ]] ||
+            { echo "::error::Cannot find the pinned Postgres or RabbitMQ image"; exit 1; }
+          PG_DB_PASSWORD=$(openssl rand -hex 24)
+          AMQP_PASSWORD=$(openssl rand -hex 24)
+          echo "::add-mask::$PG_DB_PASSWORD"
+          echo "::add-mask::$AMQP_PASSWORD"
+          DUMP_DIR="$RUNNER_TEMP/dump"
+          {
+            echo "PG_DB_PASSWORD=$PG_DB_PASSWORD"
+            echo "AMQP_PASSWORD=$AMQP_PASSWORD"
+            echo "DUMP_DIR=$DUMP_DIR"
+          } >>"$GITHUB_ENV"
+          mkdir -p "$DUMP_DIR"
+          docker run -d --name db -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD="$PG_DB_PASSWORD" \
+            -v "$GITHUB_WORKSPACE/deployment/docker-entrypoint-initdb:/docker-entrypoint-initdb.d:ro" \
+            -v "$DUMP_DIR:/dump" "$pg_image"
+          docker run -d --name rabbitmq -p 127.0.0.1:5672:5672 \
+            -e RABBITMQ_DEFAULT_USER="$AMQP_USER" -e RABBITMQ_DEFAULT_PASS="$AMQP_PASSWORD" "$mq_image"
+          for _ in $(seq 60); do
+            docker exec db pg_isready -q -h 127.0.0.1 -U postgres && exit 0
+            sleep 2
+          done
+          docker logs db
+          echo "::error::Postgres did not start"
+          exit 1
+      - name: Migrate the databases
+        run: |
+          set -euo pipefail
+          docker build -q --target api -t codeclarity-ci/api -f api/.cloud/docker/Dockerfile api
+          docker run --rm --network host -e ENV -e PG_DB_HOST -e PG_DB_PORT -e PG_DB_USER -e PG_DB_PASSWORD \
+            -e PG_DB_SSLMODE codeclarity-ci/api node dist/scripts/migrate.js
+      # Built in the knowledge service's own pinned Go image, from the backend checkout.
+      - name: Build the knowledge tooling
+        run: |
+          set -euo pipefail
+          go_image=$(sed -n 's/^FROM \(golang:[^ ]*\) AS plugin-build$/\1/p' backend/services/knowledge/.cloud/docker/Dockerfile)
+          [[ "$go_image" == *@sha256:* ]] || { echo "::error::Cannot find the pinned Go image"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/bin"
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e GOTOOLCHAIN=local -e CGO_ENABLED=0 \
+            -v "$GITHUB_WORKSPACE/backend:/codeclarity" -v "$RUNNER_TEMP/bin:/out" \
+            -w /codeclarity/services/knowledge "$go_image" go build -o /out/knowledge .
+      # Update failures are reported, not fatal: the completeness gate decides what ships.
+      - name: Update the knowledge database from its sources
+        working-directory: backend/services/knowledge
+        timeout-minutes: 300
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          [ -n "$NVD_API_KEY" ] || echo "::warning::No NVD_API_KEY in the release environment; NVD runs at its lower rate"
+          if ! "$RUNNER_TEMP/bin/knowledge" -knowledge -action update; then
+            echo "::warning::The knowledge update reported failures; the completeness gate decides"
+          fi
+      - name: Completeness gate
+        working-directory: backend/services/knowledge
+        env:
+          KNOWLEDGE_GATE_WAIVE: ${{ inputs.waive }}
+          KNOWLEDGE_GATE_WAIVE_REASON: ${{ inputs.reason }}
+        run: |
+          set -uo pipefail
+          # The API migration classes, oldest first, as make dump-knowledge passes them.
+          api_migrations() {
+            for file in "$GITHUB_WORKSPACE/api/src/migrations/$1"/*.ts; do
+              [ -f "$file" ] && sed -n 's/^export class \([A-Za-z0-9_]*\).*/\1/p' "$file" | head -n 1
+            done | paste -s -d, -
+          }
+          KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE=$(api_migrations knowledge)
+          KNOWLEDGE_EXPECTED_MIGRATIONS_CONFIG=$(api_migrations config)
+          export KNOWLEDGE_EXPECTED_MIGRATIONS_KNOWLEDGE KNOWLEDGE_EXPECTED_MIGRATIONS_CONFIG
+          status=0
+          "$RUNNER_TEMP/bin/knowledge" -knowledge -action validate -read-only >"$RUNNER_TEMP/gate-report.json" || status=$?
+          cat "$RUNNER_TEMP/gate-report.json"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::The completeness gate failed (exit $status); nothing is published"
+            exit 1
+          fi
+      - name: Dump knowledge and config with their manifest
+        run: |
+          set -euo pipefail
+          docker exec -i db sh -c "$(cat .cloud/scripts/dump-knowledge-in-db.sh)" dump-knowledge <"$RUNNER_TEMP/gate-report.json"
+          sh deployment/scripts/restore-dump.sh verify
+          {
+            echo "### Knowledge dump $(jq -r .build_date "$DUMP_DIR/knowledge-manifest.json")"
+            echo '```json'
+            jq '{gate: (.gate | {passed, waiver}), sources: [.sources[] | {source, last_outcome}]}' "$DUMP_DIR/knowledge-manifest.json"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: knowledge-dump-set
+          path: |
+            ${{ runner.temp }}/dump/knowledge.dump
+            ${{ runner.temp }}/dump/config.dump
+            ${{ runner.temp }}/dump/knowledge-manifest.json
+            ${{ runner.temp }}/dump/knowledge-manifest.sha256
+          if-no-files-found: error
+          # pg_dump -Fc output is already compressed.
+          compression-level: 0
+          retention-days: 1
+
+  image:
+    name: image
+    needs: [dump]
+    if: github.ref == 'refs/heads/main' && vars.CI_RELEASE == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: knowledge-dump-set
+          path: ${{ runner.temp }}/context/dump
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: meta
+        name: Stage the build context and name the image
+        env:
+          CONTEXT: ${{ runner.temp }}/context
+        run: |
+          set -euo pipefail
+          cp deployment/scripts/restore-dump.sh "$CONTEXT/"
+          DUMP_DIR="$CONTEXT/dump" sh "$CONTEXT/restore-dump.sh" verify
+          manifest="$CONTEXT/dump/knowledge-manifest.json"
+          date=$(jq -er '.build_date[0:10]' "$manifest")
+          [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Unexpected build_date: $date"; exit 1; }
+          # The dump must come from the Postgres major version the image is built on.
+          dump_major=$(jq -er '.postgres_version | split(".")[0]' "$manifest")
+          image_major=$(sed -n 's/^FROM postgres:\([0-9]*\)\..*/\1/p' .cloud/docker/knowledge-dump/Dockerfile)
+          [[ -n "$image_major" && "$dump_major" == "$image_major" ]] ||
+            { echo "::error::Dump is from Postgres $dump_major, the image is built on Postgres $image_major"; exit 1; }
+          tag="$IMAGE:$date"
+          if docker buildx imagetools inspect "$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists; a published dump is never replaced"
+            exit 1
+          fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+      # No layer cache on release builds. The image only copies files, so arm64 needs no emulation.
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ runner.temp }}/context
+          file: .cloud/docker/knowledge-dump/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: index.docker.io/${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Summary
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Published \`$TAG\`"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Manifest digest | \`$DIGEST\` |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  # Needs a Docker Hub token allowed to delete. Reads the pinned tags with this run's token.
+  prune:
+    name: prune old tags
+    needs: [image]
+    if: github.ref == 'refs/heads/main' && vars.CI_RELEASE == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prune knowledge dump tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          KEEP_WEEKS: "8"
+        run: sh .cloud/scripts/prune-knowledge-dump-tags.sh

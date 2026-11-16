@@ -30,6 +30,8 @@ IMAGE_REPOS=(
   "plugin-codeql"
   "plugin-sbom-php"
   "plugin-sca-license"
+  "deployment"
+  "codeclarity-dev"
 )
 
 # Repos whose default branch must pass the ci check. Add a repo only once its
@@ -58,6 +60,8 @@ RULESET_REPOS=(
   "plugin-codeql"
   "plugin-sbom-php"
   "plugin-sca-license"
+  "deployment"
+  "codeclarity-dev"
 )
 
 # Actions allowed besides GitHub-owned ones; every action must also be SHA-pinned.

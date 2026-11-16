@@ -5,7 +5,7 @@ PG_DB_NAME="codeclarity"
 NVD_API_KEY=""
 NPM_URL="https://registry.npmjs.org/"
 
-# AMQP — host-run make targets (knowledge-setup/knowledge-update) reach the
+# AMQP: host-run make targets (knowledge-update, knowledge-update-osv) reach the
 # RabbitMQ container via its published port on localhost. RabbitMQ is TLS-only
 # on 5671 (plaintext 5672 disabled), so connect with amqps. The dev cert is
 # issued for the in-network hostname "rabbitmq", so SSLMODE=require is used to
