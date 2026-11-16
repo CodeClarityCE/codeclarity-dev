@@ -2,14 +2,14 @@
 
 ## Development Environment
 
-- **One-time host setup**: `docker volume create pnpm-store` (creates the shared external volume mounted into `api-dev` and `frontend-dev` for a deduped pnpm content-addressable store)
-- `make up` / `make down` - Start/stop all services
+- **Setup**: `git clone --recursive`, then `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
+- `make up` / `make down` - Start/stop all services (`down` keeps data)
 - `make build` - Build all Docker images
 - `make logs` - View container logs
-- `make stop-all` - Full container cleanup
 - `make pull` - Pull latest images
+- `make reset CONFIRM=reset` - Wipe the dev stack's volumes, then `make up` again. Without `CONFIRM=reset` on the command line it exits non-zero and changes nothing
 - Access at <https://localhost:443>
-- Default credentials: `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
+- Dev account (dev stack only): `john.doe@codeclarity.io` / `ThisIs4Str0ngP4ssW0rd?`
 - Knowledge daemon: off in dev by default. Run `KNOWLEDGE_DAEMON_REPLICAS=1 make up` on the host to start it (`service-knowledge`, default 0 replicas); the devcontainer broker does not read the caller's shell, so the variable has no effect through it.
 - IMPORTANT: Hot-reload is enabled. API, frontend, plugins, and services reload on save in containers. No need to restart containers or use `pnpm dev`.
 
@@ -17,10 +17,11 @@
 
 The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
 
-- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make seed` / `make reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
-- First run on an empty daemon: `make up`, then `make seed`. `make reset` wipes the agent stack's data and does both.
+- `make up` / `make down` / `make build` / `make pull` / `make ps` / `make reset CONFIRM=reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
+- First run on an empty daemon: `make up`; the setup jobs do the rest. `make reset CONFIRM=reset` wipes the agent stack's data and runs `up` again; the broker refuses `reset` without that confirmation.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
+- The dev stack's Compose files are listed once, in `.cloud/docker/compose-files.txt`. The broker and `.cloud/scripts/compose.sh` both read it, the broker on every request, so adding a file there needs no rebuild (its services still have to pass the policy).
 
 ## Architecture Overview
 
@@ -64,9 +65,9 @@ onto a small server-side connection set, so replica count no longer drives `max_
   for the Go services/plugins (applied via `DatabaseConfig.ApplyPool` in
   `backend/utilities/boilerplates/`), and `PG_DB_POOL_MAX` (10) for each NestJS API DataSource.
 - **Pooler config**: dev is inline in `.cloud/docker/docker-compose.yaml`; prod uses
-  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. Prod prereqs: regenerate
-  certs so the SAN includes `pgbouncer` (`make setup-pg-certs`) and keep `PGBOUNCER_AUTH_PASSWORD`
-  (`.env.database`) in sync with `deployment/config/userlist.txt`.
+  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
+  (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
+  its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
 - **Budget**: `default_pool_size(20) × (roles × databases)` stays under `max_connections`
   (300 dev / 200 prod, kept as headroom). Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4.
 
@@ -76,6 +77,7 @@ onto a small server-side connection set, so replica count no longer drives `max_
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
+- **Fresh install (dev)**: `.cloud/scripts/tests/fresh-install/dev.sh` runs `make up` twice on an empty Docker daemon, logs in as the dev account and runs the Default Analyzer on an uploaded npm project; CI only (`fresh-install-dev` job), never against a stack you use
 
 ## CI (GitHub Actions)
 
@@ -85,25 +87,23 @@ Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its
 - **`ci` gate**: the required check on `main` is a job named `ci` in the caller itself, since called jobs report as `<caller job> / <job>`. The caller also sets concurrency (cancel in progress for PRs only). Rulesets, `scripts/release-all.sh` and the callers all depend on that name.
 - **Permissions**: a caller job using `go-image.yml` or `node-image.yml` grants `contents: write`, `id-token: write` and `attestations: write`, because GitHub validates the skipped release jobs too. It also passes `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` by name under `secrets:` (not `secrets: inherit`): reusable workflows only get secrets their caller passes, even ones stored in the `release` environment.
 - **Releases**: PRs to `main` must bump the version (`config.json` / `package.json`). On `main`, release jobs run only when the repo variable `CI_RELEASE` is `true`, in the `release` environment (main only) that holds `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`. They build amd64 and arm64 natively, attest provenance, then create the tag and release at the built commit; an existing tag is never re-released.
-- **Transition**: Jenkins (`.cloud/jenkins/Jenkinsfile`) still releases every repo whose `CI_RELEASE` is not on. Turn it on with `docs/ci-release-test.md`, which also disables that repo's Jenkins job.
+- **New repos**: a repo whose caller can release ships nothing until `CI_RELEASE` is on; turn it on with `docs/ci-release-test.md`. `scripts/release-all.sh` stops on such a repo while it is off.
 - **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
 
 Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.
 
 ## Database Commands
 
-- `make knowledge-setup` - Initialize knowledge DB
 - `make knowledge-update` - Update vulnerability data (needs NVD API key); in the devcontainer the broker reads it from the gitignored `.cloud/env/.env.secrets`. See `docs/knowledge-dump.md`
 - `make knowledge-update-osv` - Update only OSV advisories; also works in the devcontainer
-- `make download-dumps` / `make dump-database` / `make restore-database` - Dump management. Downloads and restores verify the dump manifest first and reassemble split dumps; see `docs/knowledge-dump.md`
+- `make up` restores knowledge + config from the `codeclarityce/knowledge-dump` image when the knowledge database is empty. `make restore-database` restores a local dump set from `deployment/dump` into empty `knowledge` and `config` databases, after verifying its manifest; see `docs/knowledge-dump.md`
 - `make dump-knowledge` - Dumps `knowledge` + `config` with a manifest, only after the read-only completeness gate passes; also works in the devcontainer. `WAIVE=<checks> REASON=<why>` waives named source checks during an upstream outage, recorded in the manifest. See `docs/knowledge-dump.md`
-- `make create-knowledge-indexes` - GIN indexes for JSONB lookups
 
 Empty `knowledge` and `config` databases need no dump: running the API migrations creates every base table and the `config` row with null watermarks, so the first knowledge update does a full fetch.
 
 Migration workflow: see `.claude/rules/database-migrations.md`.
 
-Production deployment: see `deployment/CLAUDE.md`.
+Production deployment: see `deployment/README.md`.
 
 ## License
 

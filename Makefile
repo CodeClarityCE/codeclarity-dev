@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs restart ps seed reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge dump-database
+.PHONY        = help build build-prod up down logs restart ps reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -14,7 +14,7 @@ BROKER = sh .devcontainer/broker-client.sh
 build: ## Builds the Docker images
 	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) build $(SERVICE); else cd .cloud/scripts && sh build.sh; fi
 
-up: ## Starts the Docker images
+up: ## Sets up and starts the dev stack; its setup jobs skip work already done
 	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) up $(SERVICE); else cd .cloud/scripts && sh up.sh; fi
 
 down: ## Stops the Docker images
@@ -32,11 +32,10 @@ restart: ## Restarts one service in the devcontainer (SERVICE=name)
 ps: ## Lists the agent stack's containers in the devcontainer
 	@$(BROKER) ps
 
-seed: ## Verifies deployment/dump against its manifest, then restores all databases in the devcontainer
-	@$(BROKER) seed
-
-reset: ## Wipes the agent stack's data, then starts and seeds it in the devcontainer
-	@$(BROKER) reset
+reset: ## Wipes the dev stack's data, then sets it up again; needs CONFIRM=reset on the command line
+	@if [ "$(origin CONFIRM)" != "command line" ] || [ "$(CONFIRM)" != reset ]; then \
+		echo "make reset deletes every database and volume of the dev stack. To go ahead: make reset CONFIRM=reset" >&2; exit 1; fi
+	@if [ -S $(BROKER_SOCKET) ]; then CONFIRM=reset $(BROKER) reset; else cd .cloud/scripts && sh reset.sh; fi
 
 ## —— Commands to test production 🎯 ———————————————————————————————————————————————————————————————
 build-prod: ## Builds de production Docker images
@@ -50,36 +49,21 @@ up-prod: ## Starts the Docker images in prod mode
 down-prod: ## Stops the Docker images in prod mode
 	@cd deployment && make down
 
-## —— Commands to setup database 💾 ———————————————————————————————————————————————————————————————
-knowledge-setup: export PG_DB_PORT = 6433
-knowledge-setup: ## Creates the database
-	@set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action setup && cd -
+## -- Commands to update the knowledge database 💾 ---------------------------------------------------------------
+knowledge-update: ## Updates the database in the stack (NVD_API_KEY from .cloud/env/.env.secrets)
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else cd .cloud/scripts && sh knowledge-update.sh update; fi
 
-knowledge-update: export PG_DB_PORT = 6433
-knowledge-update: ## Updates the database (NVD_API_KEY; in the devcontainer from .cloud/env/.env.secrets)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-update; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update && cd -; fi
-
-knowledge-update-osv: export PG_DB_PORT = 6433
 knowledge-update-osv: ## Updates only the OSV advisories (no NVD key needed)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else set -a ; . .cloud/env/.env.makefile ; set +a; cd backend/services/knowledge && go run . -knowledge -action update-osv; fi
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) knowledge-osv; else cd .cloud/scripts && sh knowledge-update.sh update-osv; fi
 
 ## —— Commands to dump and restore database 💾 ———————————————————————————————————————————————————————————————
-download-dumps: ## Downloads the database dump
-	@sh deployment/scripts/download-dumps.sh
-
 dump-knowledge: ## Dumps knowledge + config with a manifest, only if the completeness gate passes (WAIVE=<checks> REASON=<why> records waived checks)
 	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) dump-knowledge; else cd .cloud/scripts && sh dump-knowledge.sh; fi
 
-dump-database: ## Dumps codeclarity, then knowledge + config through dump-knowledge
-	@cd .cloud/scripts && sh dump-db.sh codeclarity
-	@$(MAKE) --no-print-directory dump-knowledge
-
-restore-database: ## Verifies the dumps against their manifest, then restores the databases
+restore-database: ## Verifies the dumps against their manifest, then restores knowledge + config
 	@cd .cloud/scripts && sh restore-db.sh verify
-	@cd .cloud/scripts && sh restore-db.sh codeclarity
 	@cd .cloud/scripts && sh restore-db.sh knowledge
 	@cd .cloud/scripts && sh restore-db.sh config
-	@cd .cloud/scripts && sh restore-test-db.sh
 
 dump-knowledge-dated: ## Dumps the knowledge + config databases to dated files (LABEL=<label>)
 ifndef LABEL
@@ -94,17 +78,17 @@ endif
 	@cd .cloud/scripts && sh restore-knowledge-dated.sh $(LABEL)
 
 ## —— Commands to manage database migrations 📦 ———————————————————————————————————————————————————————————————
-migrate: ## Run all database migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate; else cd api && make migrate; fi
+migrate: ## Run all database migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate; else cd .cloud/scripts && sh migrate.sh; fi
 
-migrate-codeclarity: ## Run codeclarity DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate codeclarity; else cd api && make migrate-codeclarity; fi
+migrate-codeclarity: ## Run codeclarity DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate codeclarity; else cd .cloud/scripts && sh migrate.sh codeclarity; fi
 
-migrate-knowledge: ## Run knowledge DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate knowledge; else cd api && make migrate-knowledge; fi
+migrate-knowledge: ## Run knowledge DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate knowledge; else cd .cloud/scripts && sh migrate.sh knowledge; fi
 
-migrate-plugins: ## Run plugins DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate plugins; else cd api && make migrate-plugins; fi
+migrate-plugins: ## Run plugins DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate plugins; else cd .cloud/scripts && sh migrate.sh plugins; fi
 
-migrate-config: ## Run config DB migrations (api)
-	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate config; else cd api && make migrate-config; fi
+migrate-config: ## Run config DB migrations in the migrate job
+	@if [ -S $(BROKER_SOCKET) ]; then $(BROKER) migrate config; else cd .cloud/scripts && sh migrate.sh config; fi

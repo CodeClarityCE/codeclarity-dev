@@ -40,6 +40,8 @@ services:
       - no-new-privileges:true
     environment:
       HOME: /var/lib/broker
+      # Compose writes build metadata to TMPDIR; / is read-only.
+      TMPDIR: /var/lib/broker
     tmpfs:
       - /var/lib/broker:mode=0700
     volumes:

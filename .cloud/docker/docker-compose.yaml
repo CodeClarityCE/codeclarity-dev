@@ -44,7 +44,7 @@ services:
           memory: 500M
 
   db:
-    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    image: &postgres-image postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: always
     # set shared memory limit when using docker-compose
     shm_size: 128mb
@@ -71,6 +71,56 @@ services:
       - ../env/.env.dev
     environment:
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
+    # Checks over TCP, which the first-run init server does not listen on, so the
+    # migrate job only starts once the init script has created the databases.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  # One-shot job: restores knowledge and config from the dump image when knowledge is empty.
+  # KNOWLEDGE_DUMP_IMAGE swaps in another dump image.
+  knowledge-restore:
+    image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-11}
+    restart: "no"
+    env_file:
+      - ../env/.env.dev
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Dev-only one-shot job: creates the API tests' _test databases, recreating any without
+  # migration history; the migrate-test job then migrates them.
+  test-databases:
+    image: *postgres-image
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export PGHOST=db PGUSER=postgres PGPASSWORD="$$POSTGRES_PASSWORD"
+        for db in codeclarity_test knowledge_test config_test; do
+          exists=$$(psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$$db'")
+          if [ "$$exists" = 1 ] && [ "$$(psql -d "$$db" -tAc "SELECT to_regclass('public.migrations') IS NULL")" = t ]; then
+            echo "$$db has no migration history, recreating it"
+            dropdb --force "$$db"
+            exists=
+          fi
+          if [ "$$exists" != 1 ]; then
+            createdb "$$db"
+            echo "created $$db"
+          fi
+        done
+    env_file:
+      - ../env/.env.dev
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Transaction-pooling connection pooler. All services/plugins/API connect here
   # (PG_DB_HOST=pgbouncer, PG_DB_PORT=6432) instead of directly to Postgres, so
@@ -117,6 +167,8 @@ services:
     volumes:
       - ../../backend:/codeclarity
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       db:
@@ -130,6 +182,10 @@ services:
     ports:
       - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
+    # Every backend service and plugin waits on adminer, so they all wait for migrate.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   prometheus:
     image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e

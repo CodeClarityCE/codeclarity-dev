@@ -241,73 +241,59 @@ func TestAlloyMatchesStackCompose(t *testing.T) {
 	}
 }
 
-func TestRestoreDumpRunsTheScriptInTheDBContainer(t *testing.T) {
-	got := restoreDumpArgs("echo restoring", "knowledge", "knowledge_test")
-	want := []string{"exec", "-T", "db", "sh", "-c", "echo restoring", "restore-dump", "restore", "knowledge", "knowledge_test"}
-	if !slices.Equal(got, want) {
-		t.Errorf("restoreDumpArgs = %q, want %q", got, want)
+func TestMigrateArgsRunTheMigrateJob(t *testing.T) {
+	if got, want := strings.Join(migrateArgs(), " "), "run --rm migrate"; got != want {
+		t.Errorf("migrateArgs() = %q, want %q", got, want)
 	}
-	got = verifyDumpsArgs("echo verifying")
-	want = []string{"exec", "-T", "db", "sh", "-c", "echo verifying", "restore-dump", "verify"}
-	if !slices.Equal(got, want) {
-		t.Errorf("verifyDumpsArgs = %q, want %q", got, want)
+	if got, want := strings.Join(migrateArgs("plugins"), " "), "run --rm migrate plugins"; got != want {
+		t.Errorf("migrateArgs(plugins) = %q, want %q", got, want)
 	}
 }
 
-func TestRestoreDumpScriptIsInTheDeploymentRepo(t *testing.T) {
-	if _, err := os.Stat("../../deployment/scripts"); err != nil {
-		t.Skip("the deployment submodule is not checked out")
+// The one-shot knowledge restore job runs from the pulled knowledge dump image, migrate waiting on it.
+func TestAcceptsTheKnowledgeRestoreJob(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	cfg["services"].(map[string]any)["knowledge-restore"] = map[string]any{
+		"image":       "codeclarityce/knowledge-dump:2026-11-11",
+		"restart":     "no",
+		"env_file":    []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}},
+		"environment": map[string]any{"PGHOST": "db", "PGPORT": "5432"},
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
 	}
-	if _, err := os.Stat(filepath.Join("../..", restoreDumpScript)); err != nil {
-		t.Errorf("broker reads %s: %v", restoreDumpScript, err)
-	}
-}
-
-func TestSeedRestoresNothingWhenVerificationFails(t *testing.T) {
-	var out bytes.Buffer
-	var restored []string
-	verify := func() int { return 1 }
-	restore := func(dump, db string) int {
-		restored = append(restored, db)
-		return 0
-	}
-	code, ok := seedRestores(&out, verify, restore)
-	if code == 0 || ok {
-		t.Errorf("a failed verification should fail the seed, got %d, %v", code, ok)
-	}
-	if len(restored) > 0 {
-		t.Errorf("nothing should be restored, got %v", restored)
-	}
-	if !strings.Contains(out.String(), "nothing was restored") {
-		t.Errorf("the seed should say nothing was restored, got %q", out.String())
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
 	}
 }
 
-func TestSeedRestoresEveryDumpOnceVerified(t *testing.T) {
-	var out bytes.Buffer
-	var restored [][2]string
-	verify := func() int { return 0 }
-	restore := func(dump, db string) int {
-		restored = append(restored, [2]string{dump, db})
-		if db == "config" {
-			return 4
-		}
-		return 0
+// The one-shot migrate job as Compose resolves it, with the API waiting on it.
+func TestAcceptsTheMigrateJob(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	completed := map[string]any{"condition": "service_completed_successfully", "required": true}
+	cfg["services"].(map[string]any)["migrate"] = map[string]any{
+		"image":       "codeclarityce/api-dev:latest",
+		"restart":     "no",
+		"entrypoint":  []any{"/bin/sh", "-c", `pnpm install && exec pnpm run migrate "$@"`, "migrate"},
+		"command":     []any{},
+		"env_file":    []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}},
+		"environment": map[string]any{"PG_DB_HOST": "db", "PG_DB_PORT": "5432"},
+		"build": map[string]any{
+			"context": filepath.Join(repo, "api"), "dockerfile": ".cloud/docker/Dockerfile", "target": "api-dev",
+		},
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+		"volumes": []any{
+			map[string]any{"type": "bind", "source": filepath.Join(repo, "api"), "target": "/app"},
+			map[string]any{"type": "volume", "source": "api_node_modules", "target": "/app/node_modules", "volume": map[string]any{}},
+			map[string]any{"type": "volume", "source": "pnpm-store", "target": "/pnpm/store", "volume": map[string]any{}},
+		},
 	}
-	code, ok := seedRestores(&out, verify, restore)
-	if code != 4 || !ok {
-		t.Errorf("a failed restore should give its exit code, got %d, %v", code, ok)
-	}
-	if !slices.Equal(restored, restores) {
-		t.Errorf("restored %v, want %v", restored, restores)
-	}
-}
-
-func TestMigrateArgsRunInTheAPIContainer(t *testing.T) {
-	got := strings.Join(migrateArgs("plugins"), " ")
-	want := "exec -T -e PG_DB_HOST=db -e PG_DB_PORT=5432 api pnpm migration:run:plugins"
-	if got != want {
-		t.Errorf("migrateArgs = %q, want %q", got, want)
+	svc(cfg, "api")["depends_on"] = map[string]any{"migrate": completed}
+	cfg["volumes"].(map[string]any)["api_node_modules"] = map[string]any{"name": "codeclarity-dev_api_node_modules"}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
 	}
 }
 
@@ -644,5 +630,89 @@ func TestOnlyDumpKnowledgeTakesAWaiver(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 			}
 		})
+	}
+}
+
+// The dev-only setup jobs: test-databases runs psql from the db image, dev-user and
+// migrate-test run scripts from the api-dev image, and the API waits on them.
+func TestAcceptsTheDevSetupJobs(t *testing.T) {
+	cfg, repo := goodConfig(t)
+	completed := map[string]any{"condition": "service_completed_successfully", "required": true}
+	envFile := []any{map[string]any{"path": filepath.Join(repo, ".cloud/env/.env.dev"), "required": true}}
+	services := cfg["services"].(map[string]any)
+	services["test-databases"] = map[string]any{
+		"image":      "postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+		"restart":    "no",
+		"entrypoint": []any{"/bin/sh", "-c", "createdb codeclarity_test"},
+		"env_file":   envFile,
+		"depends_on": map[string]any{
+			"db": map[string]any{"condition": "service_healthy", "required": true},
+		},
+	}
+	for name, script := range map[string]string{"dev-user": "create-user", "migrate-test": "migrate"} {
+		services[name] = map[string]any{
+			"image":       "codeclarityce/api-dev:latest",
+			"restart":     "no",
+			"entrypoint":  []any{"node_modules/.bin/ts-node", "-r", "tsconfig-paths/register", "src/scripts/" + script + ".ts"},
+			"env_file":    envFile,
+			"environment": map[string]any{"PG_DB_HOST": "db", "PG_DB_PORT": "5432", "PG_DB_NAME_SUFFIX": "_test"},
+			"build": map[string]any{
+				"context": filepath.Join(repo, "api"), "dockerfile": ".cloud/docker/Dockerfile", "target": "api-dev",
+			},
+			"depends_on": map[string]any{"test-databases": completed},
+			"volumes": []any{
+				map[string]any{"type": "bind", "source": filepath.Join(repo, "api"), "target": "/app"},
+				map[string]any{"type": "volume", "source": "api_node_modules", "target": "/app/node_modules", "volume": map[string]any{}},
+			},
+		}
+	}
+	svc(cfg, "api")["depends_on"] = map[string]any{"dev-user": completed, "migrate-test": completed}
+	cfg["volumes"].(map[string]any)["api_node_modules"] = map[string]any{"name": "codeclarity-dev_api_node_modules"}
+	if found := run(t, cfg, repo); len(found) != 0 {
+		t.Fatalf("expected no violations, got %v", found)
+	}
+}
+
+// make up runs every setup job, so there is no separate seed command.
+func TestSeedIsNotACommand(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&broker{}).handle(rec, httptest.NewRequest(http.MethodPost, "/seed", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// reset wipes every volume, so it runs only with confirm=reset, and no other command takes confirm.
+func TestResetNeedsItsConfirmation(t *testing.T) {
+	cases := []string{
+		"/reset",
+		"/reset?confirm=",
+		"/reset?confirm=yes",
+		"/reset?confirm=RESET",
+		"/reset?confirm=reset&service=api",
+		"/up?confirm=reset",
+		"/down?confirm=reset",
+	}
+	for _, target := range cases {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			(&broker{}).handle(rec, httptest.NewRequest(http.MethodPost, target, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+			if strings.Contains(rec.Body.String(), exitMarker) {
+				t.Errorf("a refused reset ran something: %q", rec.Body.String())
+			}
+			name := strings.TrimPrefix(strings.SplitN(target, "?", 2)[0], "/")
+			if !strings.Contains(target, "service=") && !strings.HasPrefix(rec.Body.String(), name+" ") {
+				t.Errorf("the refusal does not name %s: %q", name, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestResetRemovesTheStackVolumes(t *testing.T) {
+	if got, want := strings.Join(resetDownArgs(), " "), "compose -p codeclarity-dev down -v"; got != want {
+		t.Errorf("resetDownArgs() = %q, want %q", got, want)
 	}
 }

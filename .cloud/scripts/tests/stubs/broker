@@ -1,0 +1,3 @@
+#!/bin/sh
+# Test stand-in for broker-client.sh: logs the command and CONFIRM to STUB_BROKER_LOG.
+echo "$* CONFIRM=${CONFIRM:-}" >>"${STUB_BROKER_LOG:-/dev/null}"
