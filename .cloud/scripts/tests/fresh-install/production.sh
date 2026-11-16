@@ -7,6 +7,8 @@
 # and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
 # and the user and its data must be kept and the new migrations applied.
 # Then it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
+# With the codeql profile off, it checks no CodeQL container runs, an analyzer using CodeQL is
+# unavailable and names CodeQL, and the API refuses to start it, saving nothing.
 # Last, it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
 # API's public URLs use that port, then puts the ports back.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
@@ -192,6 +194,44 @@ check_user() {
 	check "$1: the instance has exactly one user and one organization" $result
 }
 
+# With CodeQL off (no codeql profile), checks an analyzer using it is unavailable and refused
+# in org $2 on project $3; $1 names the run.
+check_codeql_off() {
+	result=ok
+	! compose ps -a --format '{{.Service}}' | grep -qx plugin-codeql || result=bad
+	check "$1: no CodeQL container runs without the codeql profile" $result
+
+	result=ok
+	get "/org/$2/analyzers?page=0&entries_per_page=100" >"$work/analyzers.json" || result=bad
+	jq -e --arg name "$ANALYZER" '[.data[] | select(.name == $name)][0].availability.state == "available"' \
+		"$work/analyzers.json" >/dev/null || result=bad
+	check "$1: \"$ANALYZER\" is available with CodeQL off" $result
+
+	step='{"version":"v1","config":{},"persistant_config":{}}'
+	body='{"name":"CodeQL Analyzer","description":"Fresh install CodeQL check","steps":[['"$(echo "$step" | jq -c '.name = "js-sbom"')"','"$(echo "$step" | jq -c '.name = "codeql"')"']]}'
+	result=ok
+	codeql=$(post "/org/$2/analyzers" "$body" | jq -er '.id') || result=bad
+	check "$1: an analyzer using CodeQL is created" $result
+	[ "$result" = ok ] || return 0
+
+	result=ok
+	reason=$(get "/org/$2/analyzers/$codeql" | jq -er '.data.availability | select(.state == "off") | .message') || result=bad
+	case "$reason" in *CodeQL*"off on this instance"*) ;; *) result=bad ;; esac
+	check "$1: the CodeQL analyzer is unavailable, naming CodeQL (says ${reason:-nothing})" $result
+
+	before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
+	result=ok
+	status=$(api_curl -sS -o "$work/refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+		-H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+		-d '{"analyzer_id":"'"$codeql"'","branch":"main","config":{}}') || result=bad
+	[ "$status" = 409 ] || result=bad
+	jq -e --arg reason "$reason" '.error_code == "AnalyzerUnavailable" and .error_message == $reason' "$work/refusal.json" >/dev/null || result=bad
+	after=$(sql codeclarity 'SELECT count(*) FROM analysis') || after=
+	[ -n "$before" ] && [ "$before" = "$after" ] || result=bad
+	check "$1: starting it is refused with the same reason and nothing is saved (HTTP ${status:-none})" $result
+	[ "$result" = ok ] || cat "$work/refusal.json" 2>/dev/null || true
+}
+
 # Row counts of what an upgrade must keep.
 kept_rows() {
 	for table in '"user"' organization analyzer project analysis; do
@@ -274,6 +314,7 @@ fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
+if [ -n "${org:-}" ] && [ -n "${project:-}" ]; then check_codeql_off "after create-user" "$org" "$project"; fi
 
 result=ok
 compose up -d || { result=bad; report_unsettled; }
