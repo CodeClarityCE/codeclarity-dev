@@ -1,23 +1,27 @@
 #!/bin/sh
 # Reference-machine baseline (#162): runs the default production stack on a real npm analysis and
 # records peak memory per container and in total, OOM kills and restarts, p95 latency of UI pages and
-# API calls while it runs, analysis time, and each default image's arch. Only an unfinished analysis
-# fails the run; no threshold is enforced yet.
+# API calls while it runs, analysis time, and each default image's arch. The run fails (#169) if a
+# container is killed for running out of memory, the stack's peak is over the budget, UI or API p95
+# latency is over the limit, or the analysis does not finish. Analysis time is only recorded.
 #
 # Usage: sh .cloud/scripts/measure/reference-baseline.sh run <out-dir>
 #        sh .cloud/scripts/measure/reference-baseline.sh summarize <out-dir>
+#        sh .cloud/scripts/measure/reference-baseline.sh check <out-dir>
 # run needs an empty Docker daemon (CI) and never removes anything. It writes the samples, the
-# analysis and timing.env to <out-dir>, then summary.md. summarize only reads <out-dir>.
+# analysis and timing.env to <out-dir>, then summary.md. summarize and check only read <out-dir>;
+# check prints each threshold and exits 1 if one is not met.
 # Env: DEPLOYMENT_DIR (default: the deployment submodule), PROJECT_DIR (default: the baseline project
 #      next to this script), WAIT_SECONDS (default 3000), ANALYSIS_WAIT_SECONDS (default 2400),
-#      SAMPLE_SECONDS (default 2).
+#      SAMPLE_SECONDS (default 2), BUDGET_MIB (default 6656, which is 6.5 GiB),
+#      P95_LIMIT_SECONDS (default 1).
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
 
 usage() {
-	echo "usage: $0 run <out-dir> | summarize <out-dir>" >&2
+	echo "usage: $0 run <out-dir> | summarize <out-dir> | check <out-dir>" >&2
 	exit 2
 }
 
@@ -64,6 +68,57 @@ p95() {
 		if (r < 1) r = 1
 		printf "%.3f", v[r]
 	}'
+}
+
+# Prints "ok: ..." or "FAIL: ..." for each threshold on the samples in $1.
+thresholds() {
+	tdir=$1
+	# shellcheck disable=SC1091 # written by run
+	. "$tdir/timing.env"
+	budget=${BUDGET_MIB:-6656}
+	limit=${P95_LIMIT_SECONDS:-1}
+
+	# The OOM-killed flag resets when a container restarts, so Docker's oom events count too.
+	killed=$({
+		awk -F, '$1 != "epoch" && $3 == "true" { print $2 }' "$tdir/oom.csv"
+		if [ -f "$tdir/oom-events.csv" ]; then awk -F, 'NF >= 2 && $2 != "" { print $2 }' "$tdir/oom-events.csv"; fi
+	} | sort -u)
+	if [ -z "$killed" ]; then
+		echo "ok: no container was killed for running out of memory"
+	else
+		echo "$killed" | sed 's/^/FAIL: /; s/$/ was killed for running out of memory/'
+	fi
+
+	if [ "$(awk -F, '$1 != "epoch"' "$tdir/mem.csv" | wc -l)" -eq 0 ]; then
+		echo "FAIL: no memory use was recorded"
+	else
+		peak=$(memory_table "$tdir/mem.csv" | awk -F'\t' '$1 == "TOTAL" { print $2 }')
+		if awk -v p="$peak" -v b="$budget" 'BEGIN { exit !(p + 0 <= b + 0) }'; then
+			echo "ok: the stack's peak memory, $peak MiB, is within the $budget MiB budget"
+		else
+			echo "FAIL: the stack's peak memory, $peak MiB, is over the $budget MiB budget"
+		fi
+	fi
+
+	for tkind in UI API; do
+		tlower=$(echo "$tkind" | tr 'A-Z' 'a-z')
+		p=$(awk -F, -v k="$tlower" '$1 != "epoch" && $2 == k { print $5 }' "$tdir/latency.csv" | p95)
+		if [ "$p" = n/a ]; then
+			echo "FAIL: no $tkind latency was recorded"
+		elif awk -v p="$p" -v l="$limit" 'BEGIN { exit !(p + 0 <= l + 0) }'; then
+			echo "ok: $tkind p95 latency, $p s, is within $limit s"
+		else
+			echo "FAIL: $tkind p95 latency, $p s, is over $limit s"
+		fi
+	done
+
+	if [ "${STATUS:-}" != completed ]; then
+		echo "FAIL: the analysis did not finish (status ${STATUS:-unknown})"
+	elif [ -f "$tdir/analysis.json" ] && ! jq -e '[.data.steps[][] | .Status // .status] | length > 0 and all(. == "success" or . == "skipped")' "$tdir/analysis.json" >/dev/null 2>&1; then
+		echo "FAIL: the analysis did not finish (status completed, a step did not succeed)"
+	else
+		echo "ok: the analysis finished"
+	fi
 }
 
 # Prints the markdown summary of the samples in $1 and writes it to $1/summary.md.
@@ -117,6 +172,10 @@ summarize() {
 		echo "| Service | Image | Arch | State |"
 		echo "|---|---|---|---|"
 		awk -F, '$1 != "service" { print "| " $1 " | " $2 " | " $3 " | " $4 " |" }' "$dir/images.csv"
+		echo
+		echo "### Thresholds"
+		echo
+		thresholds "$dir" | sed 's/^/- /'
 	} >"$md"
 	cat "$md"
 }
@@ -157,7 +216,9 @@ sample_oom() {
 
 # Times one GET: epoch, kind, path, then the HTTP status and seconds (000 if the request failed).
 probe() {
-	line=$(api_curl -sS -o /dev/null --max-time 60 -H "Authorization: Bearer $token" -w '%{http_code} %{time_total}' "$4" 2>/dev/null) || line="000 0"
+	# A failed or timed-out request keeps its time, so it counts against p95.
+	line=$(api_curl -sS -o /dev/null --max-time 60 -H "Authorization: Bearer $token" -w '%{http_code} %{time_total}' "$4" 2>/dev/null) || :
+	[ -n "$line" ] || line="000 60"
 	echo "$1,$2,$3,$line" | tr ' ' ',' >>"$out/latency.csv"
 }
 
@@ -220,6 +281,7 @@ run() {
 	: >"$out/mem.csv"
 	: >"$out/oom.csv"
 	: >"$out/latency.csv"
+	: >"$out/oom-events.csv"
 	echo "epoch,container,usage" >>"$out/mem.csv"
 	echo "epoch,container,oom_killed,restarts" >>"$out/oom.csv"
 	echo "epoch,kind,path,status,seconds" >>"$out/latency.csv"
@@ -285,6 +347,8 @@ run() {
 	started=$(date +%s)
 	analysis=$(post "/org/$org/projects/$project_id/analyses" "$body" | jq -er '.id')
 	ids=$(compose ps -aq)
+	docker events --filter type=container --filter event=oom --format '{{.Time}},{{.Actor.Attributes.name}}' >>"$out/oom-events.csv" &
+	pids="$pids $!"
 	sample_memory &
 	pids="$pids $!"
 	sample_oom &
@@ -319,13 +383,16 @@ run() {
 
 	summarize "$out" >/dev/null
 
-	if [ "$status" = completed ] && jq -e '[.data.steps[][] | .Status // .status] | length > 0 and all(. == "success" or . == "skipped")' "$out/analysis.json" >/dev/null 2>&1; then
-		echo "reference-baseline: analysis completed with every step succeeded"
+	fails=$(thresholds "$out" | grep '^FAIL' || :)
+	if [ -z "$fails" ]; then
+		echo "reference-baseline: every threshold met"
 		return 0
 	fi
-	echo "reference-baseline: analysis did not complete (status $status)" >&2
-	# shellcheck disable=SC2086 # a list of service names
-	report $ANALYSIS_SERVICES
+	echo "$fails" | sed 's/^/reference-baseline: /' >&2
+	if echo "$fails" | grep -q 'analysis did not finish'; then
+		# shellcheck disable=SC2086 # a list of service names
+		report $ANALYSIS_SERVICES
+	fi
 	return 1
 }
 
@@ -337,6 +404,13 @@ run)
 summarize)
 	[ $# -eq 2 ] || usage
 	summarize "$2"
+	;;
+check)
+	[ $# -eq 2 ] || usage
+	[ -f "$2/timing.env" ] || { echo "check: no $2/timing.env" >&2; exit 1; }
+	results=$(thresholds "$2")
+	echo "$results"
+	! echo "$results" | grep -q '^FAIL'
 	;;
 *) usage ;;
 esac

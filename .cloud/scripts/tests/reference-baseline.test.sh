@@ -1,7 +1,8 @@
 #!/bin/sh
 # Tests the reference-machine baseline's summary on fixture samples: peak memory per container and
 # in total (with mixed units), OOM kills and restarts, p95 latency with nearest-rank, analysis time,
-# and the arm64 image table. The run mode needs a Docker daemon and is checked by CI, not here.
+# the arm64 image table, and the thresholds that fail a run. The run mode needs a Docker daemon and is
+# checked by CI, not here.
 # Usage: sh .cloud/scripts/tests/reference-baseline.test.sh
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
@@ -84,6 +85,74 @@ has "| UI | 20 | 0.190 | 0 |" "UI p95 is nearest-rank (19th of 20)"
 has "| API | 10 | 1.000 | 1 |" "API p95 is nearest-rank (10th of 10) and non-2xx are counted"
 has "| plugin-codeql | codeclarityce/plugin-codeql:latest | missing | not started |" "an image that is missing on arm64 is shown"
 has "| api | codeclarityce/api:latest | arm64 | running |" "an arm64 image is shown with its arch"
+has "- FAIL: plugin-codeql was killed for running out of memory" "the summary shows a failed threshold"
+
+# Thresholds. good writes a run that meets every one: 6600 MiB peak, p95 0.9 s, a completed analysis.
+good() {
+	d="$work/$1"
+	mkdir -p "$d"
+	printf 'STARTED=1000\nFINISHED=1600\nSTATUS=completed\n' >"$d/timing.env"
+	printf 'epoch,container,usage\n1,db,6000MiB / 8GiB\n1,api,600MiB / 1GiB\n2,db,100MiB / 8GiB\n' >"$d/mem.csv"
+	printf 'epoch,container,oom_killed,restarts\n1,db,false,0\n' >"$d/oom.csv"
+	: >"$d/oom-events.csv"
+	{
+		echo "epoch,kind,path,status,seconds"
+		i=1
+		while [ "$i" -le 20 ]; do
+			printf '%d,ui,/,200,0.%d\n%d,api,/org,200,0.%d\n' "$i" "$((i < 19 ? 1 : 9))" "$i" "$((i < 19 ? 1 : 9))"
+			i=$((i + 1))
+		done
+	} >"$d/latency.csv"
+	printf 'service,image,arch,state\n' >"$d/images.csv"
+	echo "$d"
+}
+
+# verdict <dir> <expected exit: 0 or 1> <line that must appear> <name>
+verdict() {
+	sh "$script" check "$1" >"$work/check.out" 2>&1
+	code=$?
+	if { [ "$2" -eq 0 ] && [ "$code" -eq 0 ]; } || { [ "$2" -eq 1 ] && [ "$code" -ne 0 ]; }; then
+		if grep -qF -- "$3" "$work/check.out"; then check "$4" ok; return; fi
+	fi
+	check "$4" bad
+	sed 's/^/     /' "$work/check.out"
+}
+
+d=$(good pass)
+verdict "$d" 0 "ok: the stack's peak memory, 6600.0 MiB, is within the 6656 MiB budget" "a run within every threshold passes"
+
+d=$(good peak)
+printf '3,db,7000MiB / 8GiB\n' >>"$d/mem.csv"
+verdict "$d" 1 "FAIL: the stack's peak memory, 7000.0 MiB, is over the 6656 MiB budget" "a peak over 6.5 GiB fails"
+
+d=$(good oomflag)
+printf '5,plugin-vuln-finder,true,1\n' >>"$d/oom.csv"
+verdict "$d" 1 "FAIL: plugin-vuln-finder was killed for running out of memory" "an OOM-killed flag fails"
+
+# The flag resets when the container restarts, so Docker's oom events count too.
+d=$(good oomevent)
+printf '7,codeclarity-api-1\n' >"$d/oom-events.csv"
+verdict "$d" 1 "FAIL: codeclarity-api-1 was killed for running out of memory" "an oom event fails"
+
+d=$(good uip95)
+printf '30,ui,/projects,200,1.5\n31,ui,/projects,200,1.5\n' >>"$d/latency.csv"
+verdict "$d" 1 "FAIL: UI p95 latency, 1.500 s, is over 1 s" "a UI p95 over 1 s fails"
+
+d=$(good apip95)
+printf '30,api,/org,000,60.0\n31,api,/org,000,60.0\n' >>"$d/latency.csv"
+verdict "$d" 1 "FAIL: API p95 latency, 60.000 s, is over 1 s" "an API p95 over 1 s fails, timeouts included"
+
+d=$(good nolatency)
+printf 'epoch,kind,path,status,seconds\n' >"$d/latency.csv"
+verdict "$d" 1 "FAIL: no UI latency was recorded" "no latency samples fails"
+
+d=$(good unfinished)
+printf 'STARTED=1000\nFINISHED=0\nSTATUS=timeout\n' >"$d/timing.env"
+verdict "$d" 1 "FAIL: the analysis did not finish (status timeout)" "an unfinished analysis fails"
+
+d=$(good failedstep)
+echo '{"data":{"status":"completed","steps":[[{"Name":"js-sbom","Status":"success"},{"Name":"vuln-finder","Status":"failure"}]]}}' >"$d/analysis.json"
+verdict "$d" 1 "FAIL: the analysis did not finish (status completed, a step did not succeed)" "a completed analysis with a failed step fails"
 
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]

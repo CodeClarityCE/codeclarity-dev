@@ -134,8 +134,9 @@ jobs:
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
   # The reference-machine baseline (#162): the default production stack on arm64 running a real npm
-  # analysis. It records memory, OOM kills, p95 latency and analysis time, and fails only if the
-  # analysis does not complete. Not in the ci gate, so an arm64 runner queue cannot block merges.
+  # analysis. It records memory, OOM kills, p95 latency and analysis time, and fails (#169) if a container
+  # is killed for running out of memory, the stack's peak is over 6.5 GiB, UI or API p95 latency is over
+  # 1 s, or the analysis does not finish. Not in the ci gate, so an arm64 runner queue cannot block merges.
   reference-machine-baseline:
     name: reference machine baseline (arm64)
     runs-on: ubuntu-24.04-arm
@@ -147,7 +148,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
-      - name: Measure the default production stack
+      - name: Measure the default production stack and check its thresholds
         run: sh .cloud/scripts/measure/reference-baseline.sh run "$RUNNER_TEMP/baseline"
       - name: Job summary
         if: always()
