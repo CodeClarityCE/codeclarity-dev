@@ -6,7 +6,9 @@
 # With UPGRADE_FROM, it first installs a previous deployment release from its release assets
 # and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
 # and the user and its data must be kept and the new migrations applied.
-# Last, it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
+# Then it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
+# Last, it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
+# API's public URLs use that port, then puts the ports back.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
@@ -145,6 +147,25 @@ check_stack() {
 	result=ok
 	[ "$(sql codeclarity "SELECT count(*) FROM pg_database WHERE datname LIKE '%\_test'")" = 0 ] || result=bad
 	check "$1: there is no _test database" $result
+}
+
+# Checks that http://$DOMAIN$1 redirects to $URL, keeping the path and query; $2 names the run.
+check_redirect() {
+	result=ok
+	location=$(curl -sS -o /dev/null -w '%{redirect_url}' "http://$DOMAIN$1/projects?page=1") || result=bad
+	[ "$location" = "$URL/projects?page=1" ] || result=bad
+	check "$2: http://$DOMAIN$1 redirects to $URL (got ${location:-nothing})" $result
+}
+
+# Checks the API's public URLs start with $URL; $1 names the run.
+check_public_urls() {
+	for pair in "WEB_HOST $URL" "GITHUB_AUTH_CALLBACK $URL/auth/github/callback" "GITLAB_AUTH_CALLBACK $URL/auth/gitlab/callback"; do
+		var=${pair%% *}
+		result=ok
+		got=$(compose exec -T api printenv "$var") || result=bad
+		[ "$got" = "${pair#* }" ] || result=bad
+		check "$1: the API's $var is ${pair#* } (got ${got:-nothing})" $result
+	done
 }
 
 # Checks what the created user sees through Caddy and the API; $1 names the run.
@@ -289,6 +310,30 @@ result=ok
 compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/ca.crt" || result=bad
 check "with TLS_CERT and TLS_KEY unset again, Caddy serves $DOMAIN from its internal CA" $result
+
+# Other published ports, as when 80 and 443 are taken on the host.
+HTTP_PORT=8080 HTTPS_PORT=8443 HTTP3_PORT=8443
+export HTTP_PORT HTTPS_PORT HTTP3_PORT
+URL="https://$DOMAIN:$HTTPS_PORT"
+API_BASE="$URL/api"
+result=ok
+compose up -d || { result=bad; report_unsettled; }
+wait_settled || { result=bad; report_unsettled; }
+check "with HTTPS_PORT=$HTTPS_PORT: up -d succeeds and every service runs" $result
+check_user "with HTTPS_PORT=$HTTPS_PORT"
+check_redirect ":$HTTP_PORT" "with HTTPS_PORT=$HTTPS_PORT"
+check_public_urls "with HTTPS_PORT=$HTTPS_PORT"
+
+unset HTTP_PORT HTTPS_PORT HTTP3_PORT
+URL="https://$DOMAIN"
+API_BASE="$URL/api"
+result=ok
+compose up -d || { result=bad; report_unsettled; }
+wait_settled || { result=bad; report_unsettled; }
+check "with the ports unset again: up -d succeeds and every service runs" $result
+check_user "with the ports unset again"
+check_redirect "" "with the ports unset again"
+check_public_urls "with the ports unset again"
 
 if [ "$failed" -gt 0 ]; then
 	# shellcheck disable=SC2086 # a list of service names
