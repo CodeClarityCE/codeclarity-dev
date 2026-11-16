@@ -76,6 +76,8 @@ onto a small server-side connection set, so replica count no longer drives `max_
   (`PG_MAX_CONNECTIONS`, default 100), whatever the replica count.
 - **Replicas**: prod runs one replica of every service and plugin, sized for the reference machine (ADR 0012).
   For more, see "Larger instances" in `deployment/README.md` (downloader×8, each analysis plugin×4).
+- **Memory**: prod's default containers' memory limits add up to at most 6.5 GiB (the reference machine's 8 GiB minus
+  1.5 GiB for the OS); `.cloud/scripts/measure/memory-budget.sh` checks it with GOMEMLIMIT and `rabbitmq.conf`.
 
 ## Testing
 

@@ -1,20 +1,7 @@
 #!/bin/sh
-# Reference-machine baseline (#162): runs the default production stack on a real npm analysis and
-# records peak memory per container and in total, OOM kills and restarts, p95 latency of UI pages and
-# API calls while it runs, analysis time, and each default image's arch. The run fails (#169) if a
-# container is killed for running out of memory, the stack's peak is over the budget, UI or API p95
-# latency is over the limit, or the analysis does not finish. Analysis time is only recorded.
-#
-# Usage: sh .cloud/scripts/measure/reference-baseline.sh run <out-dir>
-#        sh .cloud/scripts/measure/reference-baseline.sh summarize <out-dir>
-#        sh .cloud/scripts/measure/reference-baseline.sh check <out-dir>
-# run needs an empty Docker daemon (CI) and never removes anything. It writes the samples, the
-# analysis and timing.env to <out-dir>, then summary.md. summarize and check only read <out-dir>;
-# check prints each threshold and exits 1 if one is not met.
-# Env: DEPLOYMENT_DIR (default: the deployment submodule), PROJECT_DIR (default: the baseline project
-#      next to this script), WAIT_SECONDS (default 3000), ANALYSIS_WAIT_SECONDS (default 2400),
-#      SAMPLE_SECONDS (default 2), BUDGET_MIB (default 6656, which is 6.5 GiB),
-#      P95_LIMIT_SECONDS (default 1).
+# Measures the default production stack on a real npm analysis and fails on the reference-machine thresholds.
+# Usage: sh .cloud/scripts/measure/reference-baseline.sh run|summarize|check <out-dir>
+# run needs an empty Docker daemon and never removes anything; summarize and check only read <out-dir>.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -25,7 +12,8 @@ usage() {
 	exit 2
 }
 
-# Prints the table of peak memory per container, sorted, then the stack total (peak of per-sample sums).
+# Prints each container's peak memory in MiB, sorted, then TOTAL (peak of per-sample sums) and SUM (sum of
+# each container's peak). $2, if present, holds cgroup peaks as "container,bytes", which win when higher.
 memory_table() {
 	awk -F, '
 	function tobytes(s,   n, u) {
@@ -44,6 +32,7 @@ memory_table() {
 		print "unknown memory unit: " s > "/dev/stderr"
 		exit 1
 	}
+	FILENAME != ARGV[1] { if ($2 + 0 > peak[$1]) peak[$1] = $2 + 0; next }
 	$1 == "epoch" { next }
 	{
 		split($3, part, " / ")
@@ -53,10 +42,21 @@ memory_table() {
 		if (sum[$1] > total) total = sum[$1]
 	}
 	END {
-		for (c in peak) printf "%s\t%.1f\n", c, peak[c] / 1048576 | "sort"
+		for (c in peak) { printf "%s\t%.1f\n", c, peak[c] / 1048576 | "sort"; all += peak[c] }
 		close("sort")
 		printf "TOTAL\t%.1f\n", total / 1048576
-	}' "$1"
+		printf "SUM\t%.1f\n", all / 1048576
+	}' "$1" ${2:+"$2"}
+}
+
+# Prints the cgroup peaks file of $1 if run wrote one.
+peaks_file() {
+	if [ -s "$1/peak.csv" ]; then echo "$1/peak.csv"; fi
+}
+
+# Prints the seconds of the latency samples of kind $2 in $1; a non-2xx response counts as 60 s.
+latencies() {
+	awk -F, -v k="$2" '$1 != "epoch" && $2 == k { print ($4 ~ /^2/ ? $5 : (($5 + 0) > 60 ? $5 : 60)) }' "$1"
 }
 
 # Prints the 95th percentile (nearest rank) of the numbers on stdin, or n/a.
@@ -71,6 +71,7 @@ p95() {
 }
 
 # Prints "ok: ..." or "FAIL: ..." for each threshold on the samples in $1.
+# shellcheck disable=SC2153 # STATUS comes from the sourced timing.env
 thresholds() {
 	tdir=$1
 	# shellcheck disable=SC1091 # written by run
@@ -92,7 +93,7 @@ thresholds() {
 	if [ "$(awk -F, '$1 != "epoch"' "$tdir/mem.csv" | wc -l)" -eq 0 ]; then
 		echo "FAIL: no memory use was recorded"
 	else
-		peak=$(memory_table "$tdir/mem.csv" | awk -F'\t' '$1 == "TOTAL" { print $2 }')
+		peak=$(memory_table "$tdir/mem.csv" "$(peaks_file "$tdir")" | awk -F'\t' '$1 == "SUM" { print $2 }')
 		if awk -v p="$peak" -v b="$budget" 'BEGIN { exit !(p + 0 <= b + 0) }'; then
 			echo "ok: the stack's peak memory, $peak MiB, is within the $budget MiB budget"
 		else
@@ -101,8 +102,8 @@ thresholds() {
 	fi
 
 	for tkind in UI API; do
-		tlower=$(echo "$tkind" | tr 'A-Z' 'a-z')
-		p=$(awk -F, -v k="$tlower" '$1 != "epoch" && $2 == k { print $5 }' "$tdir/latency.csv" | p95)
+		tlower=$(echo "$tkind" | tr '[:upper:]' '[:lower:]')
+		p=$(latencies "$tdir/latency.csv" "$tlower" | p95)
 		if [ "$p" = n/a ]; then
 			echo "FAIL: no $tkind latency was recorded"
 		elif awk -v p="$p" -v l="$limit" 'BEGIN { exit !(p + 0 <= l + 0) }'; then
@@ -111,6 +112,13 @@ thresholds() {
 			echo "FAIL: $tkind p95 latency, $p s, is over $limit s"
 		fi
 	done
+
+	noarm=$(awk -F, '$1 != "service" && $3 != "arm64" { print $1 " has no arm64 image (" $3 ")" }' "$tdir/images.csv" 2>/dev/null)
+	if [ -z "$noarm" ]; then
+		echo "ok: every default image runs on arm64"
+	else
+		echo "$noarm" | sed 's/^/FAIL: /'
+	fi
 
 	if [ "${STATUS:-}" != completed ]; then
 		echo "FAIL: the analysis did not finish (status ${STATUS:-unknown})"
@@ -122,6 +130,7 @@ thresholds() {
 }
 
 # Prints the markdown summary of the samples in $1 and writes it to $1/summary.md.
+# shellcheck disable=SC2153 # STATUS and STARTED come from the sourced timing.env
 summarize() {
 	dir=$1
 	[ -f "$dir/timing.env" ] || { echo "summarize: no $dir/timing.env" >&2; return 1; }
@@ -141,8 +150,10 @@ summarize() {
 		echo
 		echo "| Container | Peak MiB |"
 		echo "|---|---|"
-		memory_table "$dir/mem.csv" | awk -F'\t' '$1 == "TOTAL" { next } { print "| " $1 " | " $2 " |" }'
-		echo "| **Total (peak of the sum)** | **$(memory_table "$dir/mem.csv" | awk -F'\t' '$1 == "TOTAL" { print $2 }')** |"
+		mt=$(memory_table "$dir/mem.csv" "$(peaks_file "$dir")")
+		echo "$mt" | awk -F'\t' '$1 == "TOTAL" || $1 == "SUM" { next } { print "| " $1 " | " $2 " |" }'
+		echo "| **Total (peak of the sum)** | **$(echo "$mt" | awk -F'\t' '$1 == "TOTAL" { print $2 }')** |"
+		echo "| **Total (sum of each container's peak)** | **$(echo "$mt" | awk -F'\t' '$1 == "SUM" { print $2 }')** |"
 		echo
 		echo "### OOM kills and restarts"
 		echo
@@ -160,8 +171,8 @@ summarize() {
 		echo "| Kind | Requests | p95 s | Non-2xx |"
 		echo "|---|---|---|---|"
 		for kind in UI API; do
-			lower=$(echo "$kind" | tr 'A-Z' 'a-z')
-			seconds=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k { print $5 }' "$dir/latency.csv")
+			lower=$(echo "$kind" | tr '[:upper:]' '[:lower:]')
+			seconds=$(latencies "$dir/latency.csv" "$lower")
 			count=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k' "$dir/latency.csv" | wc -l | tr -d ' ')
 			bad=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k && $4 !~ /^2/ { n++ } END { print n + 0 }' "$dir/latency.csv")
 			echo "| $kind | $count | $(echo "$seconds" | p95) | $bad |"
@@ -222,16 +233,31 @@ probe() {
 	echo "$1,$2,$3,$line" | tr ' ' ',' >>"$out/latency.csv"
 }
 
-# Times the UI pages and the API calls the web app makes, once a second.
+# Times the projects page with the API call it makes, and other API calls, once a second.
 sample_latency() {
 	while :; do
 		ts=$(date +%s)
-		probe "$ts" ui / "$URL/"
 		probe "$ts" ui /projects "$URL/projects"
+		probe "$ts" ui /projects-list "$API_BASE/org/$org/projects?page=0&entries_per_page=20"
 		probe "$ts" api /org "$API_BASE/org?page=0&entries_per_page=50"
 		probe "$ts" api /analyzers "$API_BASE/org/$org/analyzers?page=0&entries_per_page=100"
 		probe "$ts" api /analysis "$API_BASE/org/$org/projects/$project_id/analyses/$analysis"
 		sleep 1
+	done
+}
+
+# Writes each container's cgroup memory peak as "container,bytes", for peaks between samples.
+cgroup_peaks() {
+	# shellcheck disable=SC2086 # the container IDs, one per word
+	docker inspect -f '{{.Id}} {{.Name}}' $ids | while read -r id name; do
+		for f in "/sys/fs/cgroup/system.slice/docker-$id.scope/memory.peak" "/sys/fs/cgroup/docker/$id/memory.peak" \
+			"/sys/fs/cgroup/memory/docker/$id/memory.max_usage_in_bytes" \
+			"/sys/fs/cgroup/memory/system.slice/docker-$id.scope/memory.max_usage_in_bytes"; do
+			if [ -r "$f" ]; then
+				echo "${name#/},$(cat "$f")"
+				break
+			fi
+		done
 	done
 }
 
@@ -301,7 +327,7 @@ run() {
 		exit 1
 	fi
 
-	# Pulls what the registry has for this arch; an image without an arm64 variant stays missing and its service is not started.
+	# An image without an arm64 variant stays missing, its service is not started, and the run fails.
 	compose config --format json >"$work/config.json"
 	jq -r '.services | to_entries[] | "\(.key) \(.value.image // "-")"' "$work/config.json" >"$work/services.txt"
 	compose pull --ignore-pull-failures >"$out/pull.log" 2>&1 || true
@@ -309,6 +335,7 @@ run() {
 	while read -r service image; do
 		arch=$(docker image inspect -f '{{.Architecture}}' "$image" 2>/dev/null) || arch=missing
 		echo "$service $image $arch" >>"$work/arch.txt"
+		if [ "$arch" != arm64 ]; then echo "::error::reference-baseline: $service has no arm64 image ($image: $arch)" >&2; fi
 	done <"$work/services.txt"
 	# shellcheck disable=SC2046 # the service names, one per word
 	compose up -d $(awk '$3 != "missing" { print $1 }' "$work/arch.txt")
@@ -367,6 +394,8 @@ run() {
 	done
 	finished=$(date +%s)
 	stop_samplers
+	cgroup_peaks >"$out/peak.csv" || :
+	if [ ! -s "$out/peak.csv" ]; then echo "reference-baseline: no cgroup memory peaks found, using sampled peaks" >&2; fi
 	[ "$status" = timeout ] && finished=0
 
 	cp "$work/analysis.json" "$out/analysis.json" 2>/dev/null || echo '{}' >"$out/analysis.json"

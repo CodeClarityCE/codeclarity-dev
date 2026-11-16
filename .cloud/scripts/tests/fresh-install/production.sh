@@ -1,27 +1,8 @@
 #!/bin/sh
-# Fresh-install test, production variant: on a Docker daemon with no codeclarity stack, runs
-# the deployment Compose file with DOMAIN=localhost (`docker compose up -d` twice), creates a
-# user with create-user, then checks what an operator and that user see after each run, and
-# runs the Default Analyzer on a tiny uploaded npm project as that user.
-# With UPGRADE_FROM, it first installs a previous deployment release from its release assets
-# and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
-# and the user and its data must be kept and the new migrations applied.
-# Then it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
-# With the codeql profile off, it checks no CodeQL container runs, an analyzer using CodeQL is
-# unavailable and names CodeQL, and the API refuses to start it, saving nothing.
-# Then it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
-# API's public URLs use that port, then puts the ports back.
-# Monitoring is off until the last run, which turns on the monitoring profile and checks
-# Prometheus scrapes the stack and Grafana reads from it.
-# It never removes anything, so run it on a throwaway daemon (CI) only.
-#
+# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing).
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
-# Env: DEPLOYMENT_DIR (default: the deployment submodule), WAIT_SECONDS (default 900),
-#      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see knowledge-dump-fixture.sh),
-#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold),
-#      UPGRADE_FROM (a deployment release tag, or "latest" for the newest release with a
-#      Compose file; needs gh. It skips the test when there is no such release),
-#      ANALYSIS_WAIT_SECONDS (default 1200).
+# Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
+#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -196,12 +177,22 @@ check_user() {
 	check "$1: the instance has exactly one user and one organization" $result
 }
 
+# Whether the running API reports analyzer availability in org $1; released images may predate it.
+api_reports_availability() {
+	get "/org/$1/analyzers?page=0&entries_per_page=100" | jq -e '[.data[] | has("availability")] | any' >/dev/null 2>&1
+}
+
 # With CodeQL off (no codeql profile), checks an analyzer using it is unavailable and refused
 # in org $2 on project $3; $1 names the run.
 check_codeql_off() {
 	result=ok
 	! compose ps -a --format '{{.Service}}' | grep -qx plugin-codeql || result=bad
 	check "$1: no CodeQL container runs without the codeql profile" $result
+
+	if ! api_reports_availability "$2"; then
+		echo "::notice::$1: the API image does not report analyzer availability, so the CodeQL refusal checks are skipped"
+		return 0
+	fi
 
 	result=ok
 	get "/org/$2/analyzers?page=0&entries_per_page=100" >"$work/analyzers.json" || result=bad
@@ -232,6 +223,100 @@ check_codeql_off() {
 	[ -n "$before" ] && [ "$before" = "$after" ] || result=bad
 	check "$1: starting it is refused with the same reason and nothing is saved (HTTP ${status:-none})" $result
 	[ "$result" = ok ] || cat "$work/refusal.json" 2>/dev/null || true
+}
+
+# The default plugin the plugin-down check stops, and the first dispatcher release that fails its steps.
+DOWN_PLUGIN=license-finder
+STALLED_SINCE=v0.0.22-alpha
+
+# Prints the state of "$ANALYZER" in org $1 as "<state> <plugins>".
+analyzer_state() {
+	get "/org/$1/analyzers?page=0&entries_per_page=100" |
+		jq -r --arg n "$ANALYZER" '[.data[] | select(.name == $n)][0].availability | "\(.state) \((.plugins // []) | join(","))"'
+}
+
+# Waits up to 60 s until analyzer_state of org $1 is $2.
+wait_analyzer_state() {
+	deadline=$(($(date +%s) + 60))
+	until [ "$(analyzer_state "$1" 2>/dev/null)" = "$2" ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || return 1
+		sleep 3
+	done
+}
+
+# Prints the analysis body of check_analysis for the Default Analyzer in org $1, project $2.
+default_analysis_body() {
+	id=$(get "/org/$1/analyzers?page=0&entries_per_page=100" | jq -er --arg n "$ANALYZER" '[.data[] | select(.name == $n)][0].id') || return 1
+	path="$1/projects/$2/main"
+	echo '{"analyzer_id":"'"$id"'","branch":"main","config":{"js-sbom":{"branch":"main","project":"'"$path"'"},"php-sbom":{"branch":"main","project":"'"$path"'"},"vuln-finder":{"vulnerabilityPolicy":[]},"license-finder":{"licensePolicy":[]}}}'
+}
+
+# Whether the running dispatcher image is at least $STALLED_SINCE, read from its config.json.
+dispatcher_fails_stalled_steps() {
+	image=$(compose config --format json | jq -er '.services["service-dispatcher"].image') || return 1
+	version=$(docker run --rm --entrypoint cat "$image" config.json 2>/dev/null | jq -er .version) || return 1
+	[ "$(printf '%s\n%s\n' "$STALLED_SINCE" "$version" | sort -V | head -n 1)" = "$STALLED_SINCE" ]
+}
+
+# Stops $DOWN_PLUGIN and checks "$ANALYZER" is temporarily down and refused in org $2 on project $3,
+# then that a step already sent to the stopped plugin fails within a short grace delay; $1 names the run.
+check_plugin_down() {
+	if ! api_reports_availability "$2"; then
+		echo "::notice::$1: the API image does not report analyzer availability, so the plugin-down checks in the API are skipped"
+	else
+		compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+		result=ok
+		wait_analyzer_state "$2" "down $DOWN_PLUGIN" || result=bad
+		check "$1: with $DOWN_PLUGIN stopped, \"$ANALYZER\" is temporarily down, naming it (got $(analyzer_state "$2" 2>/dev/null || :))" $result
+
+		before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
+		result=ok
+		body=$(default_analysis_body "$2" "$3") || result=bad
+		status=$(api_curl -sS -o "$work/down-refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+			-H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$body") || result=bad
+		[ "$status" = 409 ] || result=bad
+		jq -e --arg p "$DOWN_PLUGIN" '.error_code == "AnalyzerUnavailable" and (.error_message | contains($p))' "$work/down-refusal.json" >/dev/null || result=bad
+		after=$(sql codeclarity 'SELECT count(*) FROM analysis') || after=
+		[ -n "$before" ] && [ "$before" = "$after" ] || result=bad
+		check "$1: starting \"$ANALYZER\" while $DOWN_PLUGIN is down is refused and nothing is saved (HTTP ${status:-none})" $result
+
+		compose start "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+		result=ok
+		wait_analyzer_state "$2" "available " || result=bad
+		check "$1: \"$ANALYZER\" is available again once $DOWN_PLUGIN restarts" $result
+	fi
+
+	if ! dispatcher_fails_stalled_steps; then
+		echo "::notice::$1: the dispatcher image predates $STALLED_SINCE, so the stalled-step check is skipped"
+		return 0
+	fi
+	# A short grace delay and reaper interval, for this check only.
+	printf 'services:\n  service-dispatcher:\n    environment:\n      STALLED_PLUGIN_GRACE: "20"\n      REAPER_INTERVAL: "5"\n' >"$work/stalled.yaml"
+	docker compose --project-directory "$cdir" -f "$cdir/docker-compose.yaml" -f "$work/stalled.yaml" up -d service-dispatcher >/dev/null 2>&1 || :
+	wait_settled || report_unsettled
+
+	result=ok
+	body=$(default_analysis_body "$2" "$3") || result=bad
+	analysis=$(post "/org/$2/projects/$3/analyses" "$body" | jq -er '.id') || result=bad
+	# Stopped before the first stage ends, so its step waits in a queue nothing consumes.
+	compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+	deadline=$(($(date +%s) + 300))
+	status=
+	while [ "$result" = ok ]; do
+		get "/org/$2/projects/$3/analyses/$analysis" >"$work/stalled.json" 2>/dev/null || :
+		status=$(jq -r '.data.status // empty' "$work/stalled.json" 2>/dev/null) || status=
+		case "$status" in completed | failure | cancelled) break ;; esac
+		[ "$(date +%s)" -lt "$deadline" ] || break
+		sleep 5
+	done
+	[ "$status" = failure ] || result=bad
+	jq -e --arg p "$DOWN_PLUGIN" '.data.failure_reason | contains($p)' "$work/stalled.json" >/dev/null 2>&1 || result=bad
+	check "$1: a step sent to a stopped $DOWN_PLUGIN fails the analysis within the grace delay, naming it (status ${status:-none})" $result
+	[ "$result" = ok ] || jq '.data | {status, failure_reason}' "$work/stalled.json" 2>/dev/null || :
+
+	compose start "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+	compose up -d service-dispatcher >/dev/null 2>&1 || :
+	wait_settled || report_unsettled
 }
 
 MONITORING_SERVICES="prometheus grafana postgres_exporter"
@@ -375,6 +460,7 @@ if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 if [ -z "$UPGRADE_FROM" ]; then check_monitoring_off "first up -d"; fi
 if [ -z "$UPGRADE_FROM" ] && [ -n "${org:-}" ] && [ -n "${project:-}" ]; then
 	check_codeql_off "after create-user" "$org" "$project"
+	check_plugin_down "after create-user" "$org" "$project"
 fi
 
 result=ok

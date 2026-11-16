@@ -1,17 +1,14 @@
 #!/bin/sh
-# Memory budget check (#169) of a Compose file, without Docker: the memory limits of the containers that
-# run by default (no profile, not a one-shot job) add up to at most BUDGET_MIB, each has one, every
-# GOMEMLIMIT is below its container's limit, and no CPU limit is above MAX_CPUS.
-# Prints "service replicas limit_mib cpus" per counted container, then "TOTAL <mib>"; exits 1 on a breach.
+# Checks a Compose file's default containers: memory limits within BUDGET_MIB (6656, 6.5 GiB), CPU limits
+# at most MAX_CPUS (4), GOMEMLIMIT at 5/6 of each limit, and rabbitmq.conf matching the rabbitmq limit.
 # Usage: sh .cloud/scripts/measure/memory-budget.sh <docker-compose.yaml>
-# Env: BUDGET_MIB (default 6656, which is 6.5 GiB), MAX_CPUS (default 4).
 set -eu
 
 [ $# -eq 1 ] || { echo "usage: $0 <docker-compose.yaml>" >&2; exit 2; }
 [ -f "$1" ] || { echo "memory-budget: no file $1" >&2; exit 2; }
 
 # Reads the block layout of the Compose file; it handles the two-space indentation this repo uses.
-awk -v budget="${BUDGET_MIB:-6656}" -v maxcpus="${MAX_CPUS:-4}" '
+awk -v budget="${BUDGET_MIB:-6656}" -v maxcpus="${MAX_CPUS:-4}" -v conf="$(dirname "$1")/config/rabbitmq.conf" '
 function unquote(v) {
 	sub(/^[ \t]+/, "", v); sub(/[ \t]+(#.*)?$/, "", v)
 	gsub(/^["\047]|["\047]$/, "", v)
@@ -71,11 +68,22 @@ END {
 		if (s in cpus && cpus[s] + 0 > maxcpus + 0) { print s ": CPU limit " cpus[s] " is above " maxcpus; bad = 1 }
 		if ((s in gomem) && (s in memory) && gomem[s] >= memory[s]) {
 			printf "%s: GOMEMLIMIT %d MiB is not below its %d MiB limit\n", s, gomem[s], memory[s]; bad = 1
+		} else if ((s in gomem) && (s in memory) && (gomem[s] < int(memory[s] * 5 / 6) - 1 || gomem[s] > int(memory[s] * 5 / 6) + 1)) {
+			printf "%s: GOMEMLIMIT %d MiB is not 5/6 of its %d MiB limit (%d MiB)\n", s, gomem[s], memory[s], int(memory[s] * 5 / 6); bad = 1
 		}
 		if (optional[s] || job[s]) continue
 		if (!(s in memory)) { print s ": no memory limit"; bad = 1; continue }
 		printf "%s %d %d %s\n", s, replicas[s], memory[s], (s in cpus ? cpus[s] : "-")
 		total += replicas[s] * memory[s]
+	}
+	if ("rabbitmq" in memory) {
+		override = ""
+		while ((getline l < conf) > 0) {
+			if (l ~ /^total_memory_available_override_value *=/) { override = l; sub(/^[^=]*= */, "", override); sub(/[ \t]+$/, "", override) }
+		}
+		want = sprintf("%d", memory["rabbitmq"] * 1048576)
+		if (override == "") { print "rabbitmq: no total_memory_available_override_value in " conf; bad = 1 }
+		else if (override != want) { print "rabbitmq: rabbitmq.conf says " override " bytes, its limit is " want; bad = 1 }
 	}
 	printf "TOTAL %d\n", total
 	if (total > budget) { printf "memory limits add up to %d MiB, over the %d MiB budget\n", total, budget; bad = 1 }

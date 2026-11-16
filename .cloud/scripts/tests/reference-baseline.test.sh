@@ -1,8 +1,5 @@
 #!/bin/sh
-# Tests the reference-machine baseline's summary on fixture samples: peak memory per container and
-# in total (with mixed units), OOM kills and restarts, p95 latency with nearest-rank, analysis time,
-# the arm64 image table, and the thresholds that fail a run. The run mode needs a Docker daemon and is
-# checked by CI, not here.
+# Tests the reference-machine baseline's summary and thresholds on fixture samples; run mode is CI only.
 # Usage: sh .cloud/scripts/tests/reference-baseline.test.sh
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
@@ -36,6 +33,8 @@ printf 'STARTED=1000\nFINISHED=1600\nSTATUS=completed\n' >"$out/timing.env"
 	echo "3,api,512KiB / 1GiB"
 	echo "3,db,1.5GiB / 2GiB"
 } >"$out/mem.csv"
+# cgroup peaks: api peaked at 500 MiB between samples; db has none recorded.
+echo "api,524288000" >"$out/peak.csv"
 
 {
 	echo "epoch,container,oom_killed,restarts"
@@ -76,16 +75,18 @@ has() {
 
 check "summarize exits 0" "$([ -s "$md" ] && echo ok || echo bad)"
 has "Analysis: **completed** in 600 s (from submission to a final status)." "analysis time is final minus submission"
-has "| api | 300.0 |" "api peak is the largest sample in MiB"
+has "| api | 500.0 |" "api peak is its cgroup peak when that is above the samples"
 has "| db | 1536.0 |" "db peak converts GiB to MiB"
 has "| **Total (peak of the sum)** | **1536.5** |" "stack total is the peak of per-sample sums, with KiB converted"
+has "| **Total (sum of each container's peak)** | **2036.0** |" "the sum of per-container peaks uses cgroup peaks"
 has "OOM-killed containers: 1 (plugin-codeql)" "a container with oom_killed true is counted once"
 has "Restarts: plugin-codeql 2" "restarts are the highest count seen"
 has "| UI | 20 | 0.190 | 0 |" "UI p95 is nearest-rank (19th of 20)"
-has "| API | 10 | 1.000 | 1 |" "API p95 is nearest-rank (10th of 10) and non-2xx are counted"
+has "| API | 10 | 60.000 | 1 |" "a non-2xx API response counts as a 60 s sample and is counted"
 has "| plugin-codeql | codeclarityce/plugin-codeql:latest | missing | not started |" "an image that is missing on arm64 is shown"
 has "| api | codeclarityce/api:latest | arm64 | running |" "an arm64 image is shown with its arch"
 has "- FAIL: plugin-codeql was killed for running out of memory" "the summary shows a failed threshold"
+has "- FAIL: plugin-codeql has no arm64 image (missing)" "the summary shows an image missing on arm64"
 
 # Thresholds. good writes a run that meets every one: 6600 MiB peak, p95 0.9 s, a completed analysis.
 good() {
@@ -123,7 +124,24 @@ verdict "$d" 0 "ok: the stack's peak memory, 6600.0 MiB, is within the 6656 MiB 
 
 d=$(good peak)
 printf '3,db,7000MiB / 8GiB\n' >>"$d/mem.csv"
-verdict "$d" 1 "FAIL: the stack's peak memory, 7000.0 MiB, is over the 6656 MiB budget" "a peak over 6.5 GiB fails"
+verdict "$d" 1 "FAIL: the stack's peak memory, 7600.0 MiB, is over the 6656 MiB budget" "a peak over 6.5 GiB fails"
+
+# A peak between two samples is caught by the cgroup's own peak.
+d=$(good cgrouppeak)
+echo "db,7340032000" >"$d/peak.csv"
+verdict "$d" 1 "FAIL: the stack's peak memory, 7600.0 MiB, is over the 6656 MiB budget" "a cgroup peak over the budget fails"
+
+d=$(good non2xx)
+printf '30,ui,/projects,500,0.1\n31,ui,/projects,502,0.1\n' >>"$d/latency.csv"
+verdict "$d" 1 "FAIL: UI p95 latency, 60.000 s, is over 1 s" "fast non-2xx responses count as slow samples"
+
+d=$(good noarm64)
+printf 'service-knowledge,codeclarityce/service-knowledge,missing,not started\napi,codeclarityce/api,arm64,running\n' >>"$d/images.csv"
+verdict "$d" 1 "FAIL: service-knowledge has no arm64 image (missing)" "a default image without arm64 fails"
+
+d=$(good arm64)
+printf 'api,codeclarityce/api,arm64,running\n' >>"$d/images.csv"
+verdict "$d" 0 "ok: every default image runs on arm64" "arm64 images pass"
 
 d=$(good oomflag)
 printf '5,plugin-vuln-finder,true,1\n' >>"$d/oom.csv"
