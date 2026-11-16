@@ -60,9 +60,12 @@ services:
     environment:
       DOCKER_TLS_CERTDIR: ""
     # The second socket is the one the alloy service mounts.
+    # Stack networks use 10.213.x so they never shadow the outer default route.
     command:
       - --host=unix:///run/dockerd/docker.sock
       - --host=unix:///var/run/docker.sock
+      - --default-address-pool=base=10.213.0.0/16,size=24
+      - --bip=172.17.0.1/16
     volumes:
       - dockerd-data:/var/lib/docker
       - dockerd-socket:/run/dockerd
