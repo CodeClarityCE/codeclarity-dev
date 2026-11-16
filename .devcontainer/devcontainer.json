@@ -40,5 +40,8 @@
       }
     }
   },
-  "forwardPorts": []
+  "forwardPorts": [443],
+  "portsAttributes": {
+    "443": { "label": "CodeClarity (https)", "protocol": "https" }
+  }
 }
