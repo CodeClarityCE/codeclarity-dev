@@ -53,6 +53,9 @@ them. Recovery is therefore DB-driven, not queue-durable:
   crash cases are retried. Non-terminal analyses older than `RECOVERY_MAX_AGE`
   (default 24h) are **retired** (marked `failure`) instead of re-driven, so a large
   backlog of abandoned analyses isn't re-downloaded on every restart.
+- A `started` step whose plugin queue (`dispatcher_<plugin>`) has had no consumer for
+  `STALLED_PLUGIN_GRACE` (seconds, default 180) fails its analysis with a reason naming
+  the plugin (`stalled_plugin.go`). Startup recovery skips this check.
 
 ### Database connection pooling
 
@@ -68,8 +71,13 @@ onto a small server-side connection set, so replica count no longer drives `max_
   `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
   (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
   its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
-- **Budget**: `default_pool_size(20) × (roles × databases)` stays under `max_connections`
-  (300 dev / 200 prod, kept as headroom). Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4.
+- **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300. Prod caps
+  pgbouncer at `max_db_connections(20) × 4 databases = 80` server connections, under `max_connections`
+  (`PG_MAX_CONNECTIONS`, default 100), whatever the replica count.
+- **Replicas**: prod runs one replica of every service and plugin, sized for the reference machine (ADR 0012).
+  For more, see "Larger instances" in `deployment/README.md` (downloader×8, each analysis plugin×4).
+- **Memory**: prod's default containers' memory limits add up to at most 6.5 GiB (the reference machine's 8 GiB minus
+  1.5 GiB for the OS); `.cloud/scripts/measure/memory-budget.sh` checks it with GOMEMLIMIT and `rabbitmq.conf`.
 
 ## Testing
 

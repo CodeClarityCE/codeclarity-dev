@@ -1,23 +1,8 @@
 #!/bin/sh
-# Fresh-install test, production variant: on a Docker daemon with no codeclarity stack, runs
-# the deployment Compose file with DOMAIN=localhost (`docker compose up -d` twice), creates a
-# user with create-user, then checks what an operator and that user see after each run, and
-# runs the Default Analyzer on a tiny uploaded npm project as that user.
-# With UPGRADE_FROM, it first installs a previous deployment release from its release assets
-# and creates the user there, so the first `up -d` is the upgrade: the version is bumped,
-# and the user and its data must be kept and the new migrations applied.
-# Then it sets a self-signed TLS_CERT and TLS_KEY and checks Caddy serves them, then unsets them.
-# Last, it publishes HTTP and HTTPS on 8080 and 8443 and checks logins, the HTTP redirect and the
-# API's public URLs use that port, then puts the ports back.
-# It never removes anything, so run it on a throwaway daemon (CI) only.
-#
+# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing).
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
-# Env: DEPLOYMENT_DIR (default: the deployment submodule), WAIT_SECONDS (default 900),
-#      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see knowledge-dump-fixture.sh),
-#      KNOWLEDGE_FIXTURE_CWE (a cwe_id the restored knowledge database must hold),
-#      UPGRADE_FROM (a deployment release tag, or "latest" for the newest release with a
-#      Compose file; needs gh. It skips the test when there is no such release),
-#      ANALYSIS_WAIT_SECONDS (default 1200).
+# Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
+#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -192,6 +177,203 @@ check_user() {
 	check "$1: the instance has exactly one user and one organization" $result
 }
 
+# Whether the running API reports analyzer availability in org $1; released images may predate it.
+api_reports_availability() {
+	get "/org/$1/analyzers?page=0&entries_per_page=100" | jq -e '[.data[] | has("availability")] | any' >/dev/null 2>&1
+}
+
+# With CodeQL off (no codeql profile), checks an analyzer using it is unavailable and refused
+# in org $2 on project $3; $1 names the run.
+check_codeql_off() {
+	result=ok
+	! compose ps -a --format '{{.Service}}' | grep -qx plugin-codeql || result=bad
+	check "$1: no CodeQL container runs without the codeql profile" $result
+
+	if ! api_reports_availability "$2"; then
+		echo "::notice::$1: the API image does not report analyzer availability, so the CodeQL refusal checks are skipped"
+		return 0
+	fi
+
+	result=ok
+	get "/org/$2/analyzers?page=0&entries_per_page=100" >"$work/analyzers.json" || result=bad
+	jq -e --arg name "$ANALYZER" '[.data[] | select(.name == $name)][0].availability.state == "available"' \
+		"$work/analyzers.json" >/dev/null || result=bad
+	check "$1: \"$ANALYZER\" is available with CodeQL off" $result
+
+	step='{"version":"v1","config":{},"persistant_config":{}}'
+	body='{"name":"CodeQL Analyzer","description":"Fresh install CodeQL check","steps":[['"$(echo "$step" | jq -c '.name = "js-sbom"')"','"$(echo "$step" | jq -c '.name = "codeql"')"']]}'
+	result=ok
+	codeql=$(post "/org/$2/analyzers" "$body" | jq -er '.id') || result=bad
+	check "$1: an analyzer using CodeQL is created" $result
+	[ "$result" = ok ] || return 0
+
+	result=ok
+	reason=$(get "/org/$2/analyzers/$codeql" | jq -er '.data.availability | select(.state == "off") | .message') || result=bad
+	case "$reason" in *CodeQL*"off on this instance"*) ;; *) result=bad ;; esac
+	check "$1: the CodeQL analyzer is unavailable, naming CodeQL (says ${reason:-nothing})" $result
+
+	before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
+	result=ok
+	status=$(api_curl -sS -o "$work/refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+		-H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+		-d '{"analyzer_id":"'"$codeql"'","branch":"main","config":{}}') || result=bad
+	[ "$status" = 409 ] || result=bad
+	jq -e --arg reason "$reason" '.error_code == "AnalyzerUnavailable" and .error_message == $reason' "$work/refusal.json" >/dev/null || result=bad
+	after=$(sql codeclarity 'SELECT count(*) FROM analysis') || after=
+	[ -n "$before" ] && [ "$before" = "$after" ] || result=bad
+	check "$1: starting it is refused with the same reason and nothing is saved (HTTP ${status:-none})" $result
+	[ "$result" = ok ] || cat "$work/refusal.json" 2>/dev/null || true
+}
+
+# The default plugin the plugin-down check stops, and the first dispatcher release that fails its steps.
+DOWN_PLUGIN=license-finder
+STALLED_SINCE=v0.0.22-alpha
+
+# Prints the state of "$ANALYZER" in org $1 as "<state> <plugins>".
+analyzer_state() {
+	get "/org/$1/analyzers?page=0&entries_per_page=100" |
+		jq -r --arg n "$ANALYZER" '[.data[] | select(.name == $n)][0].availability | "\(.state) \((.plugins // []) | join(","))"'
+}
+
+# Waits up to 60 s until analyzer_state of org $1 is $2.
+wait_analyzer_state() {
+	deadline=$(($(date +%s) + 60))
+	until [ "$(analyzer_state "$1" 2>/dev/null)" = "$2" ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || return 1
+		sleep 3
+	done
+}
+
+# Prints the analysis body of check_analysis for the Default Analyzer in org $1, project $2.
+default_analysis_body() {
+	id=$(get "/org/$1/analyzers?page=0&entries_per_page=100" | jq -er --arg n "$ANALYZER" '[.data[] | select(.name == $n)][0].id') || return 1
+	path="$1/projects/$2/main"
+	echo '{"analyzer_id":"'"$id"'","branch":"main","config":{"js-sbom":{"branch":"main","project":"'"$path"'"},"php-sbom":{"branch":"main","project":"'"$path"'"},"vuln-finder":{"vulnerabilityPolicy":[]},"license-finder":{"licensePolicy":[]}}}'
+}
+
+# Whether the running dispatcher image is at least $STALLED_SINCE, read from its config.json.
+dispatcher_fails_stalled_steps() {
+	image=$(compose config --format json | jq -er '.services["service-dispatcher"].image') || return 1
+	version=$(docker run --rm --entrypoint cat "$image" config.json 2>/dev/null | jq -er .version) || return 1
+	[ "$(printf '%s\n%s\n' "$STALLED_SINCE" "$version" | sort -V | head -n 1)" = "$STALLED_SINCE" ]
+}
+
+# Stops $DOWN_PLUGIN and checks "$ANALYZER" is temporarily down and refused in org $2 on project $3,
+# then that a step already sent to the stopped plugin fails within a short grace delay; $1 names the run.
+check_plugin_down() {
+	if ! api_reports_availability "$2"; then
+		echo "::notice::$1: the API image does not report analyzer availability, so the plugin-down checks in the API are skipped"
+	else
+		compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+		result=ok
+		wait_analyzer_state "$2" "down $DOWN_PLUGIN" || result=bad
+		check "$1: with $DOWN_PLUGIN stopped, \"$ANALYZER\" is temporarily down, naming it (got $(analyzer_state "$2" 2>/dev/null || :))" $result
+
+		before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
+		result=ok
+		body=$(default_analysis_body "$2" "$3") || result=bad
+		status=$(api_curl -sS -o "$work/down-refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+			-H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$body") || result=bad
+		[ "$status" = 409 ] || result=bad
+		jq -e --arg p "$DOWN_PLUGIN" '.error_code == "AnalyzerUnavailable" and (.error_message | contains($p))' "$work/down-refusal.json" >/dev/null || result=bad
+		after=$(sql codeclarity 'SELECT count(*) FROM analysis') || after=
+		[ -n "$before" ] && [ "$before" = "$after" ] || result=bad
+		check "$1: starting \"$ANALYZER\" while $DOWN_PLUGIN is down is refused and nothing is saved (HTTP ${status:-none})" $result
+
+		compose start "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+		result=ok
+		wait_analyzer_state "$2" "available " || result=bad
+		check "$1: \"$ANALYZER\" is available again once $DOWN_PLUGIN restarts" $result
+	fi
+
+	if ! dispatcher_fails_stalled_steps; then
+		echo "::notice::$1: the dispatcher image predates $STALLED_SINCE, so the stalled-step check is skipped"
+		return 0
+	fi
+	# A short grace delay and reaper interval, for this check only.
+	printf 'services:\n  service-dispatcher:\n    environment:\n      STALLED_PLUGIN_GRACE: "20"\n      REAPER_INTERVAL: "5"\n' >"$work/stalled.yaml"
+	docker compose --project-directory "$cdir" -f "$cdir/docker-compose.yaml" -f "$work/stalled.yaml" up -d service-dispatcher >/dev/null 2>&1 || :
+	wait_settled || report_unsettled
+
+	result=ok
+	body=$(default_analysis_body "$2" "$3") || result=bad
+	analysis=$(post "/org/$2/projects/$3/analyses" "$body" | jq -er '.id') || result=bad
+	# Stopped before the first stage ends, so its step waits in a queue nothing consumes.
+	compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+	deadline=$(($(date +%s) + 300))
+	status=
+	while [ "$result" = ok ]; do
+		get "/org/$2/projects/$3/analyses/$analysis" >"$work/stalled.json" 2>/dev/null || :
+		status=$(jq -r '.data.status // empty' "$work/stalled.json" 2>/dev/null) || status=
+		case "$status" in completed | failure | cancelled) break ;; esac
+		[ "$(date +%s)" -lt "$deadline" ] || break
+		sleep 5
+	done
+	[ "$status" = failure ] || result=bad
+	jq -e --arg p "$DOWN_PLUGIN" '.data.failure_reason | contains($p)' "$work/stalled.json" >/dev/null 2>&1 || result=bad
+	check "$1: a step sent to a stopped $DOWN_PLUGIN fails the analysis within the grace delay, naming it (status ${status:-none})" $result
+	[ "$result" = ok ] || jq '.data | {status, failure_reason}' "$work/stalled.json" 2>/dev/null || :
+
+	compose start "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+	compose up -d service-dispatcher >/dev/null 2>&1 || :
+	wait_settled || report_unsettled
+}
+
+MONITORING_SERVICES="prometheus grafana postgres_exporter"
+
+# Checks no monitoring container exists and Caddy's monitoring routes answer 503 with a
+# message naming the profile; $1 names the run.
+check_monitoring_off() {
+	for service in $MONITORING_SERVICES; do
+		result=ok
+		[ -z "$(docker ps -aq --filter "label=com.docker.compose.service=$service")" ] || result=bad
+		check "$1: no $service container exists while monitoring is off" $result
+	done
+	result=ok
+	code=$(curl -sS --cacert "$work/ca.crt" -o "$work/monitoring.body" -w '%{http_code}' "https://$DOMAIN:3001/") || result=bad
+	[ "$code" = 503 ] || result=bad
+	grep -q 'monitoring' "$work/monitoring.body" || result=bad
+	check "$1: https://$DOMAIN:3001 answers 503 naming the monitoring profile (got ${code:-nothing})" $result
+	result=ok
+	# Port 9091 is not published, so ask Caddy from inside its container; busybox wget prints only the status.
+	compose exec -T frontend wget -qO /dev/null --no-check-certificate "https://$DOMAIN:9091/" >"$work/monitoring.body" 2>&1 && result=bad
+	grep -q ' 503' "$work/monitoring.body" || result=bad
+	check "$1: Caddy's Prometheus route answers 503" $result
+}
+
+# Prints how many series of the PromQL query $1 Prometheus returns.
+prom_count() {
+	compose exec -T prometheus wget -qO- "http://localhost:9090/api/v1/query?query=$1" | jq -er '.data.result | length'
+}
+
+# Checks Prometheus scrapes the stack and Grafana, through Caddy, reads from Prometheus; $1 names the run.
+check_monitoring_on() {
+	deadline=$(($(date +%s) + 180))
+	until [ "$(prom_count 'up%7Bjob%3D%22rabbitmq%22%7D%3D%3D1' 2>/dev/null)" = 1 ] &&
+		[ "$(prom_count 'up%7Bjob%3D%22postgres%22%7D%3D%3D1' 2>/dev/null)" = 1 ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || break
+		sleep 5
+	done
+	for job in rabbitmq postgres; do
+		result=ok
+		[ "$(prom_count "up%7Bjob%3D%22$job%22%7D%3D%3D1" 2>/dev/null)" = 1 ] || result=bad
+		check "$1: Prometheus scrapes the $job target" $result
+	done
+
+	result=ok
+	curl -fsS --cacert "$work/ca.crt" "https://$DOMAIN:3001/api/health" | jq -e '.database == "ok"' >/dev/null || result=bad
+	check "$1: Grafana answers through Caddy at https://$DOMAIN:3001" $result
+
+	result=ok
+	password=$(compose run --rm --no-deps -T --entrypoint cat grafana /run/codeclarity/admin_password) || result=bad
+	frames=$(curl -fsS --cacert "$work/ca.crt" -u "admin:$password" -X POST "https://$DOMAIN:3001/api/ds/query" \
+		-H 'Content-Type: application/json' \
+		-d '{"from":"now-5m","to":"now","queries":[{"refId":"A","datasource":{"uid":"prometheus"},"expr":"up","instant":true}]}' |
+		jq -er '.results.A.frames | length') || result=bad
+	[ "${frames:-0}" -gt 0 ] || result=bad
+	check "$1: Grafana's Prometheus data source returns data" $result
+}
+
 # Row counts of what an upgrade must keep.
 kept_rows() {
 	for table in '"user"' organization analyzer project analysis; do
@@ -274,6 +456,12 @@ fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
+# An upgraded instance keeps the previous release's monitoring and CodeQL containers until removed.
+if [ -z "$UPGRADE_FROM" ]; then check_monitoring_off "first up -d"; fi
+if [ -z "$UPGRADE_FROM" ] && [ -n "${org:-}" ] && [ -n "${project:-}" ]; then
+	check_codeql_off "after create-user" "$org" "$project"
+	check_plugin_down "after create-user" "$org" "$project"
+fi
 
 result=ok
 compose up -d || { result=bad; report_unsettled; }
@@ -335,9 +523,19 @@ check_user "with the ports unset again"
 check_redirect "" "with the ports unset again"
 check_public_urls "with the ports unset again"
 
+# The monitoring profile, as an operator would turn it on in .env.
+COMPOSE_PROFILES=monitoring
+export COMPOSE_PROFILES
+result=ok
+compose up -d || { result=bad; report_unsettled; }
+wait_settled || { result=bad; report_unsettled; }
+check "with COMPOSE_PROFILES=monitoring: up -d succeeds and every service runs" $result
+check_monitoring_on "with COMPOSE_PROFILES=monitoring"
+check_user "with COMPOSE_PROFILES=monitoring"
+
 if [ "$failed" -gt 0 ]; then
 	# shellcheck disable=SC2086 # a list of service names
-	report $JOBS db api frontend
+	report $JOBS db api frontend $MONITORING_SERVICES
 fi
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]

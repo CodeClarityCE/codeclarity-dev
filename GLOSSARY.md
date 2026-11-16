@@ -14,6 +14,14 @@ _Avoid_: Installation, server, environment
 Whoever installs, upgrades and administers an instance; distinct from a user, who runs analyses on it, and from a developer, who works on CodeClarity's code.
 _Avoid_: Admin (that is a role a user holds), sysadmin, maintainer
 
+**Reference machine**:
+The smallest machine an instance is designed and tested to run on with its default components: a Raspberry Pi 5 with 8 GB of memory and an SSD.
+_Avoid_: Minimum requirements, low-end hardware, small server
+
+**Optional component**:
+A part of an instance that is off unless the operator turns it on, such as CodeQL or monitoring.
+_Avoid_: Add-on, extra, plugin (a plugin is one kind of component, optional or not)
+
 ### Analysis
 
 **Analysis**:
