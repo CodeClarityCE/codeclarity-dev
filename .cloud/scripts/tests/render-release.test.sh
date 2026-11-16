@@ -37,6 +37,9 @@ digest_of() {
 	echo "sha256:$(printf '%s' "$1" | sha256sum | cut -d' ' -f1)"
 }
 
+# The knowledge dump image the deployment Compose file under test names, tag included.
+KNOWLEDGE_DUMP=$(grep -o 'codeclarityce/knowledge-dump:[A-Za-z0-9._-]*' "$DEPLOYMENT_DIR/docker-compose.yaml" | head -n 1)
+
 # The registry knows every codeclarityce image the deployment Compose file names.
 registry_with_every_image() {
 	: >"$STUB_IMAGE_DIGESTS"
@@ -44,7 +47,7 @@ registry_with_every_image() {
 		codeclarityce/service-downloader codeclarityce/service-package-follower \
 		codeclarityce/service-scheduler codeclarityce/service-notifier codeclarityce/service-knowledge \
 		codeclarityce/plugin-js-sbom codeclarityce/plugin-license-finder codeclarityce/plugin-vuln-finder \
-		codeclarityce/plugin-php-sbom codeclarityce/plugin-codeql codeclarityce/knowledge-dump:2026-11-11; do
+		codeclarityce/plugin-php-sbom codeclarityce/plugin-codeql "$KNOWLEDGE_DUMP"; do
 		echo "$ref $(digest_of "$ref")" >>"$STUB_IMAGE_DIGESTS"
 	done
 }
@@ -75,7 +78,7 @@ test_the_knowledge_dump_default_is_pinned_and_stays_overridable() {
 	out="$work/dump"
 	result=ok
 	render "$DEPLOYMENT_DIR" "$out" || result=bad
-	want="image: \${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-11@$(digest_of codeclarityce/knowledge-dump:2026-11-11)}"
+	want="image: \${KNOWLEDGE_DUMP_IMAGE:-$KNOWLEDGE_DUMP@$(digest_of "$KNOWLEDGE_DUMP")}"
 	grep -Fq "$want" "$out/docker-compose.yaml" 2>/dev/null || result=bad
 	check "the knowledge dump image is pinned by digest and KNOWLEDGE_DUMP_IMAGE still overrides it" $result
 }
@@ -203,7 +206,7 @@ test_the_release_notes_name_the_knowledge_dump_image() {
 	out="$work/notes"
 	result=ok
 	render "$DEPLOYMENT_DIR" "$out" || result=bad
-	want="codeclarityce/knowledge-dump:2026-11-11@$(digest_of codeclarityce/knowledge-dump:2026-11-11)"
+	want="$KNOWLEDGE_DUMP@$(digest_of "$KNOWLEDGE_DUMP")"
 	grep -Fq "$want" "$out/release-notes.md" 2>/dev/null || result=bad
 	grep -Fq "codeclarityce/api@$(digest_of codeclarityce/api)" "$out/release-notes.md" 2>/dev/null || result=bad
 	check "the release notes name the knowledge dump image and every pinned image" $result

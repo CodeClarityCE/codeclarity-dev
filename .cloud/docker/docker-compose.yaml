@@ -82,7 +82,7 @@ services:
   # One-shot job: restores knowledge and config from the dump image when knowledge is empty.
   # KNOWLEDGE_DUMP_IMAGE swaps in another dump image.
   knowledge-restore:
-    image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-11}
+    image: ${KNOWLEDGE_DUMP_IMAGE:-codeclarityce/knowledge-dump:2026-11-16@sha256:56361cd4f946bf7bd25582baf386314382988f9d918f1fc1956f814aa5bb2fea}
     restart: "no"
     env_file:
       - ../env/.env.dev
