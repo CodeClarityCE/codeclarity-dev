@@ -22,6 +22,14 @@ _Avoid_: Minimum requirements, low-end hardware, small server
 A part of an instance that is off unless the operator turns it on, such as CodeQL or monitoring.
 _Avoid_: Add-on, extra, plugin (a plugin is one kind of component, optional or not)
 
+**Audit log**:
+An organization's record of who did what in it, such as creating a project or starting an analysis, written by the server when the action happens.
+_Avoid_: Activity log, user logs, event log
+
+**Error report**:
+A failure the web app sends to the server for operators to diagnose; it is not shown to users and is not part of the audit log.
+_Avoid_: Frontend log, client log
+
 ### Analysis
 
 **Analysis**:
