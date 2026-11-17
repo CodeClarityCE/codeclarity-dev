@@ -142,6 +142,36 @@ check_redirect() {
 	check "$2: http://$DOMAIN$1 redirects to $URL (got ${location:-nothing})" $result
 }
 
+# Checks app paths get the index page, real files keep their type, and /assets and /api keep their 404; $1 names the run.
+check_deep_links() {
+	for path in /tickets/integrations/clickup/callback /tickets /datasets /experiments /terms /privacy /projects/1 /no-such-page; do
+		result=ok
+		got=$(curl -sS --cacert "$CURL_CA" -o "$work/page.html" -w '%{http_code} %{content_type}' "$URL$path") || result=bad
+		case $got in "200 text/html"*) ;; *) result=bad ;; esac
+		grep -q '<title>CodeClarity</title>' "$work/page.html" || result=bad
+		check "$1: $path serves the app's index page (got ${got:-nothing})" $result
+	done
+
+	result=ok
+	got=$(curl -sS --cacert "$CURL_CA" -o /dev/null -w '%{http_code} %{content_type}' "$URL/favicon.ico") || result=bad
+	case $got in "200 image/"*) ;; *) result=bad ;; esac
+	check "$1: /favicon.ico is served as an image (got ${got:-nothing})" $result
+
+	result=ok
+	chunk=$(curl -fsS --cacert "$CURL_CA" "$URL/" | grep -o '/assets/[^"]*\.js' | head -n 1) || result=bad
+	got=$(curl -sS --cacert "$CURL_CA" -o /dev/null -w '%{http_code} %{content_type}' "$URL${chunk:-/assets/none.js}") || result=bad
+	case $got in "200 text/javascript"* | "200 application/javascript"*) ;; *) result=bad ;; esac
+	check "$1: the built chunk ${chunk:-none} is served as JavaScript (got ${got:-nothing})" $result
+
+	for path in /assets/does-not-exist.js /api/no-such-route; do
+		result=ok
+		got=$(curl -sS --cacert "$CURL_CA" -o "$work/page.html" -w '%{http_code}' "$URL$path") || result=bad
+		[ "$got" = 404 ] || result=bad
+		grep -q '<title>CodeClarity</title>' "$work/page.html" && result=bad
+		check "$1: $path returns 404, not the index page (got ${got:-nothing})" $result
+	done
+}
+
 # Checks the API's public URLs start with $URL; $1 names the run.
 check_public_urls() {
 	for pair in "WEB_HOST $URL" "GITHUB_AUTH_CALLBACK $URL/auth/github/callback" "GITLAB_AUTH_CALLBACK $URL/auth/gitlab/callback"; do
@@ -455,6 +485,7 @@ result=ok
 fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
+check_deep_links "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 # An upgraded instance keeps the previous release's monitoring and CodeQL containers until removed.
 if [ -z "$UPGRADE_FROM" ]; then check_monitoring_off "first up -d"; fi
