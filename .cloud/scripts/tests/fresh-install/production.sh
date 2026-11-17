@@ -297,9 +297,11 @@ check_plugin_down() {
 
 	result=ok
 	body=$(default_analysis_body "$2" "$3") || result=bad
+	# A paused js-sbom holds the first stage, so the plugin is stopped before its step is sent.
+	compose pause plugin-js-sbom >/dev/null 2>&1 || :
 	analysis=$(post "/org/$2/projects/$3/analyses" "$body" | jq -er '.id') || result=bad
-	# Stopped before the first stage ends, so its step waits in a queue nothing consumes.
 	compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
+	compose unpause plugin-js-sbom >/dev/null 2>&1 || :
 	deadline=$(($(date +%s) + 300))
 	status=
 	while [ "$result" = ok ]; do
