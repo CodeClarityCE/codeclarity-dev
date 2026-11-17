@@ -44,6 +44,10 @@ _Avoid_: Pipeline, workflow
 Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
 _Avoid_: Dispatch (the dispatcher's own step), enqueue
 
+**Ticket**:
+A piece of remediation work for one finding in one project. It belongs to the project and is deleted with it, but it outlives the analysis that found it.
+_Avoid_: Issue (that is the external tracker's item), task
+
 ### Experiments
 
 **Dataset**:
