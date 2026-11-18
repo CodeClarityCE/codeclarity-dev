@@ -122,7 +122,7 @@ thresholds() {
 
 	if [ "${STATUS:-}" != completed ]; then
 		echo "FAIL: the analysis did not finish (status ${STATUS:-unknown})"
-	elif [ -f "$tdir/analysis.json" ] && ! jq -e '[.data.steps[][] | .Status // .status] | length > 0 and all(. == "success" or . == "skipped")' "$tdir/analysis.json" >/dev/null 2>&1; then
+	elif [ -f "$tdir/analysis.json" ] && ! jq -e '[.data.steps[][] | .Status] | length > 0 and all(. == "success" or . == "skipped")' "$tdir/analysis.json" >/dev/null 2>&1; then
 		echo "FAIL: the analysis did not finish (status completed, a step did not succeed)"
 	else
 		echo "ok: the analysis finished"
