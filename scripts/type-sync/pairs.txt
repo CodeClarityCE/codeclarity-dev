@@ -1,0 +1,24 @@
+# Frontend copies of API types, checked by check.mjs in CI.
+# One pair per line: kind, the API's file#symbol, the frontend copy's file#symbol.
+# enum: every API member must be in the frontend copy with the same value; extra frontend members are fine.
+# list: both lists must hold exactly the same entries.
+
+# Organization audit log
+enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionType frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionType
+enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionClassType frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionClassType
+enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionSeverity frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionSeverity
+
+# Error report context keys
+list api/src/base_modules/logs/logs.controller.ts#ALLOWED_FIELDS frontend/src/utils/logger.ts#ALLOWED_FIELDS
+
+# Tickets
+enum api/src/codeclarity_modules/tickets/ticket-event.entity.ts#TicketEventType frontend/src/codeclarity_components/tickets/tickets.entity.ts#TicketEventType
+enum api/src/codeclarity_modules/tickets/ticket.entity.ts#TicketStatus frontend/src/codeclarity_components/tickets/tickets.entity.ts#TicketStatus
+enum api/src/codeclarity_modules/tickets/ticket.entity.ts#TicketPriority frontend/src/codeclarity_components/tickets/tickets.entity.ts#TicketPriority
+enum api/src/codeclarity_modules/tickets/ticket.entity.ts#TicketType frontend/src/codeclarity_components/tickets/tickets.entity.ts#TicketType
+
+# Organization membership
+enum api/src/base_modules/organizations/memberships/organization.memberships.entity.ts#MemberRole frontend/src/codeclarity_components/organizations/organization.entity.ts#MemberRole
+
+# Analyses
+enum api/src/base_modules/analyses/analysis.entity.ts#AnalysisStatus frontend/src/codeclarity_components/analyses/analysis.entity.ts#AnalysisStatus
