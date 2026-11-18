@@ -98,7 +98,7 @@ jobs:
       - name: Check out the api and frontend submodules
         run: git submodule update --init --depth 1 api frontend
       - name: Test the check
-        run: node --test scripts/type-sync/
+        run: node --test scripts/type-sync/check.test.mjs
       - name: Check the frontend copies against the API
         run: node scripts/type-sync/check.mjs
 

@@ -1,4 +1,4 @@
-// Tests for check.mjs: run with `node --test scripts/type-sync/`.
+// Tests for check.mjs: run with `node --test scripts/type-sync/check.test.mjs`.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
