@@ -174,7 +174,7 @@ check_deep_links() {
 
 # Checks the API's public URLs start with $URL; $1 names the run.
 check_public_urls() {
-	for pair in "WEB_HOST $URL" "GITHUB_AUTH_CALLBACK $URL/auth/github/callback" "GITLAB_AUTH_CALLBACK $URL/auth/gitlab/callback"; do
+	for pair in "WEB_HOST $URL" "HOST $URL/api"; do
 		var=${pair%% *}
 		result=ok
 		got=$(compose exec -T api printenv "$var") || result=bad
