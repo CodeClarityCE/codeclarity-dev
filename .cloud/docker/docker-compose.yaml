@@ -182,10 +182,6 @@ services:
     ports:
       - 127.0.0.1:8080:8080
     command: [ "php", "-d", "memory_limit=-1", "-d", "post_max_size=500M", "-d", "upload_max_filesize=500M", "-S", "0.0.0.0:8080", "-t", "/var/www/html" ]
-    # Every backend service and plugin waits on adminer, so they all wait for migrate.
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
 
   prometheus:
     image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e

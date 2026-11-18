@@ -2,8 +2,9 @@
 
 ## Development Environment
 
-- **Setup**: `git clone --recursive`, then `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
+- **Setup**: `git clone --recursive`, then `make hooks` and `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
 - `make up` / `make down` - Start/stop all services (`down` keeps data)
+- `make hooks` - Points the git hooks of the umbrella and every submodule at `.githooks/` (local `core.hooksPath`, relative). Its pre-commit runs the repo's own `.githooks/<hook>` first (api and frontend `pre-push` keep working), then scans the staged changes with gitleaks: the binary on PATH (the devcontainer has it), else the pinned image through Docker, else it refuses the commit. `git commit --no-verify` skips it; CI still scans
 - `make build` - Build all Docker images
 - `make logs` - View container logs
 - `make pull` - Pull latest images
@@ -53,6 +54,9 @@ them. Recovery is therefore DB-driven, not queue-durable:
   crash cases are retried. Non-terminal analyses older than `RECOVERY_MAX_AGE`
   (default 24h) are **retired** (marked `failure`) instead of re-driven, so a large
   backlog of abandoned analyses isn't re-downloaded on every restart.
+- A `started` step whose plugin queue (`dispatcher_<plugin>`) has had no consumer for
+  `STALLED_PLUGIN_GRACE` (seconds, default 180) fails its analysis with a reason naming
+  the plugin (`stalled_plugin.go`). Startup recovery skips this check.
 
 ### Database connection pooling
 
@@ -68,8 +72,13 @@ onto a small server-side connection set, so replica count no longer drives `max_
   `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
   (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
   its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
-- **Budget**: `default_pool_size(20) × (roles × databases)` stays under `max_connections`
-  (300 dev / 200 prod, kept as headroom). Target replicas: downloader×8, js-sbom/vuln-finder/license-finder×4.
+- **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300. Prod caps
+  pgbouncer at `max_db_connections(20) × 4 databases = 80` server connections, under `max_connections`
+  (`PG_MAX_CONNECTIONS`, default 100), whatever the replica count.
+- **Replicas**: prod runs one replica of every service and plugin, sized for the reference machine (ADR 0012).
+  For more, see "Larger instances" in `deployment/README.md` (downloader×8, each analysis plugin×4).
+- **Memory**: prod's default containers' memory limits add up to at most 6.5 GiB (the reference machine's 8 GiB minus
+  1.5 GiB for the OS); `.cloud/scripts/measure/memory-budget.sh` checks it with GOMEMLIMIT and `rabbitmq.conf`.
 
 ## Testing
 
@@ -88,6 +97,7 @@ Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its
 - **Permissions**: a caller job using `go-image.yml` or `node-image.yml` grants `contents: write`, `id-token: write` and `attestations: write`, because GitHub validates the skipped release jobs too. It also passes `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` by name under `secrets:` (not `secrets: inherit`): reusable workflows only get secrets their caller passes, even ones stored in the `release` environment.
 - **Releases**: PRs to `main` must bump the version (`config.json` / `package.json`). On `main`, release jobs run only when the repo variable `CI_RELEASE` is `true`, in the `release` environment (main only) that holds `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`. They build amd64 and arm64 natively, attest provenance, then create the tag and release at the built commit; an existing tag is never re-released.
 - **New repos**: a repo whose caller can release ships nothing until `CI_RELEASE` is on; turn it on with `docs/ci-release-test.md`. `scripts/release-all.sh` stops on such a repo while it is off.
+- **Secret scan**: `workflow-lint.yml` has a `secret scan` job in every caller: gitleaks from a digest-pinned image with `.github`'s `.gitleaks.toml` (default rules plus GitLab, GitHub and Slack token rules with no entropy floor, matching push protection), over a PR's commits or a push's. A finding fails `ci`; the log names rule, file, line and fingerprint, never the value. Tests build token-shaped values at run time or use ones like `glpat-test-token`. A known dev key or fixture goes in the repo's `.gitleaksignore`: its fingerprint under a `#` line saying why. `.githooks/gitleaks.toml` and `gitleaks.env` copy the central rules and image; `gitleaks-sync.test.sh` fails when they differ from `v1`, so change the version in `.github`, `.githooks/gitleaks.env` and the devcontainer Dockerfile together
 - **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
 
 Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.

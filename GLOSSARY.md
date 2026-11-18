@@ -14,6 +14,22 @@ _Avoid_: Installation, server, environment
 Whoever installs, upgrades and administers an instance; distinct from a user, who runs analyses on it, and from a developer, who works on CodeClarity's code.
 _Avoid_: Admin (that is a role a user holds), sysadmin, maintainer
 
+**Reference machine**:
+The smallest machine an instance is designed and tested to run on with its default components: a Raspberry Pi 5 with 8 GB of memory and an SSD.
+_Avoid_: Minimum requirements, low-end hardware, small server
+
+**Optional component**:
+A part of an instance that is off unless the operator turns it on, such as CodeQL or monitoring.
+_Avoid_: Add-on, extra, plugin (a plugin is one kind of component, optional or not)
+
+**Audit log**:
+An organization's record of who did what in it, such as creating a project or starting an analysis, written by the server when the action happens.
+_Avoid_: Activity log, user logs, event log
+
+**Error report**:
+A failure the web app sends to the server for operators to diagnose; it is not shown to users and is not part of the audit log.
+_Avoid_: Frontend log, client log
+
 ### Analysis
 
 **Analysis**:
@@ -27,6 +43,10 @@ _Avoid_: Pipeline, workflow
 **Submission**:
 Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
 _Avoid_: Dispatch (the dispatcher's own step), enqueue
+
+**Ticket**:
+A piece of remediation work for one finding in one project. It belongs to the project and is deleted with it, but it outlives the analysis that found it.
+_Avoid_: Issue (that is the external tracker's item), task
 
 ### Experiments
 
