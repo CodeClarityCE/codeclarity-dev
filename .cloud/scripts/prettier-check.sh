@@ -13,6 +13,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # Refuses the tarball unless its sha512 matches the lockfile's.
+# shellcheck disable=SC2016 # the ${...} belong to the JavaScript, not the shell
 node -e '
 const [version, integrity, out] = process.argv.slice(1);
 (async () => {
