@@ -24,9 +24,14 @@ setup_fake_root() {
 	write_file backend/utilities/types go.mod $'module github.com/CodeClarityCE/utility-types\n\ngo 1.27.4'
 }
 
-# Runs one release-all.sh function in a fresh bash, with the fake tree's copy sourced.
+# Runs one function of scripts/<script> in a fresh bash, with the fake tree's copy sourced.
+sourced() {
+	bash -c 's=$1; shift; args=("$@"); set --; source "$s"; "${args[@]}"' _ "$ROOT_DIR/scripts/$1" "${@:2}"
+}
+
+# Runs one release-all.sh function.
 rel() {
-	bash -c 's=$1; shift; args=("$@"); set --; source "$s"; "${args[@]}"' _ "$ROOT_DIR/scripts/release-all.sh" "$@"
+	sourced release-all.sh "$@"
 }
 
 # Writes <content> to <path> in repo <key>, without committing.
