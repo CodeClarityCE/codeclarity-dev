@@ -146,10 +146,10 @@ check_analysis() {
 	done
 	result=ok
 	[ "$status" = completed ] || result=bad
-	jq -e '[.data.steps[][] | .Status // .status] | length > 0 and all(. == "success" or . == "skipped")' "$WORK/analysis.json" >/dev/null 2>&1 || result=bad
+	jq -e '[.data.steps[][] | .Status] | length > 0 and all(. == "success" or . == "skipped")' "$WORK/analysis.json" >/dev/null 2>&1 || result=bad
 	check "$1: the analysis completes with every step succeeded (status ${status:-none})" $result
 	if [ "$result" = bad ]; then
-		jq '.data | {status, stage, steps: [.steps[][] | {name: (.Name // .name), status: (.Status // .status)}]}' "$WORK/analysis.json" 2>/dev/null || true
+		jq '.data | {status, stage, steps: [.steps[][] | {name: .Name, status: .Status}]}' "$WORK/analysis.json" 2>/dev/null || true
 		# shellcheck disable=SC2086 # a list of service names
 		report $ANALYSIS_SERVICES
 	fi
