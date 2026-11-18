@@ -328,9 +328,14 @@ run() {
 	fi
 
 	# An image without an arm64 variant stays missing, its service is not started, and the run fails.
+	# Images already on the daemon, such as the ones CI built from the submodules, are not pulled.
 	compose config --format json >"$work/config.json"
 	jq -r '.services | to_entries[] | "\(.key) \(.value.image // "-")"' "$work/config.json" >"$work/services.txt"
-	compose pull --ignore-pull-failures >"$out/pull.log" 2>&1 || true
+	to_pull=$(while read -r service image; do
+		docker image inspect "$image" >/dev/null 2>&1 || echo "$service"
+	done <"$work/services.txt")
+	# shellcheck disable=SC2086 # the service names, one per word
+	if [ -n "$to_pull" ]; then compose pull --ignore-pull-failures $to_pull >"$out/pull.log" 2>&1 || true; fi
 	: >"$work/arch.txt"
 	while read -r service image; do
 		arch=$(docker image inspect -f '{{.Architecture}}' "$image" 2>/dev/null) || arch=missing

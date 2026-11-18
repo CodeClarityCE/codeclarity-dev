@@ -84,7 +84,7 @@ jobs:
           exit "$status"
 
   # The deployment Compose file, up -d twice on an empty daemon, then create-user and log in
-  # through Caddy and run an analysis. The API image is built from the api submodule.
+  # through Caddy and run an analysis. The CodeClarity images are built from the submodules.
   fresh-install-production:
     name: fresh install (production)
     runs-on: ubuntu-24.04
@@ -101,8 +101,8 @@ jobs:
           submodules: recursive
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
-      - name: Build the API image
-        run: docker build -q --target api -t codeclarityce/api -f api/.cloud/docker/Dockerfile api
+      - name: Build the CodeClarity images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
@@ -125,9 +125,9 @@ jobs:
           submodules: recursive
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
-      # The previous release pins its own API image by digest; this one is the upgrade's.
-      - name: Build the API image
-        run: docker build -q --target api -t codeclarityce/api -f api/.cloud/docker/Dockerfile api
+      # The previous release pins its own images by digest; these are the upgrade's.
+      - name: Build the CodeClarity images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
       - name: Upgrade test
         env:
           GH_TOKEN: ${{ github.token }}
@@ -145,6 +145,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # Built natively on arm64, so the thresholds gate the pointers' code.
+      - name: Build the CodeClarity images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
       - name: Measure the default production stack and check its thresholds
         run: sh .cloud/scripts/measure/reference-baseline.sh run "$RUNNER_TEMP/baseline"
       - name: Job summary
