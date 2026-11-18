@@ -83,6 +83,25 @@ jobs:
           done
           exit "$status"
 
+  # Fails when a frontend copy of an API enum or allow-list misses values the API defines
+  # (scripts/type-sync/pairs.txt), at the checked-out submodule pointers.
+  type-sync:
+    name: type sync (api and frontend)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out the api and frontend submodules
+        run: git submodule update --init --depth 1 api frontend
+      - name: Test the check
+        run: node --test scripts/type-sync/
+      - name: Check the frontend copies against the API
+        run: node scripts/type-sync/check.mjs
+
   # The deployment Compose file, up -d twice on an empty daemon, then create-user and log in
   # through Caddy and run an analysis. The CodeClarity images are built from the submodules.
   fresh-install-production:
@@ -169,6 +188,7 @@ jobs:
       - lint
       - shellcheck
       - shell-tests
+      - type-sync
       - fresh-install-dev
       - fresh-install-production
       - upgrade-production
