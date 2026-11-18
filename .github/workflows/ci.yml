@@ -1,4 +1,4 @@
-# CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts, and the
+# CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts (bats for scripts/), and the
 # fresh-install tests (dev and production) and the production upgrade test, on the runner's empty Docker daemon.
 name: CI
 
@@ -18,6 +18,7 @@ env:
   SHELLCHECK_IMAGE: koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
   # Same Node image as the api and frontend toolchain target.
   NODE_IMAGE: node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80
+  BATS_IMAGE: bats/bats:1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f
 
 jobs:
   lint:
@@ -38,10 +39,28 @@ jobs:
         # Explicit bash adds pipefail, so findings fail the step through the sed.
         shell: bash
         run: |
-          # Every tracked *.sh file and the shared git hook; submodules lint their own. Findings become annotations.
-          git ls-files -z '*.sh' .githooks/dispatch | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
+          # Every tracked *.sh file, the shared git hook and the bats tests; submodules lint their own.
+          # Findings become annotations.
+          git ls-files -z '*.sh' .githooks/dispatch 'scripts/tests/*.bats' 'scripts/tests/*.bash' 'scripts/tests/stubs/*' | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
             "$SHELLCHECK_IMAGE" --format=gcc |
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::\4 file=\1,line=\2,col=\3::\5/; s/^::note /::notice /'
+
+  # The bats tests of scripts/, with gh stubbed and local bare repos as git remotes.
+  script-tests:
+    name: script tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bats
+        # git, jq and the GNU tools the scripts use come from Alpine's signed package index.
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo --entrypoint bash "$BATS_IMAGE" -c \
+            'apk add --no-cache --quiet git jq coreutils sed grep && bats --print-output-on-failure scripts/tests'
 
   # Formatting of the tracked Markdown, YAML and JSON files; submodules check their own.
   prettier:
@@ -208,6 +227,7 @@ jobs:
       - prettier
       - shell-tests
       - type-sync
+      - script-tests
       - fresh-install-dev
       - fresh-install-production
       - upgrade-production
