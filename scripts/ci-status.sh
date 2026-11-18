@@ -113,7 +113,7 @@ status_table() {
 	jq -r "$ROWS_JQ" <<<"$result" >"$work/rows"
 	while IFS=$'\t' read -r repo _; do
 		{
-			value="$(gh api "repos/$ORG/$repo/actions/variables/CI_RELEASE" --jq .value 2>/dev/null)" || value=unset
+			value="$(gh api "repos/$ORG/$repo/actions/variables/CI_RELEASE" --jq .value 2>/dev/null)" || value="unset"
 			echo "$value" >"$work/release/$repo"
 		} &
 	done <"$work/rows"
