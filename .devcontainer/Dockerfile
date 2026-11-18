@@ -13,3 +13,19 @@ RUN apt-get update \
       chromium \
       fonts-liberation \
  && rm -rf /var/lib/apt/lists/*
+
+# gitleaks for the pre-commit secret scan (.githooks/), which has no docker CLI here. Same release
+# as .githooks/gitleaks.env; each download is checked against the release's sha256.
+ARG GITLEAKS_VERSION=8.30.1
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) arch=x64; sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;; \
+      arm64) arch=arm64; sum=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080 ;; \
+      *) echo "no gitleaks checksum for $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac; \
+    tarball="gitleaks_${GITLEAKS_VERSION}_linux_${arch}.tar.gz"; \
+    curl -fsSL -o "/tmp/$tarball" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$tarball"; \
+    echo "$sum  /tmp/$tarball" | sha256sum -c -; \
+    tar -xzf "/tmp/$tarball" -C /usr/local/bin gitleaks; \
+    rm "/tmp/$tarball"; \
+    gitleaks version
