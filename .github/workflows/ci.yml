@@ -36,8 +36,8 @@ jobs:
         # Explicit bash adds pipefail, so findings fail the step through the sed.
         shell: bash
         run: |
-          # Every tracked *.sh file; submodules lint their own. Findings become annotations.
-          git ls-files -z '*.sh' | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
+          # Every tracked *.sh file and the shared git hook; submodules lint their own. Findings become annotations.
+          git ls-files -z '*.sh' .githooks/dispatch | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
             "$SHELLCHECK_IMAGE" --format=gcc |
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::\4 file=\1,line=\2,col=\3::\5/; s/^::note /::notice /'
 
