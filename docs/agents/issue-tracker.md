@@ -18,6 +18,7 @@ This workspace is an umbrella repo whose code lives in four submodules, each a s
 - Work spanning more than one area: file it in `codeclarity-dev`, and reference submodule issues as `CodeClarityCE/<repo>#<n>`.
 - Wayfinder maps and their child tickets always live in `codeclarity-dev`, so the frontier query covers a single repo.
 - The triage labels must exist in all five repos.
+- CI failure tracking issues can open in any repo with a `CI` caller, plugin, service and utility repos included. Each is titled `CI failing on <branch>` and labelled `ci-failure` and `needs-triage`. Find the open ones across the org, for the "needs attention" view, with `gh search issues --owner CodeClarityCE label:ci-failure state:open`.
 
 ## Conventions
 

@@ -184,3 +184,14 @@ jobs:
             echo "::error::A needed job failed or was cancelled: $RESULTS"
             exit 1
           fi
+
+  # Tracks a failing ci on pushes to main and develop in one issue per branch; not the required check.
+  report:
+    needs: [ci]
+    if: ${{ !cancelled() && github.event_name == 'push' && (needs.ci.result == 'success' || needs.ci.result == 'failure') }}
+    uses: CodeClarityCE/.github/.github/workflows/ci-report.yml@v1
+    permissions:
+      issues: write
+      actions: read
+    with:
+      ci-result: ${{ needs.ci.result }}
