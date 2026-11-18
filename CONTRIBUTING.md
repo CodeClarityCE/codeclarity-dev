@@ -44,6 +44,7 @@ Thank you for your interest in contributing to CodeClarity! We welcome contribut
 </details>
 
 ---
+
 <br>
 
 ### How to Contribute
@@ -61,6 +62,9 @@ Be respectful and inclusive. Harassment or discrimination of any kind will not b
 ### Development Setup
 
 - Setup instruction can be found in the [README](./README.md).
+- Run `make hooks` once after cloning. It points the git hooks of this repo and every submodule at `.githooks/`, whose pre-commit scans your staged changes for secrets with gitleaks. It needs either the `gitleaks` binary on your PATH (the devcontainer has it) or Docker, which runs the same pinned image as CI. With neither, the commit is refused; `git commit --no-verify` skips the scan, but CI still runs it on your PR.
+- Tests that need a token-shaped value should use one like `glpat-test-token`, or build it at run time (a prefix joined to repeated characters), since `glpat-` followed by 20 x's is flagged by the scan and rejected by GitHub push protection.
+- If the scan flags a dev key or test fixture on purpose, add its fingerprint (printed by the scan) to that repo's `.gitleaksignore`, under a `#` line saying why. If it might be a real secret, rotate it and tell the maintainers instead.
 - Ensure you can build and run the project locally before submitting changes.
 
 ### Pull Request Process
@@ -102,6 +106,7 @@ Thank you for helping make CodeClarity better!
 ---
 
 **References:**
+
 - [1] [AGPL-3.0 License Full Text](https://www.gnu.org/licenses/agpl-3.0.html)
 
 ---

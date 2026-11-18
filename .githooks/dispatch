@@ -1,0 +1,38 @@
+#!/bin/sh
+# Shared hook for the umbrella and every submodule: runs the repo's own .githooks/<hook> first,
+# if it has one, then, for pre-commit, scans the staged changes for secrets with gitleaks.
+# Installed by `make hooks`; every hook name here is a link to this file.
+set -eu
+hook=$(basename "$0")
+shared=$(cd "$(dirname "$0")" && pwd -P)
+top=$(git rev-parse --show-toplevel)
+
+local_hook="$top/.githooks/$hook"
+if [ -x "$local_hook" ] && [ "$(cd "$top/.githooks" && pwd -P)" != "$shared" ]; then
+	if [ "$hook" = pre-commit ]; then "$local_hook" "$@"; else exec "$local_hook" "$@"; fi
+fi
+[ "$hook" = pre-commit ] || exit 0
+
+. "$shared/gitleaks.env"
+cd "$top"
+if command -v gitleaks >/dev/null 2>&1; then
+	exec gitleaks git --pre-commit --staged --redact --no-banner --verbose --config "$shared/gitleaks.toml" .
+fi
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+	# The repo and its git directories are mounted at their own paths, so a submodule's or a
+	# worktree's .git file still resolves inside the container.
+	gitdir=$(git rev-parse --absolute-git-dir)
+	case ${GIT_INDEX_FILE:-} in "" | /*) ;; *) GIT_INDEX_FILE="$top/$GIT_INDEX_FILE" && export GIT_INDEX_FILE ;; esac
+	common=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+	exec docker run --rm -v "$top:$top" -v "$gitdir:$gitdir" -v "$common:$common" \
+		-v "$shared/gitleaks.toml:/gitleaks.toml:ro" -w "$top" ${GIT_INDEX_FILE:+-e GIT_INDEX_FILE} \
+		-e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+		"$GITLEAKS_IMAGE" git --pre-commit --staged --redact --no-banner --verbose --config /gitleaks.toml .
+fi
+cat >&2 <<MSG
+pre-commit: no secret scanner, so the commit is refused. Either:
+  - install gitleaks $GITLEAKS_VERSION on PATH (https://github.com/gitleaks/gitleaks/releases), or
+  - start Docker, so the hook can run $GITLEAKS_IMAGE.
+To commit without the scan, use git commit --no-verify; CI still scans the pushed commits.
+MSG
+exit 1

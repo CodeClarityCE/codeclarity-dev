@@ -1,6 +1,6 @@
 # Makefile template derivated from https://github.com/dunglas/symfony-docker/blob/main/docs/makefile.md
 .DEFAULT_GOAL = help
-.PHONY        = help build build-prod up down logs restart ps reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge
+.PHONY        = help hooks build build-prod up down logs restart ps reset migrate migrate-codeclarity migrate-knowledge migrate-plugins migrate-config dump-knowledge
 
 ## —— 🦉 CodeClarity's Makefile 🦉 ——————————————————————————————————
 help: ## Outputs this help screen
@@ -36,6 +36,9 @@ reset: ## Wipes the dev stack's data, then sets it up again; needs CONFIRM=reset
 	@if [ "$(origin CONFIRM)" != "command line" ] || [ "$(CONFIRM)" != reset ]; then \
 		echo "make reset deletes every database and volume of the dev stack. To go ahead: make reset CONFIRM=reset" >&2; exit 1; fi
 	@if [ -S $(BROKER_SOCKET) ]; then CONFIRM=reset $(BROKER) reset; else cd .cloud/scripts && sh reset.sh; fi
+
+hooks: ## Points the git hooks of this checkout and every submodule at .githooks (secret scan on commit)
+	@sh .cloud/scripts/install-hooks.sh
 
 ## —— Commands to test production 🎯 ———————————————————————————————————————————————————————————————
 build-prod: ## Builds de production Docker images
