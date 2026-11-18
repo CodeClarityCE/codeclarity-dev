@@ -297,6 +297,7 @@ check_plugin_down() {
 
 	result=ok
 	body=$(default_analysis_body "$2" "$3") || result=bad
+	since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 	analysis=$(post "/org/$2/projects/$3/analyses" "$body" | jq -er '.id') || result=bad
 	# Stopped before the first stage ends, so its step waits in a queue nothing consumes.
 	compose stop -t 0 "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
@@ -312,7 +313,10 @@ check_plugin_down() {
 	[ "$status" = failure ] || result=bad
 	jq -e --arg p "$DOWN_PLUGIN" '.data.failure_reason | contains($p)' "$work/stalled.json" >/dev/null 2>&1 || result=bad
 	check "$1: a step sent to a stopped $DOWN_PLUGIN fails the analysis within the grace delay, naming it (status ${status:-none})" $result
-	[ "$result" = ok ] || jq '.data | {status, failure_reason}' "$work/stalled.json" 2>/dev/null || :
+	if [ "$result" != ok ]; then
+		jq '.data | {status, failure_reason, steps}' "$work/stalled.json" 2>/dev/null || :
+		compose logs --no-color --timestamps --since "$since" service-dispatcher "plugin-$DOWN_PLUGIN" 2>/dev/null || :
+	fi
 
 	compose start "plugin-$DOWN_PLUGIN" >/dev/null 2>&1 || :
 	compose up -d service-dispatcher >/dev/null 2>&1 || :
