@@ -8,6 +8,7 @@ cd "$root"
 git config --local core.hooksPath .githooks
 echo "hooks: . -> .githooks"
 # displaypath is relative to $root, so its depth gives the way back up.
+# shellcheck disable=SC2016 # git submodule foreach expands these per submodule
 git submodule foreach --quiet --recursive '
 	up=$(echo "$displaypath" | awk -F/ "{ for (i = 0; i < NF; i++) printf \"../\" }")
 	git config --local core.hooksPath "${up}.githooks"

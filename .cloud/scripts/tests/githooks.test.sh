@@ -133,7 +133,9 @@ mv "$work/gitleaks.off" "$stubs/gitleaks"
 
 # A repo's own hooks, as api and frontend have.
 mkdir -p "$sub/.githooks"
+# shellcheck disable=SC2016 # the hook expands these when it runs
 printf '#!/bin/sh\necho "own pre-commit" >>"$STUB_LOG"\nexit "${OWN_EXIT:-0}"\n' >"$sub/.githooks/pre-commit"
+# shellcheck disable=SC2016 # the hook expands these when it runs
 printf '#!/bin/sh\necho "own pre-push $*: $(cat)" >>"$STUB_LOG"\n' >"$sub/.githooks/pre-push"
 chmod +x "$sub/.githooks/pre-commit" "$sub/.githooks/pre-push"
 
