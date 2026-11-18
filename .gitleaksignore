@@ -1,0 +1,7 @@
+# The dev stack's COOKIE_SECRET, a deliberate dev-only value.
+6befa1ebf123c175f2e2ffdf28881061a719a84a:.cloud/env/.env.dev:generic-api-key:8
+.cloud/env/.env.dev:generic-api-key:8
+
+# A made-up NVD key in a broker policy test.
+a5084667ccf8821ba3e5d7164e27130707f0e459:.devcontainer/broker/policy_test.go:generic-api-key:539
+.devcontainer/broker/policy_test.go:generic-api-key:525

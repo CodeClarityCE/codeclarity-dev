@@ -1,0 +1,30 @@
+# A copy of CodeClarityCE/.github's .gitleaks.toml, which CI scans with; .cloud/scripts/tests/gitleaks-sync.test.sh
+# fails if they differ. gitleaks' defaults, plus provider-prefix rules with no entropy floor.
+title = "CodeClarityCE"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "gitlab-pat-any-entropy"
+description = "GitLab personal access token, of any entropy"
+regex = '''\bglpat-[0-9A-Za-z_-]{20,}'''
+keywords = ["glpat-"]
+
+[[rules]]
+id = "github-token-any-entropy"
+description = "GitHub personal, OAuth, user-to-server, server-to-server or refresh token, of any entropy"
+regex = '''\bgh[pousr]_[0-9A-Za-z]{36,}'''
+keywords = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"]
+
+[[rules]]
+id = "github-fine-grained-pat-any-entropy"
+description = "GitHub fine-grained personal access token, of any entropy"
+regex = '''\bgithub_pat_[0-9A-Za-z_]{82}'''
+keywords = ["github_pat_"]
+
+[[rules]]
+id = "slack-token-any-entropy"
+description = "Slack bot, user, app, config or refresh token, of any entropy"
+regex = '''\bxox[abeposr]-[0-9A-Za-z-]{10,}'''
+keywords = ["xoxa-", "xoxb-", "xoxe-", "xoxp-", "xoxo-", "xoxs-", "xoxr-"]
