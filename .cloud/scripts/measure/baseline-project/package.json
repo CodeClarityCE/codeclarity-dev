@@ -1,1 +1,24 @@
-{ "name": "reference-machine-baseline", "version": "1.0.0", "private": true, "dependencies": { "webpack": "5.97.1", "eslint": "8.57.1", "jest": "29.7.0", "vite": "5.4.11", "next": "14.2.18", "@angular/core": "18.2.12", "typescript": "5.6.3", "@angular/cli": "18.2.12", "@storybook/react": "8.4.7", "sass": "1.80.6", "babel-loader": "9.2.1", "@nestjs/core": "10.4.9", "@nestjs/platform-express": "10.4.9", "typeorm": "0.3.20", "vue": "3.5.13", "@nestjs/testing": "10.4.9", "pinia": "2.2.6" } }
+{
+  "name": "reference-machine-baseline",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "webpack": "5.97.1",
+    "eslint": "8.57.1",
+    "jest": "29.7.0",
+    "vite": "5.4.11",
+    "next": "14.2.18",
+    "@angular/core": "18.2.12",
+    "typescript": "5.6.3",
+    "@angular/cli": "18.2.12",
+    "@storybook/react": "8.4.7",
+    "sass": "1.80.6",
+    "babel-loader": "9.2.1",
+    "@nestjs/core": "10.4.9",
+    "@nestjs/platform-express": "10.4.9",
+    "typeorm": "0.3.20",
+    "vue": "3.5.13",
+    "@nestjs/testing": "10.4.9",
+    "pinia": "2.2.6"
+  }
+}

@@ -62,9 +62,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "auto"
@@ -125,9 +123,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "auto"
@@ -196,9 +192,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "auto"
@@ -259,9 +253,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "auto"
@@ -459,11 +451,7 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [
-    "infrastructure",
-    "caddy",
-    "web"
-  ],
+  "tags": ["infrastructure", "caddy", "web"],
   "templating": {
     "list": []
   },

@@ -17,7 +17,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: 'Knowledge source {{ $labels.source }}: last run failed'
+          summary: "Knowledge source {{ $labels.source }}: last run failed"
           description: See last_error in knowledge_source_sync. Stays firing until the source next succeeds.
         data:
           - refId: A
@@ -48,7 +48,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: 'Knowledge source {{ $labels.source }}: watermark is past its staleness threshold'
+          summary: "Knowledge source {{ $labels.source }}: watermark is past its staleness threshold"
           description: The source has not completed a sync within its threshold, or has never completed one.
         data:
           - refId: A
@@ -87,7 +87,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: 'Knowledge source {{ $labels.source }}: failed validation'
+          summary: "Knowledge source {{ $labels.source }}: failed validation"
           description: See validation_error in knowledge_source_sync. Updates are applied in place and not rolled back, so stored data may include the update that failed. The source keeps its last validated counts. Stays firing until the source next passes.
         data:
           - refId: A

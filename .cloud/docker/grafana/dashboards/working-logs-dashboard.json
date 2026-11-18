@@ -45,7 +45,7 @@
     },
     {
       "datasource": {
-        "type": "loki", 
+        "type": "loki",
         "uid": "loki"
       },
       "fieldConfig": {
@@ -85,9 +85,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "auto",
@@ -198,11 +196,7 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": [
-    "logs",
-    "codeclarity", 
-    "working"
-  ],
+  "tags": ["logs", "codeclarity", "working"],
   "templating": {
     "list": []
   },
@@ -212,7 +206,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "CodeClarity - Working Logs Dashboard", 
+  "title": "CodeClarity - Working Logs Dashboard",
   "uid": "working-logs",
   "version": 1,
   "weekStart": ""

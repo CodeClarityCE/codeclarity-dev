@@ -82,9 +82,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -165,9 +163,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -248,9 +244,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -331,9 +325,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -414,9 +406,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -497,9 +487,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -593,9 +581,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -676,9 +662,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -759,9 +743,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -842,9 +824,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -925,9 +905,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -1008,9 +986,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": ""
         },
         "textMode": "name"
@@ -1036,12 +1012,7 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [
-    "codeclarity",
-    "microservices",
-    "monitoring",
-    "security"
-  ],
+  "tags": ["codeclarity", "microservices", "monitoring", "security"],
   "templating": {
     "list": []
   },
