@@ -132,3 +132,7 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Specs
+
+Before a spec relies on an API path, read its handler: some return empty data instead of doing the work. `api/src/not-implemented-ceiling.spec.ts` keeps throwing stubs at zero, and `grep -rni "not implemented" api/src --include=*.ts --exclude=*.spec.ts` lists any that remain. Scope a missing feature into the spec, or block the spec on the issue that builds it.
