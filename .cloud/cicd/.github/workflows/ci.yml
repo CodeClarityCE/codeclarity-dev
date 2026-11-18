@@ -29,13 +29,13 @@ jobs:
           branch: ${{ steps.branch-names.outputs.current_branch }}
           serverUrl: ${{ github.server_url }}
           projectName: ${{ github.repository }}
-          analyzerName: 'JS Analyser'
+          analyzerName: "JS Analyser"
           failOnCritical: false
           failOnHigh: false
           failOnMedium: false
           failOnLow: false
           failOnInfo: false
-      
+
       - name: Print Output
         id: output
         run: echo "${{ steps.codeclarity-action.outputs.vulnerabilities }}"
