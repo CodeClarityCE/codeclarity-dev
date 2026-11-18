@@ -1,4 +1,4 @@
-# CI: workflow lint from the central repo, shellcheck and tests of the shell scripts, and the
+# CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts, and the
 # fresh-install tests (dev and production) and the production upgrade test, on the runner's empty Docker daemon.
 name: CI
 
@@ -16,6 +16,8 @@ concurrency:
 
 env:
   SHELLCHECK_IMAGE: koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+  # Same Node image as the api and frontend toolchain target.
+  NODE_IMAGE: node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80
 
 jobs:
   lint:
@@ -40,6 +42,22 @@ jobs:
           git ls-files -z '*.sh' .githooks/dispatch | xargs -0r docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
             "$SHELLCHECK_IMAGE" --format=gcc |
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::\4 file=\1,line=\2,col=\3::\5/; s/^::note /::notice /'
+
+  # Formatting of the tracked Markdown, YAML and JSON files; submodules check their own.
+  prettier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: prettier --check
+        # The Prettier version root package.json pins, checked against pnpm-lock.yaml's sha512.
+        run: |
+          git ls-files -z '*.md' '*.yml' '*.yaml' '*.json' | xargs -0 docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo \
+            "$NODE_IMAGE" sh .cloud/scripts/prettier-check.sh
 
   # make up twice on an empty daemon, log in as the default developer account and run an analysis.
   # The knowledge dump image is a small fixture built here, not the published one.
@@ -168,6 +186,7 @@ jobs:
     needs:
       - lint
       - shellcheck
+      - prettier
       - shell-tests
       - fresh-install-dev
       - fresh-install-production

@@ -8,7 +8,5 @@
     "dbaeumer.vscode-eslint",
     "arcanis.vscode-zipfs"
   ],
-  "unwantedRecommendations": [
-    "Vue.vscode-typescript-vue-plugin"
-  ]
+  "unwantedRecommendations": ["Vue.vscode-typescript-vue-plugin"]
 }
