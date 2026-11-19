@@ -60,9 +60,10 @@ The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against
 
 ## Fixtures
 
-| Fixture            | Case                                                                                                                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm-disputed-cve` | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade |
+| Fixture                   | Case                                                                                                                                                                                                                                                     |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm-disputed-cve`        | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade                             |
+| `npm-gcve-name-collision` | sirv 3.0.2 and negotiator 0.6.3, which share their names with GCVE records for other products (`FP`, `gcve-name-collision`), and uri-js 4.4.1, whose CNA-only GCVE records are real (`TP`, `unreviewed-ghsa`). #224 drops the first and keeps the second |
 
 ## Refreshing the knowledge
 
