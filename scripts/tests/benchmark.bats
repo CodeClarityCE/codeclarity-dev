@@ -323,3 +323,50 @@ severity_row() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Severity None with a CVSS vector or GHSA severity: not recorded"* ]]
 }
+
+# A fixture folder with an npm manifest and lockfile, listed as input "fx" next to "app".
+fixture_input() {
+	app_input
+	mkdir -p "$BENCHMARK_DIR/fixtures/fx"
+	echo '{"name": "fx"}' >"$BENCHMARK_DIR/fixtures/fx/package.json"
+	echo '{"lockfileVersion": 3}' >"$BENCHMARK_DIR/fixtures/fx/package-lock.json"
+	printf 'fx\tfixture\t-\t.\n' >>"$BENCHMARK_DIR/inputs.tsv"
+}
+
+@test "run analyses a fixture folder, archived at its root, next to pinned inputs" {
+	fixture_input
+	fake_api
+	ground_truth fx <<'EOF'
+CVE-1	a	1.0.0	TP	-	https://nvd.nist.gov/vuln/detail/CVE-1
+EOF
+	page 0 1 "$(row CVE-1 a@1.0.0)" >"$BATS_TEST_TMPDIR/pages/0.json"
+	run sh "$BENCHMARK" run --input fx --out "$REC"
+	[ "$status" -eq 0 ]
+	[[ "$(squeezed)" == *"fx 1 1 0 0 1 1 0 100.0% 100.0%"* ]]
+	[[ "$output" == *"fx: fixture fixtures/fx, analysis ana1"* ]]
+	[ "$(tar -tzf "$REC/fx.tar.gz" | sort | tr '\n' ' ')" = "package-lock.json package.json " ]
+	# The recorded run reports the same again offline.
+	run sh "$BENCHMARK" report "$REC"
+	[[ "$output" == *"fx: fixture fixtures/fx, analysis ana1"* ]]
+}
+
+@test "run refuses a fixture input without its folder" {
+	fixture_input
+	rm -r "$BENCHMARK_DIR/fixtures/fx"
+	fake_api
+	run sh "$BENCHMARK" run --input fx --out "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"fx: no fixture folder at"* ]]
+}
+
+@test "every committed input has a ground truth, and every fixture input its folder" {
+	dir="$BATS_TEST_DIRNAME/../benchmark"
+	while IFS="$(printf '\t')" read -r name repo commit subdir; do
+		[ "$name" != name ] || continue
+		[ -f "$dir/ground-truth/$name.tsv" ]
+		if [ "$repo" = fixture ]; then
+			[ "$commit" = - ]
+			[ -d "$dir/fixtures/$name/$subdir" ]
+		fi
+	done <"$dir/inputs.tsv"
+}
