@@ -11,8 +11,18 @@ packages:
 #
 # Mirrored in api/.cloud/docker/pnpm-workspace.yaml and
 # frontend/.cloud/docker/pnpm-workspace.yaml, which the standalone container
-# builds and the node-image CI workflow stage. All three must move together.
+# builds and the node-image CI workflow stage. All three must move together,
+# except supportedArchitectures below, which is host-only.
 minimumReleaseAge: 4320
+
+# A host install also fetches the Linux glibc native bindings, so tests, linters
+# and git hooks run in the devcontainer. Host-only on purpose: the .cloud/docker
+# copies stay without it, as CI and the images run on Alpine (musl).
+# After pulling this, run one `pnpm install --force` from the repo root on the host.
+supportedArchitectures:
+  os: [current, linux]
+  cpu: [current, arm64]
+  libc: [current, glibc]
 
 # Disable pnpm 11's pre-run dependency check: its automatic install ignores
 # `allowBuilds` below and fails with ERR_PNPM_IGNORED_BUILDS.
