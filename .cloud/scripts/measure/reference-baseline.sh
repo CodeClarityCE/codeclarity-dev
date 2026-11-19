@@ -1,15 +1,28 @@
 #!/bin/sh
 # Measures the default production stack on a real npm analysis and fails on the reference-machine thresholds.
 # Usage: sh .cloud/scripts/measure/reference-baseline.sh run|summarize|check <out-dir>
+#        sh .cloud/scripts/measure/reference-baseline.sh tarball <project-dir> <out-file>
 # run needs an empty Docker daemon and never removes anything; summarize and check only read <out-dir>.
+# tarball writes the upload tarball run sends for <project-dir>.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
 
 usage() {
-	echo "usage: $0 run <out-dir> | summarize <out-dir> | check <out-dir>" >&2
+	echo "usage: $0 run <out-dir> | summarize <out-dir> | check <out-dir> | tarball <project-dir> <out-file>" >&2
 	exit 2
+}
+
+# Writes the upload tarball of project $1 to $2. The baseline project stores its files with a .fixture
+# suffix so GitHub does not scan them; the tarball gets their real names.
+tarball() {
+	staging=$(mktemp -d)
+	for f in package.json package-lock.json; do
+		if [ -f "$1/$f.fixture" ]; then cp "$1/$f.fixture" "$staging/$f"; else cp "$1/$f" "$staging/$f"; fi
+	done
+	tar -czf "$2" -C "$staging" package.json package-lock.json
+	rm -rf "$staging"
 }
 
 # Prints each container's peak memory in MiB, sorted, then TOTAL (peak of per-sample sums) and SUM (sum of
@@ -367,7 +380,7 @@ run() {
 	if [ -z "$token" ]; then echo "reference-baseline: login failed" >&2; exit 1; fi
 	org=$(get '/org?page=0&entries_per_page=50' | jq -er '[.data[] | select(.organization.personal)][0].organization.id')
 	project_id=$(post "/org/$org/projects" '{"name":"reference-machine-baseline","description":"Reference-machine baseline (#162)"}' | jq -er '.id')
-	tar -czf "$work/app.tar.gz" -C "$project" package.json package-lock.json
+	tarball "$project" "$work/app.tar.gz"
 	api_curl -fsS -X PATCH "$API_BASE/org/$org/file/$project_id/upload" -H "Authorization: Bearer $token" \
 		--form-string type=source --form-string file_name=app.tar.gz --form-string chunk=true \
 		--form-string id=0 --form-string last=true --form-string "hash=$(sha256sum "$work/app.tar.gz" | cut -d' ' -f1)" \
@@ -439,6 +452,10 @@ run)
 summarize)
 	[ $# -eq 2 ] || usage
 	summarize "$2"
+	;;
+tarball)
+	[ $# -eq 3 ] || usage
+	tarball "$2" "$3"
 	;;
 check)
 	[ $# -eq 2 ] || usage

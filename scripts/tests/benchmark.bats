@@ -369,16 +369,16 @@ severity_row() {
 	[[ "$output" == *"Severity None with a CVSS vector or GHSA severity: not recorded"* ]]
 }
 
-# A fixture folder with an npm manifest and lockfile, listed as input "fx" next to "app".
+# A fixture folder with an npm manifest and lockfile stored renamed, listed as input "fx" next to "app".
 fixture_input() {
 	app_input
 	mkdir -p "$BENCHMARK_DIR/fixtures/fx"
-	echo '{"name": "fx"}' >"$BENCHMARK_DIR/fixtures/fx/package.json"
-	echo '{"lockfileVersion": 3}' >"$BENCHMARK_DIR/fixtures/fx/package-lock.json"
+	echo '{"name": "fx"}' >"$BENCHMARK_DIR/fixtures/fx/package.json.fixture"
+	echo '{"lockfileVersion": 3}' >"$BENCHMARK_DIR/fixtures/fx/package-lock.json.fixture"
 	printf 'fx\tfixture\t-\t.\n' >>"$BENCHMARK_DIR/inputs.tsv"
 }
 
-@test "run analyses a fixture folder, archived at its root, next to pinned inputs" {
+@test "run analyses a fixture folder, archived at its root with real file names, next to pinned inputs" {
 	fixture_input
 	fake_api
 	ground_truth fx <<'EOF'
@@ -393,6 +393,36 @@ EOF
 	# The recorded run reports the same again offline.
 	run sh "$BENCHMARK" report "$REC"
 	[[ "$output" == *"fx: fixture fixtures/fx, analysis ana1"* ]]
+}
+
+@test "run uploads each committed benchmark fixture with its real manifest and lockfile names" {
+	local src="$BATS_TEST_DIRNAME/../benchmark" name repo _rest inputs=()
+	fake_api
+	page 0 1 >"$BATS_TEST_TMPDIR/pages/0.json"
+	printf 'name\trepo\tcommit\tsubdir\tworkspaces\n' >"$BENCHMARK_DIR/inputs.tsv"
+	mkdir -p "$BENCHMARK_DIR/fixtures"
+	while IFS="$(printf '\t')" read -r name repo _rest; do
+		[ "$repo" = fixture ] || continue
+		cp -R "$src/fixtures/$name" "$BENCHMARK_DIR/fixtures/"
+		printf '%s\tfixture\t-\t.\t.\n' "$name" >>"$BENCHMARK_DIR/inputs.tsv"
+		ground_truth "$name" </dev/null
+		inputs+=(--input "$name")
+	done <"$src/inputs.tsv"
+	[ "${#inputs[@]}" -gt 0 ]
+	run sh "$BENCHMARK" run "${inputs[@]}" --out "$REC"
+	[ "$status" -eq 0 ]
+	while IFS="$(printf '\t')" read -r name repo _rest; do
+		[ "$repo" = fixture ] || continue
+		case "$name" in
+		npm-*) expected="package-lock.json package.json " ;;
+		composer-*) expected="composer.json composer.lock " ;;
+		*) echo "no expected listing for $name"; return 1 ;;
+		esac
+		[ "$(tar -tzf "$REC/$name.tar.gz" | sort | tr '\n' ' ')" = "$expected" ] || {
+			echo "$name: $(tar -tzf "$REC/$name.tar.gz" | tr '\n' ' ')"
+			return 1
+		}
+	done <"$src/inputs.tsv"
 }
 
 @test "run refuses a fixture input without its folder" {
