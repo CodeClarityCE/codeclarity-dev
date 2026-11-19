@@ -252,6 +252,51 @@ EOF
 	[[ "$(squeezed)" == *"app 2 1 1 0 1 1 0 50.0% 100.0%"* ]]
 }
 
+# A repo at $BENCHMARK_ROOT/umbrella whose api and frontend folders are submodules, listed as
+# input "mono" reading those two workspaces.
+mono_input() {
+	local repo="$BENCHMARK_ROOT/umbrella" sub sha
+	mkdir -p "$repo"
+	git -C "$repo" init -q
+	echo '{"private": true}' >"$repo/package.json"
+	for sub in api frontend; do
+		mkdir -p "$repo/$sub"
+		git -C "$repo/$sub" init -q
+		echo "{\"name\": \"$sub\"}" >"$repo/$sub/package.json"
+		git -C "$repo/$sub" add package.json
+		git -C "$repo/$sub" -c user.name=Test -c user.email=test@example.invalid commit -q -m "Add $sub"
+		sha=$(git -C "$repo/$sub" rev-parse HEAD)
+		git -C "$repo" update-index --add --cacheinfo "160000,$sha,$sub"
+	done
+	git -C "$repo" add package.json
+	git -C "$repo" -c user.name=Test -c user.email=test@example.invalid commit -q -m "Add submodules"
+	printf 'name\trepo\tcommit\tsubdir\tworkspaces\nmono\tumbrella\t%s\t.\tapi,frontend\n' "$(git -C "$repo" rev-parse HEAD)" \
+		>"$BENCHMARK_DIR/inputs.tsv"
+}
+
+@test "run archives an input's submodules and reads each listed workspace" {
+	mono_input
+	fake_api
+	ground_truth mono <<'EOF'
+CVE-1	a	1.0.0	TP	-	https://github.com/advisories/GHSA-1
+CVE-2	b	2.0.0	TP	-	https://github.com/advisories/GHSA-2
+EOF
+	# Both workspaces get the same list pages from the stand-in API.
+	page 0 1 "$(row CVE-1 a@1.0.0)" "$(row CVE-2 b@2.0.0)" >"$BATS_TEST_TMPDIR/pages/0.json"
+	run sh "$BENCHMARK" run --out "$REC"
+	[ "$status" -eq 0 ]
+	tar -tzf "$REC/mono.tar.gz" | sed 's#^\./##' >"$BATS_TEST_TMPDIR/listing"
+	grep -qx 'package.json' "$BATS_TEST_TMPDIR/listing"
+	grep -qx 'api/package.json' "$BATS_TEST_TMPDIR/listing"
+	grep -qx 'frontend/package.json' "$BATS_TEST_TMPDIR/listing"
+	grep -q 'vulnerabilities?workspace=api&entries_per_page=100&page=0$' "$CURL_STUB_LOG"
+	grep -q 'vulnerabilities?workspace=frontend&entries_per_page=100&page=0$' "$CURL_STUB_LOG"
+	[ "$(grep -c 'workspace=\.&' "$CURL_STUB_LOG")" = 0 ]
+	# An instance shown in both workspaces counts once.
+	[[ "$(squeezed)" == *"mono 2 2 0 0 2 2 0 100.0% 100.0%"* ]]
+	[[ "$output" == *"mono: umbrella at "*", workspaces api, frontend, analysis ana1"* ]]
+}
+
 @test "run refuses an input name that is not in the inputs file" {
 	app_input
 	run sh "$BENCHMARK" run --input nope --out "$REC"

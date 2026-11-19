@@ -21,7 +21,7 @@ Env: `API_URL` (default `http://localhost:3000`, the API without the `/api` pref
 
 ## Files
 
-- `inputs.tsv`: one input per line: `name`, `repo` (a git checkout relative to the umbrella root, such as `api`), `commit` and `subdir` (the folder that becomes the archive root, `.` for the whole tree). The commit must be in the local checkout; `git -C <repo> fetch origin <commit>` if it is not. Add an input by appending a line and its ground-truth file.
+- `inputs.tsv`: one input per line: `name`, `repo` (a git checkout relative to the umbrella root, such as `api`, or `.` for the umbrella), `commit`, `subdir` (the folder that becomes the archive root, `.` for the whole tree) and `workspaces` (the workspaces whose lists are read, comma-separated, `.` for the root). The commit must be in the local checkout; `git -C <repo> fetch origin <commit>` if it is not. A listed workspace that is a submodule at that commit gets the top-level files (manifests and lockfiles) of the submodule's checkout at its pinned commit, which keeps the upload under the API's 25 MB limit. Add an input by appending a line and its ground-truth file.
 - `knowledge-dump.txt`: the knowledge dump image the benchmark is pinned to. `run` refuses a stack whose `knowledge-restore` image (`.cloud/docker/docker-compose.yaml`, or `KNOWLEDGE_DUMP_IMAGE`) differs.
 - `ground-truth/<name>.tsv`: one line per (canonical vulnerability, package, version): `vulnerability`, `package`, `version`, `verdict`, `cause` (`-` when none) and `evidence` (the record that supports the verdict).
 - `benchmark.sh`: the runner. It reuses the login, upload, start and poll helpers of `.cloud/scripts/tests/fresh-install/lib.sh`.
@@ -42,7 +42,7 @@ Precision is correct / (correct + wrong). Recall is found / expected, where expe
 
 ## Ground truth
 
-The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against the 2026-11-16 knowledge dump. Its baseline: cc-frontend shows 52 instances, 8 wrong; cc-api shows 76 instances, 11 wrong. The evidence link is the GHSA advisory when one matched, a GitHub advisory search when the verdict rests on a GHSA record or withdrawal, NVD for NVD-only matches and CIRCL's vulnerability lookup for GCVE-only matches. The cause tags:
+The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against the 2026-11-16 knowledge dump. cc-umbrella is the umbrella at the commit that pins those same api and frontend commits. Its root `pnpm-lock.yaml` makes it one pnpm workspace with `api` and `frontend` members, resolved from that lockfile rather than the submodules' own. Its ground truth is the cc-frontend and cc-api verdicts for the package versions that lockfile also resolves. That leaves out the eight undici 8.10.2 lines (the root lockfile has undici 8.12.4). Instances in the 30 versions only the root lockfile has show as unjudged until they are adjudicated. Its baseline: cc-frontend shows 52 instances, 8 wrong; cc-api shows 76 instances, 11 wrong. The evidence link is the GHSA advisory when one matched, a GitHub advisory search when the verdict rests on a GHSA record or withdrawal, NVD for NVD-only matches and CIRCL's vulnerability lookup for GCVE-only matches. The cause tags:
 
 | Cause                      | Verdict | Meaning                                                                   |
 | -------------------------- | ------- | ------------------------------------------------------------------------- |

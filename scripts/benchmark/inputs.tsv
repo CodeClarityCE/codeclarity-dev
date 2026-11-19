@@ -1,3 +1,4 @@
-name	repo	commit	subdir
-cc-frontend	frontend	9f01be4392114ccbb4259782b0f6e3ea2a6817a0	.
-cc-api	api	f40a6f418ce92cefcd257fda048a6c236b2900ee	.
+name	repo	commit	subdir	workspaces
+cc-frontend	frontend	9f01be4392114ccbb4259782b0f6e3ea2a6817a0	.	.
+cc-api	api	f40a6f418ce92cefcd257fda048a6c236b2900ee	.	.
+cc-umbrella	.	9e8bfcdd0a8c3c11f3308cbf5514f784825c8037	.	api,frontend

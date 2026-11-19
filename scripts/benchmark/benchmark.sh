@@ -34,9 +34,19 @@ die() {
 	exit 1
 }
 
-# Prints the inputs file's rows (name, repo, commit, subdir), without header or comments.
+# Prints the inputs file's rows (name, repo, commit, subdir, workspaces), without header or comments.
 inputs() {
 	grep -v -e '^#' -e '^name	' -e '^$' "$dir/inputs.tsv"
+}
+
+# Prints the workspaces in list $1 (comma-separated, "." when empty), one per line.
+workspace_list() {
+	echo "${1:-.}" | tr ',' '\n' | grep -v '^$'
+}
+
+# Prints the file name prefix of workspace $1's list pages: none for ".", else the name and a dash.
+pages_prefix() {
+	[ "$1" = . ] || printf '%s-' "$1" | tr '/' '_'
 }
 
 # Prints the knowledge dump image the dev stack restores.
@@ -49,25 +59,57 @@ stack_dump() {
 		"$root/.cloud/docker/docker-compose.yaml" | head -n 1
 }
 
-# Writes input $1's archive (repo $2 at commit $3, subdir $4 as the archive root) to $5.
+# Writes input $1's archive (repo $2 at commit $3, subdir $4 as the archive root) to $5. A
+# workspace in list $6 that is a submodule there gets the top-level files of its checkout at the
+# pinned commit.
 archive_input() {
 	git -C "$root/$2" cat-file -e "$3^{commit}" 2>/dev/null ||
 		die "$1: commit $3 is not in $2; fetch it first (git -C $2 fetch origin $3)"
 	tree=$3
 	[ "$4" = . ] || tree="$3:$4"
-	git -C "$root/$2" archive --format=tar.gz -o "$5" "$tree"
+	subs=
+	for ws in $(workspace_list "$6"); do
+		[ "$ws" = . ] && continue
+		sub=$ws
+		[ "$4" = . ] || sub="$4/$ws"
+		line=$(git -C "$root/$2" ls-tree "$3" -- "$sub")
+		case "$line" in "160000 commit "*) ;; *) continue ;; esac
+		sha=$(echo "$line" | cut -f1 | cut -d' ' -f3)
+		git -C "$root/$2/$sub" cat-file -e "$sha^{commit}" 2>/dev/null ||
+			die "$1: submodule $sub commit $sha is not checked out; fetch it first (git -C $2/$sub fetch origin $sha)"
+		subs="$subs $ws:$sub:$sha"
+	done
+	if [ -z "$subs" ]; then
+		git -C "$root/$2" archive --format=tar.gz -o "$5" "$tree"
+		return
+	fi
+	staging=$(mktemp -d)
+	git -C "$root/$2" archive "$tree" | tar -x -C "$staging"
+	for entry in $subs; do
+		ws=${entry%%:*} rest=${entry#*:}
+		mkdir -p "$staging/$ws"
+		# Only its top-level files (manifests and lockfiles), so the upload stays under the API's limit.
+		files=$(git -C "$root/$2/${rest%%:*}" ls-tree "${rest#*:}" | awk -F '\t' '$1 ~ / blob / { print $2 }')
+		# shellcheck disable=SC2086 # one word per file name
+		git -C "$root/$2/${rest%%:*}" archive "${rest#*:}" $files | tar -x -C "$staging/$ws"
+	done
+	# shellcheck disable=SC2046 # the staged top-level names, which have no spaces
+	tar -czf "$5" -C "$staging" $(ls -A "$staging")
+	rm -rf "$staging"
 }
 
-# Saves every page of analysis $3's list (project $2, org $1) as $4/<page>.json.
+# Saves every page of analysis $3's list (project $2, org $1) for workspace $5 as
+# $4/<prefix><page>.json, the prefix naming the workspace (see pages_prefix).
 fetch_pages() {
 	mkdir -p "$4"
 	n=0
 	filters=
+	prefix=$(pages_prefix "$5")
 	[ -z "${ACTIVE_FILTERS:-}" ] || filters="&active_filters=$ACTIVE_FILTERS"
 	while :; do
-		get "/org/$1/projects/$2/analysis/$3/vulnerabilities?workspace=.&entries_per_page=100&page=$n$filters" >"$4/$n.json" ||
+		get "/org/$1/projects/$2/analysis/$3/vulnerabilities?workspace=$5&entries_per_page=100&page=$n$filters" >"$4/$prefix$n.json" ||
 			return 1
-		total=$(jq -er '.total_pages' "$4/$n.json") || return 1
+		total=$(jq -er '.total_pages' "$4/$prefix$n.json") || return 1
 		n=$((n + 1))
 		[ "$n" -lt "$total" ] || break
 	done
@@ -77,19 +119,23 @@ fetch_pages() {
 NONE_ROWS='.data[] | select(((.Severity.Severity // 0) == 0) and ((.Severity.SeverityClass // "NONE") | ascii_upcase | IN("LOW", "MEDIUM", "HIGH", "CRITICAL") | not))'
 
 # Saves the details of each instance the list in $4.pages shows as None (org $1, project $2,
-# analysis $3) as $4.none/<n>.json, indexed in $4.none/index.tsv; a failed read records null.
+# analysis $3, workspaces in list $5) as $4.none/<n>.json, indexed in $4.none/index.tsv; a
+# failed read records null.
 fetch_none_details() {
 	mkdir -p "$4.none"
 	: >"$4.none/index.tsv"
-	jq -r "$NONE_ROWS"' | .Vulnerability as $v | .Affected[] | [$v, .AffectedDependency, .AffectedVersion, ($v | @uri), (.AffectedDependency | @uri), (.AffectedVersion | @uri)] | @tsv' \
-		"$4.pages/"*.json | sort -u >"$4.none/rows.tsv"
 	n=0
-	while IFS="$tab" read -r id pkg ver uid upkg uver; do
-		get "/org/$1/projects/$2/analysis/$3/vulnerabilities/vulnerability/$uid?workspace=.&dependency=$upkg&version=$uver" \
-			>"$4.none/$n.json" 2>/dev/null || echo '{"data": null}' >"$4.none/$n.json"
-		printf '%s\t%s\t%s\t%s\n' "$n" "$id" "$pkg" "$ver" >>"$4.none/index.tsv"
-		n=$((n + 1))
-	done <"$4.none/rows.tsv"
+	for ws in $(workspace_list "$5"); do
+		prefix=$(pages_prefix "$ws")
+		jq -r "$NONE_ROWS"' | .Vulnerability as $v | .Affected[] | [$v, .AffectedDependency, .AffectedVersion, ($v | @uri), (.AffectedDependency | @uri), (.AffectedVersion | @uri)] | @tsv' \
+			"$4.pages/$prefix"[0-9]*.json | sort -u >"$4.none/rows.tsv"
+		while IFS="$tab" read -r id pkg ver uid upkg uver; do
+			get "/org/$1/projects/$2/analysis/$3/vulnerabilities/vulnerability/$uid?workspace=$ws&dependency=$upkg&version=$uver" \
+				>"$4.none/$n.json" 2>/dev/null || echo '{"data": null}' >"$4.none/$n.json"
+			printf '%s\t%s\t%s\t%s\n' "$n" "$id" "$pkg" "$ver" >>"$4.none/index.tsv"
+			n=$((n + 1))
+		done <"$4.none/rows.tsv"
+	done
 	rm -f "$4.none/rows.tsv"
 }
 
@@ -102,12 +148,13 @@ none_with_severity() {
 			"$2/$1.none/$n.json" >/dev/null 2>&1; then
 			printf 'N\t%s\t%s\t%s@%s\n' "$1" "$id" "$pkg" "$ver"
 		fi
-	done <"$2/$1.none/index.tsv"
+	done <"$2/$1.none/index.tsv" | sort -u
 }
 
-# Analyses input $1 (repo $2, commit $3, subdir $4) in org $5 and records it in $out.
+# Analyses input $1 (repo $2, commit $3, subdir $4, workspaces $6) in org $5 and records it in $out.
 run_input() {
-	archive_input "$1" "$2" "$3" "$4" "$out/$1.tar.gz"
+	workspaces=${6:-.}
+	archive_input "$1" "$2" "$3" "$4" "$out/$1.tar.gz" "$workspaces"
 	short=$(echo "$3" | cut -c1-12)
 	project=$(post "/org/$5/projects" '{"name":"benchmark-'"$1-$short"'","description":"Accuracy benchmark"}' |
 		jq -er '.id') || die "$1: could not create a project"
@@ -120,11 +167,14 @@ run_input() {
 		jq '.data | {status, stage, steps: [.steps[][] | {name: .Name, status: .Status}]}' "$WORK/analysis.json" >&2 2>/dev/null || :
 		die "$1: analysis $analysis ended ${status:-without a status}; see make logs SERVICE=plugin-vuln-finder"
 	fi
-	fetch_pages "$5" "$project" "$analysis" "$out/$1.pages" || die "$1: could not read the vulnerability list"
-	fetch_none_details "$5" "$project" "$analysis" "$out/$1"
+	for ws in $(workspace_list "$workspaces"); do
+		fetch_pages "$5" "$project" "$analysis" "$out/$1.pages" "$ws" ||
+			die "$1: could not read the vulnerability list of workspace $ws"
+	done
+	fetch_none_details "$5" "$project" "$analysis" "$out/$1" "$workspaces"
 	get "/org/$5/projects/$project/analysis/$analysis/vulnerabilities/knowledge-snapshot" >"$out/$1.knowledge.json" ||
 		echo '{"data": null}' >"$out/$1.knowledge.json"
-	printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$analysis" >>"$out/run.tsv"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$analysis" "$workspaces" >>"$out/run.tsv"
 }
 
 cmd_run() {
@@ -159,7 +209,7 @@ cmd_run() {
 
 	[ -n "$out" ] || out=$(mktemp -d "${TMPDIR:-/tmp}/codeclarity-benchmark.XXXXXX")
 	mkdir -p "$out"
-	printf 'name\trepo\tcommit\tsubdir\tanalysis\n' >"$out/run.tsv"
+	printf 'name\trepo\tcommit\tsubdir\tanalysis\tworkspaces\n' >"$out/run.tsv"
 	echo "$pin" >"$out/knowledge-dump.txt"
 
 	wait_for_login
@@ -168,11 +218,11 @@ cmd_run() {
 		die "no personal organization for $LOGIN_EMAIL"
 
 	inputs >"$out/inputs.tsv"
-	while IFS="$tab" read -r name repo commit subdir; do
+	while IFS="$tab" read -r name repo commit subdir workspaces; do
 		if [ -n "$names" ]; then
 			case " $names " in *" $name "*) ;; *) continue ;; esac
 		fi
-		run_input "$name" "$repo" "$commit" "$subdir" "$org" </dev/null
+		run_input "$name" "$repo" "$commit" "$subdir" "$org" "$workspaces" </dev/null
 	done <"$out/inputs.tsv"
 	rm -f "$out/inputs.tsv"
 	echo "benchmark: recorded in $out" >&2
@@ -243,10 +293,13 @@ cmd_report() {
 	echo "Accuracy benchmark"
 	echo "Knowledge dump: $(cat "$rec/knowledge-dump.txt" 2>/dev/null || echo unknown)"
 	tail -n +2 "$rec/run.tsv" >"$lines.inputs"
-	while IFS="$tab" read -r name repo commit subdir analysis; do
+	while IFS="$tab" read -r name repo commit subdir analysis workspaces; do
 		where=$repo
 		[ "$subdir" = . ] || where="$repo/$subdir"
-		echo "$name: $where at $commit, analysis $analysis"
+		case "${workspaces:-.}" in
+		.) echo "$name: $where at $commit, analysis $analysis" ;;
+		*) echo "$name: $where at $commit, workspaces $(echo "$workspaces" | sed 's/,/, /g'), analysis $analysis" ;;
+		esac
 		echo "  knowledge: $(jq -r '[.data.sources[]? | "\(.source) \(.watermark // "none")"] | if length == 0 then "not recorded" else join(", ") end' \
 			"$rec/$name.knowledge.json" 2>/dev/null || echo "not recorded")"
 		judge "$name" "$rec" >>"$lines" || exit 1
