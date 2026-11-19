@@ -60,9 +60,10 @@ The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against
 
 ## Fixtures
 
-| Fixture            | Case                                                                                                                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm-disputed-cve` | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade |
+| Fixture            | Case                                                                                                                                                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm-disputed-cve` | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade                                     |
+| `npm-cna-backport` | nanoid 3.3.18 and CVE-2026-67214. The CNA record lists affected 0 to 5.1.16 and 0 to 3.3.16, and 3.3.16 unaffected as the fix backported to the 3.x line. Judged wrong (`FP`, `gcve-unaffected-ignored`) like the measurement judged it in cc-api; #225 drops it |
 
 ## Refreshing the knowledge
 
