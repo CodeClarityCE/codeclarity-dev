@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Fails when a frontend copy of an API enum or allow-list misses values the API
-// defines. Reads source text only: neither app is imported or built.
+// defines, or a shared file's copy differs. Reads source text only: nothing is built.
 // Usage: node scripts/type-sync/check.mjs [checkout root, default: this repo]
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const KINDS = new Set(["enum", "list"]);
+const KINDS = new Set(["enum", "list", "file"]);
 
-/** Parses pairs.txt: one "kind api-file#symbol frontend-file#symbol" per line. */
+/** Parses pairs.txt: one "kind api-file#symbol frontend-file#symbol" per line; a file pair has no symbols. */
 export function parsePairs(text) {
   const pairs = [];
   text.split("\n").forEach((raw, index) => {
@@ -21,11 +21,12 @@ export function parsePairs(text) {
     }
     const [kind, api, frontend] = fields;
     if (!KINDS.has(kind))
-      throw new Error(`${where}: kind must be enum or list`);
+      throw new Error(`${where}: kind must be enum, list or file`);
+    const parse = kind === "file" ? (file) => ({ file, symbol: file }) : target;
     pairs.push({
       kind,
-      api: target(api, where),
-      frontend: target(frontend, where),
+      api: parse(api, where),
+      frontend: parse(frontend, where),
     });
   });
   return pairs;
@@ -107,6 +108,7 @@ function read(root, ref, kind) {
   } catch {
     return { error: `cannot read ${ref.file}` };
   }
+  if (kind === "file") return { value: source };
   const value =
     kind === "enum"
       ? readEnum(source, ref.symbol)
@@ -126,7 +128,12 @@ export function checkPairs(root, pairs) {
     for (const r of [a, f]) if (r.error) problems.push(`${label}: ${r.error}`);
     if (a.error || f.error) continue;
 
-    if (kind === "enum") {
+    if (kind === "file") {
+      // A shared file must be byte for byte the same in both places.
+      if (a.value !== f.value) {
+        problems.push(`${label}: ${frontend.file} differs from it`);
+      }
+    } else if (kind === "enum") {
       // Every API member must exist in the frontend with the same value; extras are fine.
       for (const [name, value] of a.value) {
         const fe = `${frontend.file}#${frontend.symbol}`;
@@ -172,7 +179,7 @@ if (
   if (problems.length > 0) {
     for (const problem of problems) console.error(`::error::${problem}`);
     console.error(
-      `${problems.length} problem(s). Add the API's values to the frontend copy, then bump the submodule pointers.`,
+      `${problems.length} problem(s). Bring the copy in line with the API's, then bump the submodule pointers.`,
     );
     process.exit(1);
   }
