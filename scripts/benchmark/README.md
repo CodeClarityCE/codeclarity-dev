@@ -22,6 +22,7 @@ Env: `API_URL` (default `http://localhost:3000`, the API without the `/api` pref
 ## Files
 
 - `inputs.tsv`: one input per line: `name`, `repo` (a git checkout relative to the umbrella root, such as `api`), `commit` and `subdir` (the folder that becomes the archive root, `.` for the whole tree). The commit must be in the local checkout; `git -C <repo> fetch origin <commit>` if it is not. Add an input by appending a line and its ground-truth file.
+- `fixtures/<name>/`: a synthetic fixture, a tiny project (manifest and lockfile, such as `package.json` and `package-lock.json`, or `composer.json` and `composer.lock`) for a case our own repositories lack. Its inputs line is `<name>`, `fixture`, `-` and `.` (or a folder inside the fixture). `run` archives the folder as it is in the checkout, so commit the folder, its inputs line and `ground-truth/<name>.tsv` together; the script needs no change.
 - `knowledge-dump.txt`: the knowledge dump image the benchmark is pinned to. `run` refuses a stack whose `knowledge-restore` image (`.cloud/docker/docker-compose.yaml`, or `KNOWLEDGE_DUMP_IMAGE`) differs.
 - `ground-truth/<name>.tsv`: one line per (canonical vulnerability, package, version): `vulnerability`, `package`, `version`, `verdict`, `cause` (`-` when none) and `evidence` (the record that supports the verdict).
 - `benchmark.sh`: the runner. It reuses the login, upload, start and poll helpers of `.cloud/scripts/tests/fresh-install/lib.sh`.
@@ -44,18 +45,25 @@ Precision is correct / (correct + wrong). Recall is found / expected, where expe
 
 The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against the 2026-11-16 knowledge dump. Its baseline: cc-frontend shows 52 instances, 8 wrong; cc-api shows 76 instances, 11 wrong. The evidence link is the GHSA advisory when one matched, a GitHub advisory search when the verdict rests on a GHSA record or withdrawal, NVD for NVD-only matches and CIRCL's vulnerability lookup for GCVE-only matches. The cause tags:
 
-| Cause                      | Verdict | Meaning                                                                   |
-| -------------------------- | ------- | ------------------------------------------------------------------------- |
-| `gcve-name-collision`      | FP      | the GCVE record is for another product with the same name                 |
-| `gcve-unaffected-ignored`  | FP      | the CNA record lists the version as unaffected, and matching ignored it   |
-| `no-veto-coarse-range`     | FP      | a coarse CNA range covers a version GHSA lists as fixed                   |
-| `nvd-vendor-skipped`       | FP      | the NVD CPE names another vendor, such as a scoped package                |
-| `disputed-cve`             | FP      | the vendor disputes the CVE                                               |
-| `withdrawn-not-propagated` | FP      | GHSA withdrew the advisory, the CNA record is still published             |
-| `unreviewed-ghsa`          | TP      | true, though only the CNA record matched: its GHSA advisory is unreviewed |
-| `no-ghsa`                  | TP      | true, though only the CNA record matched: there is no GHSA advisory       |
-| `published-after-snapshot` | LAG     | published after the pinned dump                                           |
-| `withdrawn-after-snapshot` | LAG     | withdrawn after the pinned dump                                           |
+| Cause                      | Verdict | Meaning                                                                              |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `gcve-name-collision`      | FP      | the GCVE record is for another product with the same name                            |
+| `gcve-unaffected-ignored`  | FP      | the CNA record lists the version as unaffected, and matching ignored it              |
+| `no-veto-coarse-range`     | FP      | a coarse CNA range covers a version GHSA lists as fixed                              |
+| `nvd-vendor-skipped`       | FP      | the NVD CPE names another vendor, such as a scoped package                           |
+| `disputed-cve`             | FP      | the vendor disputes the CVE                                                          |
+| `vendor-disputed`          | TP      | the vendor disputes the CVE; shown badged "Disputed", the grade leaves it out (#214) |
+| `withdrawn-not-propagated` | FP      | GHSA withdrew the advisory, the CNA record is still published                        |
+| `unreviewed-ghsa`          | TP      | true, though only the CNA record matched: its GHSA advisory is unreviewed            |
+| `no-ghsa`                  | TP      | true, though only the CNA record matched: there is no GHSA advisory                  |
+| `published-after-snapshot` | LAG     | published after the pinned dump                                                      |
+| `withdrawn-after-snapshot` | LAG     | withdrawn after the pinned dump                                                      |
+
+## Fixtures
+
+| Fixture            | Case                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm-disputed-cve` | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Expected (`TP`), shown with the "Disputed" badge, and the grade leaves it out (#214) |
 
 ## Refreshing the knowledge
 
