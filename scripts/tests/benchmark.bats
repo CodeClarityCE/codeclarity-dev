@@ -337,7 +337,7 @@ fixture_input() {
 	fixture_input
 	fake_api
 	ground_truth fx <<'EOF'
-CVE-1	a	1.0.0	TP	vendor-disputed	https://nvd.nist.gov/vuln/detail/CVE-1
+CVE-1	a	1.0.0	TP	-	https://nvd.nist.gov/vuln/detail/CVE-1
 EOF
 	page 0 1 "$(row CVE-1 a@1.0.0)" >"$BATS_TEST_TMPDIR/pages/0.json"
 	run sh "$BENCHMARK" run --input fx --out "$REC"
