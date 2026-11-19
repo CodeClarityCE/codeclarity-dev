@@ -145,7 +145,7 @@ One knowledge source's claim that a canonical vulnerability affects a dependency
 _Avoid_: Conflict, pair
 
 **Source verdict**:
-What one knowledge source said about one vulnerability instance when it was checked: it matched, its record excludes the version, its record is retired, its record names another product, it has no package data, it has no record, or it was stale or failed.
+What one knowledge source said about one vulnerability instance when it was checked: it matched, its record excludes the version, its record is retired, its record names another product, it has no package data (its record names no package, or no version range or version that can be read), it has no record, or it was stale or failed.
 _Avoid_: Reason, source comparison
 
 **Contradicted source match**:
