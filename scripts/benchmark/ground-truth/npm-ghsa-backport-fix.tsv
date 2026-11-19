@@ -1,0 +1,6 @@
+vulnerability	package	version	verdict	cause	evidence
+CVE-2026-102276	brace-expansion	1.1.18	TP	-	https://github.com/advisories/GHSA-6j4f-fj2g-mc7p
+CVE-2026-102277	brace-expansion	1.1.18	TP	-	https://github.com/advisories/GHSA-q2hr-2g5m-vwhr
+CVE-2026-102278	brace-expansion	1.1.18	TP	-	https://github.com/advisories/GHSA-qhr7-859c-m2p7
+CVE-2026-13149	brace-expansion	1.1.18	FP	no-veto-coarse-range	https://github.com/advisories?query=CVE-2026-13149
+CVE-2026-14257	brace-expansion	1.1.18	FP	no-veto-coarse-range	https://github.com/advisories?query=CVE-2026-14257

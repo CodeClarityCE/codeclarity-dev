@@ -30,3 +30,6 @@ private
 # Progress of scripts/release-all.sh (resume state)
 scripts/.release-state
 .cloud/env/.env.secrets
+# Benchmark fixtures commit their lockfiles.
+!scripts/benchmark/fixtures/**/package-lock.json
+!scripts/benchmark/fixtures/**/yarn.lock

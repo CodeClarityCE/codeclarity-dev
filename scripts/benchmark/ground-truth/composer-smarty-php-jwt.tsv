@@ -1,0 +1,6 @@
+vulnerability	package	version	verdict	cause	evidence
+CVE-2023-28447	smarty/smarty	4.3.0	TP	-	https://github.com/advisories/GHSA-7j98-h7fp-4vwj
+CVE-2024-35226	smarty/smarty	4.3.0	TP	-	https://github.com/advisories/GHSA-4rmg-292m-wg3w
+CVE-2026-62992	smarty/smarty	4.3.0	TP	-	https://github.com/advisories/GHSA-f6wf-28g6-769x
+CVE-2026-62993	smarty/smarty	4.3.0	TP	-	https://github.com/advisories/GHSA-cq55-c7wv-pxmq
+CVE-2025-45769	firebase/php-jwt	6.11.0	FP	disputed-cve	https://nvd.nist.gov/vuln/detail/CVE-2025-45769
