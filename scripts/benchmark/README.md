@@ -22,6 +22,7 @@ Env: `API_URL` (default `http://localhost:3000`, the API without the `/api` pref
 ## Files
 
 - `inputs.tsv`: one input per line: `name`, `repo` (a git checkout relative to the umbrella root, such as `api`), `commit` and `subdir` (the folder that becomes the archive root, `.` for the whole tree). The commit must be in the local checkout; `git -C <repo> fetch origin <commit>` if it is not. Add an input by appending a line and its ground-truth file.
+- `fixtures/<name>/`: a synthetic fixture, a tiny project (manifest and lockfile, such as `package.json` and `package-lock.json`, or `composer.json` and `composer.lock`) for a case our own repositories lack. Its inputs line is `<name>`, `fixture`, `-` and `.` (or a folder inside the fixture). `run` archives the folder as it is in the checkout, so commit the folder, its inputs line and `ground-truth/<name>.tsv` together; the script needs no change.
 - `knowledge-dump.txt`: the knowledge dump image the benchmark is pinned to. `run` refuses a stack whose `knowledge-restore` image (`.cloud/docker/docker-compose.yaml`, or `KNOWLEDGE_DUMP_IMAGE`) differs.
 - `ground-truth/<name>.tsv`: one line per (canonical vulnerability, package, version): `vulnerability`, `package`, `version`, `verdict`, `cause` (`-` when none) and `evidence` (the record that supports the verdict).
 - `benchmark.sh`: the runner. It reuses the login, upload, start and poll helpers of `.cloud/scripts/tests/fresh-install/lib.sh`.
@@ -56,6 +57,12 @@ The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against
 | `no-ghsa`                  | TP      | true, though only the CNA record matched: there is no GHSA advisory       |
 | `published-after-snapshot` | LAG     | published after the pinned dump                                           |
 | `withdrawn-after-snapshot` | LAG     | withdrawn after the pinned dump                                           |
+
+## Fixtures
+
+| Fixture            | Case                                                                                                                                                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm-disputed-cve` | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade |
 
 ## Refreshing the knowledge
 
