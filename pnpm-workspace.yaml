@@ -42,6 +42,11 @@ allowBuilds:
 # container build; keep both in sync with the fastify pin in api/package.json.
 overrides:
   fastify: 5.12.8
+  # Patched versions forced where the parent has no fixed release. Mirrored in
+  # api/.cloud/docker/pnpm-workspace.yaml and frontend/.cloud/docker/pnpm-workspace.yaml.
+  "glob@>=9.0.0 <14.0.2": ^14.0.2
+  "minimatch@>=7.0.0 <11.0.1": ^11.0.1
+  "qs@<6.16.1": ^6.16.1
 
 auditConfig:
   ignoreCves: []
