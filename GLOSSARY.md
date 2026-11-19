@@ -144,6 +144,22 @@ _Avoid_: CVE (when the identity may have none), vuln ID
 One knowledge source's claim that a canonical vulnerability affects a dependency version, kept whether or not that source is chosen for display.
 _Avoid_: Conflict, pair
 
+**Source verdict**:
+What one knowledge source said about one vulnerability instance when it was checked: it matched, its record excludes the version, its record is retired, its record names another product, it has no package data, it has no record, or it was stale or failed.
+_Avoid_: Reason, source comparison
+
+**Contradicted source match**:
+A source match that a source verdict from a different source origin denies, because that source's record for the same canonical vulnerability excludes the installed version or names a different package.
+_Avoid_: Veto, false positive (that is a judgement against ground truth)
+
+**Uncorroborated vulnerability instance**:
+A vulnerability instance matched by sources of one source origin only, while no source of another origin holds package data for it.
+_Avoid_: Match uncertain, possibly incorrect
+
+**Accuracy benchmark**:
+A fixed set of projects pinned to commits and to one knowledge dump, with an adjudicated verdict for every (canonical vulnerability, package, version), used to measure precision and recall.
+_Avoid_: Ground truth (that is its verdicts), test suite
+
 **Winning source**:
 The knowledge source whose data is displayed for a vulnerability instance when several source matches exist.
 _Avoid_: Primary source, truth
