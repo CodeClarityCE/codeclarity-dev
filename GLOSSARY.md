@@ -153,7 +153,7 @@ A source match that a source verdict from a different source origin denies, beca
 _Avoid_: Veto, false positive (that is a judgement against ground truth)
 
 **Uncorroborated vulnerability instance**:
-A vulnerability instance matched by sources of one source origin only, while no source of another origin holds package data for it.
+A vulnerability instance matched by sources of one source origin only, while no source of another origin holds package data for it. A source holds package data when its verdict is matched, version excluded, retired or names another product; no package data, no record and stale or failed say nothing about the package. Analyses without source verdicts are never labelled uncorroborated.
 _Avoid_: Match uncertain, possibly incorrect
 
 **Accuracy benchmark**:
