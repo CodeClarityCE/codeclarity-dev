@@ -149,7 +149,7 @@ What one knowledge source said about one vulnerability instance when it was chec
 _Avoid_: Reason, source comparison
 
 **Contradicted source match**:
-A source match that a source verdict from a different source origin denies, because that source's record for the same canonical vulnerability excludes the installed version or names a different package.
+A source match that a source verdict from a different source origin denies, because that source's record for the same canonical vulnerability excludes the installed version, is retired for that package, or names a different package in the same ecosystem. A name counts in an ecosystem when its record says so: an OSV package's ecosystem, or the ecosystem an NVD CPE's target software implies (node.js is npm, php is Packagist); a GCVE name gives none, so it never contradicts.
 _Avoid_: Veto, false positive (that is a judgement against ground truth)
 
 **Uncorroborated vulnerability instance**:
