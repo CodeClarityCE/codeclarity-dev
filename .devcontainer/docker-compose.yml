@@ -22,6 +22,12 @@ services:
       - no-new-privileges:true
     volumes:
       - ..:/workspaces/codeclarity-dev:cached
+      # node_modules and the pnpm store live in container volumes, installed by postCreateCommand,
+      # so a host install never mixes its native bindings in.
+      - node-modules:/workspaces/codeclarity-dev/node_modules
+      - api-node-modules:/workspaces/codeclarity-dev/api/node_modules
+      - frontend-node-modules:/workspaces/codeclarity-dev/frontend/node_modules
+      - pnpm-store:/home/vscode/.local/share/pnpm
       - ${HOME}/.claude:/home/vscode/.claude:cached
       - ${HOME}/.claude.json:/home/vscode/.claude.json:cached
       - broker-socket:/run/codeclarity-broker
@@ -92,6 +98,10 @@ services:
       - ../frontend/.cloud/docker/conf/certs:/workspaces/codeclarity-dev/frontend/.cloud/docker/conf/certs
 
 volumes:
+  node-modules:
+  api-node-modules:
+  frontend-node-modules:
+  pnpm-store:
   broker-socket:
   dockerd-socket:
   dockerd-data:
