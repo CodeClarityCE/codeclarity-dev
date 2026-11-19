@@ -1,0 +1,11 @@
+{
+  "name": "codeclarity/benchmark-composer-smarty-php-jwt",
+  "description": "Accuracy benchmark fixture: Composer packages with GHSA advisories",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.1",
+    "firebase/php-jwt": "6.11.0",
+    "smarty/smarty": "4.3.0"
+  }
+}

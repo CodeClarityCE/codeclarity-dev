@@ -60,10 +60,8 @@ stack_dump() {
 		"$root/.cloud/docker/docker-compose.yaml" | head -n 1
 }
 
-# Writes input $1's archive (repo $2 at commit $3, subdir $4 as the archive root) to $5. A
-# workspace in list $6 that is a submodule there gets the top-level files of its checkout at the
-# pinned commit.
-# Repo "fixture" archives the committed folder fixtures/$1 as it is in the working tree.
+# Writes input $1's archive (repo $2 at commit $3, subdir $4) to $5; a submodule workspace in $6
+# gets its top-level files, and repo "fixture" archives fixtures/$1 from the working tree.
 archive_input() {
 	if [ "$2" = fixture ]; then
 		src="$dir/fixtures/$1"
@@ -127,9 +125,8 @@ fetch_pages() {
 # The jq filter that keeps list rows with severity None: no score and no known class.
 NONE_ROWS='.data[] | select(((.Severity.Severity // 0) == 0) and ((.Severity.SeverityClass // "NONE") | ascii_upcase | IN("LOW", "MEDIUM", "HIGH", "CRITICAL") | not))'
 
-# Saves the details of each instance the list in $4.pages shows as None (org $1, project $2,
-# analysis $3, workspaces in list $5) as $4.none/<n>.json, indexed in $4.none/index.tsv; a
-# failed read records null.
+# Saves the details of each instance shown as None in $4.pages (org $1, project $2, analysis $3,
+# workspaces $5) as $4.none/<n>.json, indexed in $4.none/index.tsv; a failed read records null.
 fetch_none_details() {
 	mkdir -p "$4.none"
 	: >"$4.none/index.tsv"
