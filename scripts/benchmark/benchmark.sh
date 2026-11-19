@@ -35,6 +35,7 @@ die() {
 }
 
 # Prints the inputs file's rows (name, repo, commit, subdir, workspaces), without header or comments.
+# A fixture row has repo "fixture" and commit "-".
 inputs() {
 	grep -v -e '^#' -e '^name	' -e '^$' "$dir/inputs.tsv"
 }
@@ -62,7 +63,15 @@ stack_dump() {
 # Writes input $1's archive (repo $2 at commit $3, subdir $4 as the archive root) to $5. A
 # workspace in list $6 that is a submodule there gets the top-level files of its checkout at the
 # pinned commit.
+# Repo "fixture" archives the committed folder fixtures/$1 as it is in the working tree.
 archive_input() {
+	if [ "$2" = fixture ]; then
+		src="$dir/fixtures/$1"
+		[ "$4" = . ] || src="$src/$4"
+		[ -d "$src" ] || die "$1: no fixture folder at $src"
+		(cd "$src" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tar -czf "$5" -T -)
+		return
+	fi
 	git -C "$root/$2" cat-file -e "$3^{commit}" 2>/dev/null ||
 		die "$1: commit $3 is not in $2; fetch it first (git -C $2 fetch origin $3)"
 	tree=$3
@@ -156,6 +165,7 @@ run_input() {
 	workspaces=${6:-.}
 	archive_input "$1" "$2" "$3" "$4" "$out/$1.tar.gz" "$workspaces"
 	short=$(echo "$3" | cut -c1-12)
+	[ "$2" != fixture ] || short=fixture
 	project=$(post "/org/$5/projects" '{"name":"benchmark-'"$1-$short"'","description":"Accuracy benchmark"}' |
 		jq -er '.id') || die "$1: could not create a project"
 	upload_archive "$5" "$project" "$out/$1.tar.gz" || die "$1: could not upload the archive"
@@ -294,12 +304,18 @@ cmd_report() {
 	echo "Knowledge dump: $(cat "$rec/knowledge-dump.txt" 2>/dev/null || echo unknown)"
 	tail -n +2 "$rec/run.tsv" >"$lines.inputs"
 	while IFS="$tab" read -r name repo commit subdir analysis workspaces; do
-		where=$repo
-		[ "$subdir" = . ] || where="$repo/$subdir"
-		case "${workspaces:-.}" in
-		.) echo "$name: $where at $commit, analysis $analysis" ;;
-		*) echo "$name: $where at $commit, workspaces $(echo "$workspaces" | sed 's/,/, /g'), analysis $analysis" ;;
-		esac
+		if [ "$repo" = fixture ]; then
+			where="fixture fixtures/$name"
+			[ "$subdir" = . ] || where="$where/$subdir"
+			echo "$name: $where, analysis $analysis"
+		else
+			where=$repo
+			[ "$subdir" = . ] || where="$repo/$subdir"
+			case "${workspaces:-.}" in
+			.) echo "$name: $where at $commit, analysis $analysis" ;;
+			*) echo "$name: $where at $commit, workspaces $(echo "$workspaces" | sed 's/,/, /g'), analysis $analysis" ;;
+			esac
+		fi
 		echo "  knowledge: $(jq -r '[.data.sources[]? | "\(.source) \(.watermark // "none")"] | if length == 0 then "not recorded" else join(", ") end' \
 			"$rec/$name.knowledge.json" 2>/dev/null || echo "not recorded")"
 		judge "$name" "$rec" >>"$lines" || exit 1

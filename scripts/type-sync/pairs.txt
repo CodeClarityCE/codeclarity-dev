@@ -25,3 +25,6 @@ enum api/src/base_modules/analyses/analysis.entity.ts#AnalysisStatus frontend/sr
 
 # Vulnerability severity
 enum api/src/codeclarity_modules/results/vulnerabilities/vulnerabilities.types.ts#SeverityType frontend/src/codeclarity_components/results/vulnerabilities/VulnStats.ts#SeverityType
+
+# Source verdicts
+enum api/src/codeclarity_modules/results/source-comparison/source-match.types.ts#SourceVerdictValue frontend/src/codeclarity_components/results/vulnerabilities/VulnDetails/VulnDetails.types.ts#SourceVerdictValue

@@ -22,6 +22,7 @@ Env: `API_URL` (default `http://localhost:3000`, the API without the `/api` pref
 ## Files
 
 - `inputs.tsv`: one input per line: `name`, `repo` (a git checkout relative to the umbrella root, such as `api`, or `.` for the umbrella), `commit`, `subdir` (the folder that becomes the archive root, `.` for the whole tree) and `workspaces` (the workspaces whose lists are read, comma-separated, `.` for the root). The commit must be in the local checkout; `git -C <repo> fetch origin <commit>` if it is not. A listed workspace that is a submodule at that commit gets the top-level files (manifests and lockfiles) of the submodule's checkout at its pinned commit, which keeps the upload under the API's 25 MB limit. Add an input by appending a line and its ground-truth file.
+- `fixtures/<name>/`: a synthetic fixture, a tiny project (manifest and lockfile, such as `package.json` and `package-lock.json`, or `composer.json` and `composer.lock`) for a case our own repositories lack. Its inputs line is `<name>`, `fixture`, `-`, `.` (or a folder inside the fixture) and `.`. `run` archives the folder as it is in the checkout, so commit the folder, its inputs line and `ground-truth/<name>.tsv` together; the script needs no change.
 - `knowledge-dump.txt`: the knowledge dump image the benchmark is pinned to. `run` refuses a stack whose `knowledge-restore` image (`.cloud/docker/docker-compose.yaml`, or `KNOWLEDGE_DUMP_IMAGE`) differs.
 - `ground-truth/<name>.tsv`: one line per (canonical vulnerability, package, version): `vulnerability`, `package`, `version`, `verdict`, `cause` (`-` when none) and `evidence` (the record that supports the verdict).
 - `benchmark.sh`: the runner. It reuses the login, upload, start and poll helpers of `.cloud/scripts/tests/fresh-install/lib.sh`.
@@ -56,6 +57,15 @@ The cc-frontend and cc-api verdicts come from the 2026-11-18 measurement against
 | `no-ghsa`                  | TP      | true, though only the CNA record matched: there is no GHSA advisory       |
 | `published-after-snapshot` | LAG     | published after the pinned dump                                           |
 | `withdrawn-after-snapshot` | LAG     | withdrawn after the pinned dump                                           |
+
+## Fixtures
+
+| Fixture                   | Case                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm-disputed-cve`        | ejs 3.1.10 and CVE-2023-29827, which NVD scores 9.8 and the vendor disputes. Judged wrong (`FP`, `disputed-cve`) like the measurement judged ejs 5.0.2; #214 still shows it badged "Disputed" and leaves it out of the grade                                                                                                             |
+| `npm-cna-backport`        | nanoid 3.3.18 and CVE-2026-67214. The CNA record lists affected 0 to 5.1.16 and 0 to 3.3.16, and 3.3.16 unaffected as the fix backported to the 3.x line. Judged wrong (`FP`, `gcve-unaffected-ignored`) like the measurement judged it in cc-api; #225 drops it                                                                         |
+| `npm-gcve-name-collision` | sirv 3.0.2 and negotiator 0.6.3, which share their names with GCVE records for other products (`FP`, `gcve-name-collision`), and uri-js 4.4.1, whose CNA-only GCVE records are real (`TP`, `unreviewed-ghsa`). #224 drops the first and keeps the second                                                                                 |
+| `npm-nvd-vendor-clash`    | passport 0.7.0 and @fastify/passport 2.2.0, with CVE-2023-29019 and CVE-2023-29020, whose NVD CPEs name the `fastify` vendor's `passport`. Judged wrong (`FP`, `nvd-vendor-skipped`) on passport like the measurement judged it in cc-api, and right (`TP`) on @fastify/passport; #226 drops the passport ones and keeps the scoped ones |
 
 ## Refreshing the knowledge
 
