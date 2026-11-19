@@ -56,6 +56,8 @@ stack_dump() {
 		echo "$KNOWLEDGE_DUMP_IMAGE"
 		return
 	fi
+	# The pattern matches a literal ${...} in the compose file.
+	# shellcheck disable=SC2016
 	sed -n 's/.*\${KNOWLEDGE_DUMP_IMAGE:-\(codeclarityce\/knowledge-dump:[^}]*\)}.*/\1/p' \
 		"$root/.cloud/docker/docker-compose.yaml" | head -n 1
 }
@@ -185,7 +187,7 @@ run_input() {
 }
 
 cmd_run() {
-	out= names=
+	out='' names=''
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--input)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test stand-in for curl. Logs each call to CURL_STUB_LOG as "<method> <url>", then hands the
 # method, URL and request body (-d) to the curl_stub function in CURL_STUB_RULES, or fails as unexpected.
-method=GET url= data=
+method=GET url='' data=''
 while (($#)); do
 	case "$1" in
 	-X)
