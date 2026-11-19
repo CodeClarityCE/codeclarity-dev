@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Test stand-in for curl. Logs each call to CURL_STUB_LOG as "<method> <url>", then hands the
+# method, URL and request body (-d) to the curl_stub function in CURL_STUB_RULES, or fails as unexpected.
+method=GET url= data=
+while (($#)); do
+	case "$1" in
+	-X)
+		method=$2
+		shift
+		;;
+	-d)
+		data=$2
+		shift
+		;;
+	-H | --form-string | -F | --cacert) shift ;;
+	http://* | https://*) url=$1 ;;
+	esac
+	shift
+done
+echo "$method $url" >>"${CURL_STUB_LOG:-/dev/null}"
+
+if [[ -n "${CURL_STUB_RULES:-}" && -f "$CURL_STUB_RULES" ]]; then
+	# shellcheck source=/dev/null
+	source "$CURL_STUB_RULES"
+fi
+if declare -F curl_stub >/dev/null; then
+	curl_stub "$method" "$url" "$data"
+	exit
+fi
+echo "curl stub: unexpected call: $method $url" >&2
+exit 1
