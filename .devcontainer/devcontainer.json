@@ -25,7 +25,7 @@
       "version": "2.103.3"
     }
   },
-  "postCreateCommand": "sh .devcontainer/drop-missing-credential-helpers.sh && npm install -g corepack@latest --force && corepack enable && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && make hooks",
+  "postCreateCommand": "sh .devcontainer/drop-missing-credential-helpers.sh && npm install -g corepack@latest --force && corepack enable && npm install -g @anthropic-ai/claude-code && git submodule update --init --recursive && make hooks && pnpm install --frozen-lockfile",
   "customizations": {
     "vscode": {
       "extensions": [

@@ -29,3 +29,11 @@ RUN set -eu; \
     tar -xzf "/tmp/$tarball" -C /usr/local/bin gitleaks; \
     rm "/tmp/$tarball"; \
     gitleaks version
+
+# Mount points for the container-only node_modules and pnpm store volumes (docker-compose.yml),
+# owned by vscode so each new volume starts writable for that user.
+RUN install -d -o vscode -g vscode \
+      /home/vscode/.local /home/vscode/.local/share /home/vscode/.local/share/pnpm \
+      /workspaces/codeclarity-dev/node_modules \
+      /workspaces/codeclarity-dev/api/node_modules \
+      /workspaces/codeclarity-dev/frontend/node_modules
