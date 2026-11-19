@@ -1,0 +1,5 @@
+vulnerability	package	version	verdict	cause	evidence
+CVE-2023-29019	passport	0.7.0	FP	nvd-vendor-skipped	https://nvd.nist.gov/vuln/detail/CVE-2023-29019
+CVE-2023-29020	passport	0.7.0	FP	nvd-vendor-skipped	https://nvd.nist.gov/vuln/detail/CVE-2023-29020
+CVE-2023-29019	@fastify/passport	2.2.0	TP	-	https://github.com/advisories/GHSA-4m3m-ppvx-xgw9
+CVE-2023-29020	@fastify/passport	2.2.0	TP	-	https://github.com/advisories/GHSA-2ccf-ffrj-m4qw

@@ -4,3 +4,4 @@ cc-api	api	f40a6f418ce92cefcd257fda048a6c236b2900ee	.
 npm-disputed-cve	fixture	-	.
 npm-cna-backport	fixture	-	.
 npm-gcve-name-collision	fixture	-	.
+npm-nvd-vendor-clash	fixture	-	.
