@@ -125,3 +125,11 @@ dismiss() {
 	[ "$status" -ne 0 ]
 	[ ! -s "$GH_STUB_LOG" ]
 }
+
+@test "--help prints usage and makes no gh call" {
+	run dismiss --help
+	[ "$status" -eq 0 ]
+	grep -q -- "--dry-run" <<<"$output"
+	grep -q "FIXTURE_ALERTS_ORG" <<<"$output"
+	[ ! -s "$GH_STUB_LOG" ]
+}

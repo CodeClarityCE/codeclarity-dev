@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
-# Dismisses open Dependabot alerts whose manifest lives in a test or benchmark fixture folder,
-# across the CodeClarityCE repos that have such folders. Other alerts are never touched.
-#
-# Usage:
-#   scripts/dismiss-fixture-alerts.sh --dry-run   # list what it would dismiss, change nothing
-#   scripts/dismiss-fixture-alerts.sh             # dismiss them
-#
-# Each dismissal uses the reason "tolerable risk" and the comment below. Only open alerts are
-# read, so a re-run dismisses nothing new. Prints one count per repo.
-#
-# Env: FIXTURE_ALERTS_ORG (default CodeClarityCE).
+# Dismisses open Dependabot alerts whose manifest lives in a test or benchmark fixture folder.
+# Run with --help for usage.
 
 set -euo pipefail
 
@@ -27,6 +18,23 @@ codeclarity-dev .cloud/scripts/measure/baseline-project/
 codeclarity-dev scripts/benchmark/fixtures/
 .github fixtures/
 "
+
+usage() {
+	cat <<'EOF'
+Dismisses open Dependabot alerts whose manifest lives in a test or benchmark fixture folder,
+across the CodeClarityCE repos that have such folders. Other alerts are never touched.
+
+Usage:
+  scripts/dismiss-fixture-alerts.sh --dry-run   # list what it would dismiss, change nothing
+  scripts/dismiss-fixture-alerts.sh             # dismiss them
+
+Each dismissal uses the reason "tolerable risk" and the comment "test fixture: deliberately
+vulnerable input". Only open alerts are read, so a re-run dismisses nothing new. Prints one
+count per repo.
+
+Env: FIXTURE_ALERTS_ORG (default CodeClarityCE).
+EOF
+}
 
 die() {
 	printf 'error: %s\n' "$*" >&2
@@ -60,7 +68,7 @@ main() {
 	"") ;;
 	--dry-run) dry_run=1 ;;
 	-h | --help)
-		sed -n '2,13p' "$0"
+		usage
 		return 0
 		;;
 	*) die "unknown argument: $1 (see --help)" ;;
