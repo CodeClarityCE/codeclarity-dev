@@ -122,7 +122,7 @@ thresholds() {
 
 	if [ "${STATUS:-}" != completed ]; then
 		echo "FAIL: the analysis did not finish (status ${STATUS:-unknown})"
-	elif [ -f "$tdir/analysis.json" ] && ! jq -e '[.data.steps[][] | .Status // .status] | length > 0 and all(. == "success" or . == "skipped")' "$tdir/analysis.json" >/dev/null 2>&1; then
+	elif [ -f "$tdir/analysis.json" ] && ! jq -e '[.data.steps[][] | .Status] | length > 0 and all(. == "success" or . == "skipped")' "$tdir/analysis.json" >/dev/null 2>&1; then
 		echo "FAIL: the analysis did not finish (status completed, a step did not succeed)"
 	else
 		echo "ok: the analysis finished"
@@ -132,11 +132,12 @@ thresholds() {
 # Prints the markdown summary of the samples in $1 and writes it to $1/summary.md.
 # shellcheck disable=SC2153 # STATUS and STARTED come from the sourced timing.env
 summarize() {
-	dir=$1
-	[ -f "$dir/timing.env" ] || { echo "summarize: no $dir/timing.env" >&2; return 1; }
+	# Not dir: sh has no local, and run's compose reads dir after this.
+	sdir=$1
+	[ -f "$sdir/timing.env" ] || { echo "summarize: no $sdir/timing.env" >&2; return 1; }
 	# shellcheck disable=SC1091 # written by run
-	. "$dir/timing.env"
-	md="$dir/summary.md"
+	. "$sdir/timing.env"
+	md="$sdir/summary.md"
 	{
 		echo "## Reference-machine baseline (arm64)"
 		echo
@@ -150,16 +151,16 @@ summarize() {
 		echo
 		echo "| Container | Peak MiB |"
 		echo "|---|---|"
-		mt=$(memory_table "$dir/mem.csv" "$(peaks_file "$dir")")
+		mt=$(memory_table "$sdir/mem.csv" "$(peaks_file "$sdir")")
 		echo "$mt" | awk -F'\t' '$1 == "TOTAL" || $1 == "SUM" { next } { print "| " $1 " | " $2 " |" }'
 		echo "| **Total (peak of the sum)** | **$(echo "$mt" | awk -F'\t' '$1 == "TOTAL" { print $2 }')** |"
 		echo "| **Total (sum of each container's peak)** | **$(echo "$mt" | awk -F'\t' '$1 == "SUM" { print $2 }')** |"
 		echo
 		echo "### OOM kills and restarts"
 		echo
-		killed=$(awk -F, '$1 != "epoch" && $3 == "true" { k[$2] = 1 } END { for (c in k) print c }' "$dir/oom.csv" | sort | paste -sd, - | sed 's/,/, /g')
-		echo "OOM-killed containers: $(awk -F, '$1 != "epoch" && $3 == "true" { k[$2] = 1 } END { print length(k) + 0 }' "$dir/oom.csv")${killed:+ ($killed)}"
-		restarts=$(awk -F, '$1 != "epoch" { if ($4 + 0 > r[$2]) r[$2] = $4 + 0 } END { for (c in r) if (r[c] > 0) printf "%s %d\n", c, r[c] }' "$dir/oom.csv" | sort)
+		killed=$(awk -F, '$1 != "epoch" && $3 == "true" { k[$2] = 1 } END { for (c in k) print c }' "$sdir/oom.csv" | sort | paste -sd, - | sed 's/,/, /g')
+		echo "OOM-killed containers: $(awk -F, '$1 != "epoch" && $3 == "true" { k[$2] = 1 } END { print length(k) + 0 }' "$sdir/oom.csv")${killed:+ ($killed)}"
+		restarts=$(awk -F, '$1 != "epoch" { if ($4 + 0 > r[$2]) r[$2] = $4 + 0 } END { for (c in r) if (r[c] > 0) printf "%s %d\n", c, r[c] }' "$sdir/oom.csv" | sort)
 		if [ -n "$restarts" ]; then
 			echo "Restarts: $(echo "$restarts" | awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $1, $2 }')"
 		else
@@ -172,9 +173,9 @@ summarize() {
 		echo "|---|---|---|---|"
 		for kind in UI API; do
 			lower=$(echo "$kind" | tr '[:upper:]' '[:lower:]')
-			seconds=$(latencies "$dir/latency.csv" "$lower")
-			count=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k' "$dir/latency.csv" | wc -l | tr -d ' ')
-			bad=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k && $4 !~ /^2/ { n++ } END { print n + 0 }' "$dir/latency.csv")
+			seconds=$(latencies "$sdir/latency.csv" "$lower")
+			count=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k' "$sdir/latency.csv" | wc -l | tr -d ' ')
+			bad=$(awk -F, -v k="$lower" '$1 != "epoch" && $2 == k && $4 !~ /^2/ { n++ } END { print n + 0 }' "$sdir/latency.csv")
 			echo "| $kind | $count | $(echo "$seconds" | p95) | $bad |"
 		done
 		echo
@@ -182,11 +183,11 @@ summarize() {
 		echo
 		echo "| Service | Image | Arch | State |"
 		echo "|---|---|---|---|"
-		awk -F, '$1 != "service" { print "| " $1 " | " $2 " | " $3 " | " $4 " |" }' "$dir/images.csv"
+		awk -F, '$1 != "service" { print "| " $1 " | " $2 " | " $3 " | " $4 " |" }' "$sdir/images.csv"
 		echo
 		echo "### Thresholds"
 		echo
-		thresholds "$dir" | sed 's/^/- /'
+		thresholds "$sdir" | sed 's/^/- /'
 	} >"$md"
 	cat "$md"
 }

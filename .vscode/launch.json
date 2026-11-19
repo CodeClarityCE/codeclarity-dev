@@ -42,6 +42,6 @@
       "port": 9229,
       "autoAttachChildProcesses": true,
       "skipFiles": ["<node_internals>/**"]
-    },
+    }
   ]
 }

@@ -34,71 +34,33 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - **Go module paths**: `github.com/CodeClarityCE/plugin-*`, `github.com/CodeClarityCE/utility-types`
 - **Message flow**: API Request -> Dispatcher -> Downloader (if git needed) -> Dispatcher -> Plugins (stage execution) -> Dispatcher (results)
 
-### Restart semantics & orphan recovery
-
-`make down` removes the RabbitMQ container, which in dev has **no data volume** by
-design (`make down && make up` is the deliberate way to clear a wedged queue), so
-**all in-flight messages are lost** on restart. Postgres persists (named volume),
-so analysis rows survive — leaving them `started`/`ongoing` with nothing to drive
-them. Recovery is therefore DB-driven, not queue-durable:
-
-- The dispatcher's **reaper** (`backend/services/dispatcher/reaper.go`) runs a
-  one-shot **startup recovery pass** (queue is known-empty, so every non-terminal
-  analysis is re-driven) plus a periodic interval pass (`REAPER_INTERVAL`, default
-  60s; stuck threshold `REAPER_STEP_TIMEOUT`, default 30m).
-- **Stage-0 / pre-download** analyses are recovered by re-running the **downloader**
-  first (`redriveStageZero` in `receive.go`); later stages re-dispatch in place
-  (they read the SBOM from the DB). Re-running the downloader is idempotent.
-- Recovery is **bounded**: a genuine download failure marks the analysis `failure`
-  (downloader `receive.go`), so the reaper stops re-driving it; only lost-message /
-  crash cases are retried. Non-terminal analyses older than `RECOVERY_MAX_AGE`
-  (default 24h) are **retired** (marked `failure`) instead of re-driven, so a large
-  backlog of abandoned analyses isn't re-downloaded on every restart.
-- A `started` step whose plugin queue (`dispatcher_<plugin>`) has had no consumer for
-  `STALLED_PLUGIN_GRACE` (seconds, default 180) fails its analysis with a reason naming
-  the plugin (`stalled_plugin.go`). Startup recovery skips this check.
-
-### Database connection pooling
-
-All services/plugins/API connect through a **pgbouncer** transaction pooler (`PG_DB_HOST=pgbouncer`,
-`PG_DB_PORT=6432`), never directly to Postgres. This multiplexes the many per-replica client pools
-onto a small server-side connection set, so replica count no longer drives `max_connections`.
-
-- **Per-instance pool bounds** are env-overridable: `DB_MAX_OPEN_CONNS` (default 15),
-  `DB_MAX_IDLE_CONNS` (3), `DB_CONN_MAX_LIFETIME_SECONDS` (300), `DB_CONN_MAX_IDLE_SECONDS` (60)
-  for the Go services/plugins (applied via `DatabaseConfig.ApplyPool` in
-  `backend/utilities/boilerplates/`), and `PG_DB_POOL_MAX` (10) for each NestJS API DataSource.
-- **Pooler config**: dev is inline in `.cloud/docker/docker-compose.yaml`; prod uses
-  `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
-  (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
-  its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
-- **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300. Prod caps
-  pgbouncer at `max_db_connections(20) × 4 databases = 80` server connections, under `max_connections`
-  (`PG_MAX_CONNECTIONS`, default 100), whatever the replica count.
-- **Replicas**: prod runs one replica of every service and plugin, sized for the reference machine (ADR 0012).
-  For more, see "Larger instances" in `deployment/README.md` (downloader×8, each analysis plugin×4).
-- **Memory**: prod's default containers' memory limits add up to at most 6.5 GiB (the reference machine's 8 GiB minus
-  1.5 GiB for the OS); `.cloud/scripts/measure/memory-budget.sh` checks it with GOMEMLIMIT and `rabbitmq.conf`.
+- **Stuck analyses** after `make down` / `make up` or a crash, or tuning the dispatcher's reaper: read `docs/restart-recovery.md` (lost RabbitMQ messages, DB-driven recovery, `REAPER_*`, `RECOVERY_MAX_AGE`, `STALLED_PLUGIN_GRACE`).
+- **Connection limits**, pool tuning, pgbouncer config, replica or memory sizing: read `docs/database-pooling.md` (services, plugins and the API reach Postgres only through pgbouncer).
 
 ## Testing
 
 - **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Playwright)
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
+- **Release script** (`scripts/`): `bats scripts/tests` (bats tests with `gh` stubbed and local git remotes; CI runs them in the pinned `bats/bats` image)
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
+- **Formatting (root)**: root CI's `prettier` job checks every tracked Markdown, YAML and JSON file outside the submodules (`.prettierignore` skips tool-written ones) with the Prettier root `package.json` pins; fix with `node_modules/.bin/prettier --write <files>`, or check as CI does with `git ls-files -z '*.md' '*.yml' '*.yaml' '*.json' | xargs -0 sh .cloud/scripts/prettier-check.sh`
 - **Fresh install (dev)**: `.cloud/scripts/tests/fresh-install/dev.sh` runs `make up` twice on an empty Docker daemon, logs in as the dev account and runs the Default Analyzer on an uploaded npm project; CI only (`fresh-install-dev` job), never against a stack you use
 
 ## CI (GitHub Actions)
 
 Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its README documents each workflow, its inputs and the caller template). Each repo's `.github/workflows/ci.yml` is a short caller referencing them at the moving `v1` tag; third-party actions and images are pinned by SHA or digest.
 
+- **Moving `v1`**: central changes land on `.github`'s `develop`, then merge to its `main` through a PR, and only then does `v1` move, always to a commit on `main`. The central repo's own `ci` turns its fixtures' version check off (`version-check: false`), so its `develop` -> `main` PRs need no fixture bump; callers keep the check. See "Moving `v1`" in `.github`'s README.
 - **Toolchains**: Go steps run in the digest-pinned `golang:1.27.4` image with `GOTOOLCHAIN=local`; the digest lives in `.github`'s `go-checks.yml`, keep it in sync with the Dockerfiles and `go.mod`. Node steps run in the Dockerfile's `toolchain` target, so `package.json` `packageManager` stays the single source of truth for pnpm. Go image repos test with `GOWORK=off` like the image build, so they pass only after `scripts/release-all.sh` has bumped utility versions.
 - **`ci` gate**: the required check on `main` is a job named `ci` in the caller itself, since called jobs report as `<caller job> / <job>`. The caller also sets concurrency (cancel in progress for PRs only). Rulesets, `scripts/release-all.sh` and the callers all depend on that name.
 - **Permissions**: a caller job using `go-image.yml` or `node-image.yml` grants `contents: write`, `id-token: write` and `attestations: write`, because GitHub validates the skipped release jobs too. It also passes `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` by name under `secrets:` (not `secrets: inherit`): reusable workflows only get secrets their caller passes, even ones stored in the `release` environment.
 - **Releases**: PRs to `main` must bump the version (`config.json` / `package.json`). On `main`, release jobs run only when the repo variable `CI_RELEASE` is `true`, in the `release` environment (main only) that holds `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`. They build amd64 and arm64 natively, attest provenance, then create the tag and release at the built commit; an existing tag is never re-released.
 - **New repos**: a repo whose caller can release ships nothing until `CI_RELEASE` is on; turn it on with `docs/ci-release-test.md`. `scripts/release-all.sh` stops on such a repo while it is off.
 - **Secret scan**: `workflow-lint.yml` has a `secret scan` job in every caller: gitleaks from a digest-pinned image with `.github`'s `.gitleaks.toml` (default rules plus GitLab, GitHub and Slack token rules with no entropy floor, matching push protection), over a PR's commits or a push's. A finding fails `ci`; the log names rule, file, line and fingerprint, never the value. Tests build token-shaped values at run time or use ones like `glpat-test-token`. A known dev key or fixture goes in the repo's `.gitleaksignore`: its fingerprint under a `#` line saying why. `.githooks/gitleaks.toml` and `gitleaks.env` copy the central rules and image; `gitleaks-sync.test.sh` fails when they differ from `v1`, so change the version in `.github`, `.githooks/gitleaks.env` and the devcontainer Dockerfile together
+- **Type sync**: the `type-sync` job fails when a frontend copy of an API enum or allow-list (`scripts/type-sync/pairs.txt`) misses a value the API defines, at the submodule pointers. Add a pair as one line there; run it with `node scripts/type-sync/check.mjs`
 - **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
+- **Org status**: `scripts/ci-status.sh` prints one row per non-archived repo (submodule path, `ci` on `main` and `develop`, `CI_RELEASE`, open PRs, other branches) in a few seconds; `scripts/ci-status.sh --wait api#12 codeclarity-dev#200` waits for those PRs' `pull_request` `ci` and exits non-zero if any failed
 
 Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.
 
@@ -132,3 +94,7 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Specs
+
+Before a spec relies on an API path, read its handler: some return empty data instead of doing the work. `api/src/not-implemented-ceiling.spec.ts` keeps throwing stubs at zero, and `grep -rni "not implemented" api/src --include=*.ts --exclude=*.spec.ts` lists any that remain. Scope a missing feature into the spec, or block the spec on the issue that builds it.

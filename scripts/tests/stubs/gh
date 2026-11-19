@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Test stand-in for gh. Logs each call to GH_STUB_LOG as "<repo>: <args>", where repo is the
+# working directory relative to GH_STUB_ROOT ("." for the root itself).
+# Answers "auth status" with success and "variable get NAME" from GH_STUB_DIR/<repo>/variables/NAME;
+# any other call goes to the gh_stub function in GH_STUB_RULES, or fails as unexpected.
+dir="${PWD#"${GH_STUB_ROOT:-}"}"
+dir="${dir#/}"
+repo="${dir:-.}"
+echo "$repo: $*" >>"${GH_STUB_LOG:-/dev/null}"
+
+case "$1 ${2:-}" in
+"auth status") exit 0 ;;
+"variable get")
+	file="${GH_STUB_DIR:-/nonexistent}/$repo/variables/$3"
+	[[ -f "$file" ]] || {
+		echo "variable $3 was not found" >&2
+		exit 1
+	}
+	cat "$file"
+	exit 0
+	;;
+esac
+
+if [[ -n "${GH_STUB_RULES:-}" && -f "$GH_STUB_RULES" ]]; then
+	# shellcheck source=/dev/null
+	source "$GH_STUB_RULES"
+fi
+if declare -F gh_stub >/dev/null; then
+	gh_stub "$@"
+	exit
+fi
+echo "gh stub: unexpected call: $*" >&2
+exit 1

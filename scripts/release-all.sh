@@ -58,26 +58,28 @@ export GONOPROXY="github.com/CodeClarityCE/*"
 DRY_RUN=0
 ASSUME_YES=0
 ONLY=""
-while [[ $# -gt 0 ]]; do
-	case "$1" in
-	--dry-run) DRY_RUN=1 ;;
-	-y | --yes) ASSUME_YES=1 ;;
-	--only)
-		ONLY="${2:?--only needs a repo path}"
+parse_args() {
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--dry-run) DRY_RUN=1 ;;
+		-y | --yes) ASSUME_YES=1 ;;
+		--only)
+			ONLY="${2:?--only needs a repo path}"
+			shift
+			;;
+		-h | --help)
+			sed -n '2,42p' "$0"
+			exit 0
+			;;
+		*)
+			echo "unknown argument: $1" >&2
+			exit 2
+			;;
+		esac
 		shift
-		;;
-	-h | --help)
-		sed -n '2,42p' "$0"
-		exit 0
-		;;
-	*)
-		echo "unknown argument: $1" >&2
-		exit 2
-		;;
-	esac
-	shift
-done
-ONLY="${ONLY%/}"
+	done
+	ONLY="${ONLY%/}"
+}
 
 log() { printf '\033[1;34m[%s]\033[0m %s\n' "$1" "${*:2}" >&2; }
 die() {
@@ -520,15 +522,23 @@ plan() {
 	printf '%-32s %-15s -> %-15s %-12s %-8s %-9s %s%s\n' "$key" "$cur" "$tag" "$reason" "$by" "/${check:--}/" "$note" "${bumps[*]#github.com/CodeClarityCE/}"
 }
 
-preflight
-# shellcheck disable=SC2076 # literal match of a whole name in the list
-[[ -n "$ONLY" && ! " ${ORDER[*]} " =~ " $ONLY " ]] && die "unknown repo '$ONLY' (expected one of: ${ORDER[*]})"
+main() {
+	parse_args "$@"
+	preflight
+	# shellcheck disable=SC2076 # literal match of a whole name in the list
+	[[ -n "$ONLY" && ! " ${ORDER[*]} " =~ " $ONLY " ]] && die "unknown repo '$ONLY' (expected one of: ${ORDER[*]})"
 
-if [[ $DRY_RUN -eq 1 ]]; then
-	log plan "PR checks: /$CI_CHECK_PATTERN/ in repos with an Actions caller"
-	printf '%-32s %-15s    %-15s %-12s %-8s %-9s %s\n' repo current next reason releaser check notes
+	if [[ $DRY_RUN -eq 1 ]]; then
+		log plan "PR checks: /$CI_CHECK_PATTERN/ in repos with an Actions caller"
+		printf '%-32s %-15s    %-15s %-12s %-8s %-9s %s\n' repo current next reason releaser check notes
+	fi
+	for key in "${ORDER[@]}"; do
+		[[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
+		if [[ $DRY_RUN -eq 1 ]]; then plan "$key"; else release "$key"; fi
+	done
+}
+
+# Sourcing defines the functions only, for scripts/tests/release-all.bats.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
 fi
-for key in "${ORDER[@]}"; do
-	[[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
-	if [[ $DRY_RUN -eq 1 ]]; then plan "$key"; else release "$key"; fi
-done

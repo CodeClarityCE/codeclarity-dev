@@ -14,11 +14,7 @@
       "changeProcessCWD": true
     }
   ],
-  "eslint.probe": [
-    "javascript",
-    "typescript",
-    "vue"
-  ],
+  "eslint.probe": ["javascript", "typescript", "vue"],
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "sarif-viewer.connectToGithubCodeScanning": "off"
