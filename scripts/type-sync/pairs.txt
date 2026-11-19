@@ -28,3 +28,6 @@ enum api/src/codeclarity_modules/results/vulnerabilities/vulnerabilities.types.t
 
 # Source verdicts
 enum api/src/codeclarity_modules/results/source-comparison/source-match.types.ts#SourceVerdictValue frontend/src/codeclarity_components/results/vulnerabilities/VulnDetails/VulnDetails.types.ts#SourceVerdictValue
+
+# Instances hidden by default
+enum api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.ts#HiddenReason frontend/src/codeclarity_components/results/vulnerabilities/VulnStats.ts#HiddenReason

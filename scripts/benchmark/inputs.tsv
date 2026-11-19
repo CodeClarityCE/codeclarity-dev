@@ -5,4 +5,6 @@ npm-disputed-cve	fixture	-	.	.
 npm-cna-backport	fixture	-	.	.
 npm-gcve-name-collision	fixture	-	.	.
 npm-nvd-vendor-clash	fixture	-	.	.
+npm-ghsa-backport-fix	fixture	-	.	.
+npm-ghsa-withdrawn	fixture	-	.	.
 cc-umbrella	.	9e8bfcdd0a8c3c11f3308cbf5514f784825c8037	.	api,frontend
