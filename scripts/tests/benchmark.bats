@@ -215,6 +215,9 @@ curl_stub() {
 		echo '{"data": {"status": "completed", "steps": [[{"Name": "js-sbom", "Status": "success"}]]}}' ;;
 	"GET /org/org1/projects/proj1/analysis/ana1/vulnerabilities/knowledge-snapshot")
 		echo '{"data": {"sources": [{"source": "osv", "watermark": "2026-11-16T03:00:00Z"}]}}' ;;
+	"GET /org/org1/projects/proj1/analysis/ana1/vulnerabilities/vulnerability/"*)
+		local id=${path##*/vulnerability/}
+		cat "$BATS_TEST_TMPDIR/details/${id%%\?*}.json" ;;
 	"GET /org/org1/projects/proj1/analysis/ana1/vulnerabilities")
 		local n=${2##*page=}
 		cat "$BATS_TEST_TMPDIR/pages/${n%%&*}.json" ;;
@@ -285,4 +288,38 @@ EOF
 	run sh "$BENCHMARK" run --input app --out "$REC"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"app: analysis ana1 ended failure"* ]]
+}
+
+# One list row with a severity: id, package@version, score, class.
+severity_row() {
+	local pv=$2
+	printf '{"Vulnerability": "%s", "Affected": [{"AffectedDependency": "%s", "AffectedVersion": "%s"}], "Severity": {"Severity": %s, "SeverityClass": "%s"}}' \
+		"$1" "${pv%@*}" "${pv##*@}" "$3" "$4"
+}
+
+@test "run counts instances shown as None whose record has a CVSS vector or a GHSA severity" {
+	app_input
+	fake_api
+	ground_truth app </dev/null
+	page 0 1 "$(severity_row CVE-1 a@1.0.0 0 NONE)" "$(severity_row CVE-2 b@1.0.0 0 NONE)" \
+		"$(severity_row CVE-3 c@1.0.0 9.3 CRITICAL)" "$(severity_row CVE-4 d@1.0.0 0 HIGH)" \
+		>"$BATS_TEST_TMPDIR/pages/0.json"
+	mkdir -p "$BATS_TEST_TMPDIR/details"
+	echo '{"data": {"severities": {"cvss_4": {"base_score": 9.3}}}}' >"$BATS_TEST_TMPDIR/details/CVE-1.json"
+	echo '{"data": {"severities": {}}}' >"$BATS_TEST_TMPDIR/details/CVE-2.json"
+	run sh "$BENCHMARK" run --input app --out "$REC"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Severity None with a CVSS vector or GHSA severity: 1"* ]]
+	[[ "$output" == *"app  CVE-1  a@1.0.0"* ]]
+	# Only the instances shown as None are looked up.
+	[ "$(grep -c '/vulnerability/' "$CURL_STUB_LOG")" = 2 ]
+	grep -q '/vulnerability/CVE-1?workspace=.&dependency=a&version=1.0.0$' "$CURL_STUB_LOG"
+}
+
+@test "the report says the None check was not recorded for older runs" {
+	ground_truth app </dev/null
+	page 0 1 | record app apprepo 0123456789abcdef0123 analysis-1
+	run sh "$BENCHMARK" report "$REC"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Severity None with a CVSS vector or GHSA severity: not recorded"* ]]
 }

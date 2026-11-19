@@ -73,6 +73,38 @@ fetch_pages() {
 	done
 }
 
+# The jq filter that keeps list rows with severity None: no score and no known class.
+NONE_ROWS='.data[] | select(((.Severity.Severity // 0) == 0) and ((.Severity.SeverityClass // "NONE") | ascii_upcase | IN("LOW", "MEDIUM", "HIGH", "CRITICAL") | not))'
+
+# Saves the details of each instance the list in $4.pages shows as None (org $1, project $2,
+# analysis $3) as $4.none/<n>.json, indexed in $4.none/index.tsv; a failed read records null.
+fetch_none_details() {
+	mkdir -p "$4.none"
+	: >"$4.none/index.tsv"
+	jq -r "$NONE_ROWS"' | .Vulnerability as $v | .Affected[] | [$v, .AffectedDependency, .AffectedVersion, ($v | @uri), (.AffectedDependency | @uri), (.AffectedVersion | @uri)] | @tsv' \
+		"$4.pages/"*.json | sort -u >"$4.none/rows.tsv"
+	n=0
+	while IFS="$tab" read -r id pkg ver uid upkg uver; do
+		get "/org/$1/projects/$2/analysis/$3/vulnerabilities/vulnerability/$uid?workspace=.&dependency=$upkg&version=$uver" \
+			>"$4.none/$n.json" 2>/dev/null || echo '{"data": null}' >"$4.none/$n.json"
+		printf '%s\t%s\t%s\t%s\n' "$n" "$id" "$pkg" "$ver" >>"$4.none/index.tsv"
+		n=$((n + 1))
+	done <"$4.none/rows.tsv"
+	rm -f "$4.none/rows.tsv"
+}
+
+# Prints, for input $1 in recorded run $2, each instance shown as None whose record has a CVSS
+# vector or a GHSA severity, as "N", id, package@version; prints nothing when none were recorded.
+none_with_severity() {
+	[ -f "$2/$1.none/index.tsv" ] || return 0
+	while IFS="$tab" read -r n id pkg ver; do
+		if jq -e '.data.severities // {} | (.cvss_4 // .cvss_31 // .cvss_3 // .cvss_2 // .ghsa) != null' \
+			"$2/$1.none/$n.json" >/dev/null 2>&1; then
+			printf 'N\t%s\t%s\t%s@%s\n' "$1" "$id" "$pkg" "$ver"
+		fi
+	done <"$2/$1.none/index.tsv"
+}
+
 # Analyses input $1 (repo $2, commit $3, subdir $4) in org $5 and records it in $out.
 run_input() {
 	archive_input "$1" "$2" "$3" "$4" "$out/$1.tar.gz"
@@ -89,6 +121,7 @@ run_input() {
 		die "$1: analysis $analysis ended ${status:-without a status}; see make logs SERVICE=plugin-vuln-finder"
 	fi
 	fetch_pages "$5" "$project" "$analysis" "$out/$1.pages" || die "$1: could not read the vulnerability list"
+	fetch_none_details "$5" "$project" "$analysis" "$out/$1"
 	get "/org/$5/projects/$project/analysis/$analysis/vulnerabilities/knowledge-snapshot" >"$out/$1.knowledge.json" ||
 		echo '{"data": null}' >"$out/$1.knowledge.json"
 	printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$analysis" >>"$out/run.tsv"
@@ -204,6 +237,7 @@ cmd_report() {
 	rec=$1
 	[ -f "$rec/run.tsv" ] || die "no recorded run in $rec"
 	lines=$(mktemp)
+	none_unrecorded=
 	trap 'rm -f "$lines"' EXIT
 
 	echo "Accuracy benchmark"
@@ -216,6 +250,8 @@ cmd_report() {
 		echo "  knowledge: $(jq -r '[.data.sources[]? | "\(.source) \(.watermark // "none")"] | if length == 0 then "not recorded" else join(", ") end' \
 			"$rec/$name.knowledge.json" 2>/dev/null || echo "not recorded")"
 		judge "$name" "$rec" >>"$lines" || exit 1
+		none_with_severity "$name" "$rec" >>"$lines"
+		[ -f "$rec/$name.none/index.tsv" ] || none_unrecorded=1
 	done <"$lines.inputs"
 	rm -f "$lines.inputs"
 
@@ -240,6 +276,14 @@ cmd_report() {
 	section W "Wrong (shown, but false), by cause:"
 	section M "Missed (true, but not shown), by cause:"
 	section U "Unjudged (shown, but not in the ground truth):"
+
+	echo
+	if [ -n "$none_unrecorded" ]; then
+		echo "Severity None with a CVSS vector or GHSA severity: not recorded"
+	else
+		echo "Severity None with a CVSS vector or GHSA severity: $(grep -c "^N	" "$lines" || :)"
+		grep "^N	" "$lines" | sort | awk -F '\t' '{ print "    " $2 "  " $3 "  " $4 }'
+	fi
 }
 
 # Prints the $lines entries tagged $1 under heading $2, grouped by cause.

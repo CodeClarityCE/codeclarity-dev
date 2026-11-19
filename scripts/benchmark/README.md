@@ -36,6 +36,8 @@ Env: `API_URL` (default `http://localhost:3000`, the API without the `/api` pref
 
 An instance shown but absent from the ground truth is unjudged: it counts in neither precision nor recall and is listed so a maintainer can adjudicate it.
 
+The report also counts the instances shown with severity None whose record has a CVSS vector or a GHSA severity, which should be 0. `run` reads the details of each instance shown as None for it; a run recorded before this check says "not recorded".
+
 Precision is correct / (correct + wrong). Recall is found / expected, where expected counts every `TP` (and `LAG` withdrawn after the dump), including ones the run did not show.
 
 ## Ground truth
