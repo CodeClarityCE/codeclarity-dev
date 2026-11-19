@@ -22,3 +22,6 @@ enum api/src/base_modules/organizations/memberships/organization.memberships.ent
 
 # Analyses
 enum api/src/base_modules/analyses/analysis.entity.ts#AnalysisStatus frontend/src/codeclarity_components/analyses/analysis.entity.ts#AnalysisStatus
+
+# Vulnerability severity
+enum api/src/codeclarity_modules/results/vulnerabilities/vulnerabilities.types.ts#SeverityType frontend/src/codeclarity_components/results/vulnerabilities/VulnStats.ts#SeverityType
