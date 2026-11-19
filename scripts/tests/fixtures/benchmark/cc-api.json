@@ -1,0 +1,560 @@
+{
+  "data": [
+    {
+      "Vulnerability": "CVE-2023-29019",
+      "Affected": [
+        {
+          "AffectedDependency": "passport",
+          "AffectedVersion": "0.7.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2023-29020",
+      "Affected": [
+        {
+          "AffectedDependency": "passport",
+          "AffectedVersion": "0.7.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2023-29827",
+      "Affected": [
+        {
+          "AffectedDependency": "ejs",
+          "AffectedVersion": "5.0.2"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2025-40649",
+      "Affected": [
+        {
+          "AffectedDependency": "negotiator",
+          "AffectedVersion": "0.6.3"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2025-40676",
+      "Affected": [
+        {
+          "AffectedDependency": "negotiator",
+          "AffectedVersion": "0.6.3"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-100699",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-100700",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-100701",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-100702",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-102276",
+      "Affected": [
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "1.1.18"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "2.1.4"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "5.0.9"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-102277",
+      "Affected": [
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "1.1.18"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "2.1.4"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "5.0.9"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-102278",
+      "Affected": [
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "1.1.18"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "2.1.4"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "5.0.9"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-103387",
+      "Affected": [
+        {
+          "AffectedDependency": "uri-js",
+          "AffectedVersion": "4.4.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-109383",
+      "Affected": [
+        {
+          "AffectedDependency": "undici",
+          "AffectedVersion": "6.28.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-109869",
+      "Affected": [
+        {
+          "AffectedDependency": "undici",
+          "AffectedVersion": "6.28.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-109924",
+      "Affected": [
+        {
+          "AffectedDependency": "undici",
+          "AffectedVersion": "6.28.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-109932",
+      "Affected": [
+        {
+          "AffectedDependency": "undici",
+          "AffectedVersion": "6.28.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110095",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "3.1.7"
+        },
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110180",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "3.1.7"
+        },
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110306",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "3.1.7"
+        },
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110725",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "3.1.7"
+        },
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110869",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110870",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110871",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-110872",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-111755",
+      "Affected": [
+        {
+          "AffectedDependency": "follow-redirects",
+          "AffectedVersion": "1.16.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-111756",
+      "Affected": [
+        {
+          "AffectedDependency": "follow-redirects",
+          "AffectedVersion": "1.16.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-116689",
+      "Affected": [
+        {
+          "AffectedDependency": "follow-redirects",
+          "AffectedVersion": "1.16.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-118764",
+      "Affected": [
+        {
+          "AffectedDependency": "minimatch",
+          "AffectedVersion": "10.2.6"
+        },
+        {
+          "AffectedDependency": "minimatch",
+          "AffectedVersion": "9.0.9"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-118773",
+      "Affected": [
+        {
+          "AffectedDependency": "glob",
+          "AffectedVersion": "10.5.0"
+        },
+        {
+          "AffectedDependency": "glob",
+          "AffectedVersion": "11.1.0"
+        },
+        {
+          "AffectedDependency": "glob",
+          "AffectedVersion": "13.0.6"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-121424",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-121425",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-121426",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        },
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-13149",
+      "Affected": [
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "1.1.18"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "2.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-14257",
+      "Affected": [
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "1.1.18"
+        },
+        {
+          "AffectedDependency": "brace-expansion",
+          "AffectedVersion": "2.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-67214",
+      "Affected": [
+        {
+          "AffectedDependency": "nanoid",
+          "AffectedVersion": "3.3.18"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-86472",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "3.1.7"
+        },
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-86818",
+      "Affected": [
+        {
+          "AffectedDependency": "fast-uri",
+          "AffectedVersion": "4.1.4"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-87018",
+      "Affected": [
+        {
+          "AffectedDependency": "undici",
+          "AffectedVersion": "6.28.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-90776",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.1.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-92395",
+      "Affected": [
+        {
+          "AffectedDependency": "@fastify/proxy-addr",
+          "AffectedVersion": "5.1.0"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-92595",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-92596",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-92597",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-92598",
+      "Affected": [
+        {
+          "AffectedDependency": "nodemailer",
+          "AffectedVersion": "9.0.6"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-93690",
+      "Affected": [
+        {
+          "AffectedDependency": "uri-js",
+          "AffectedVersion": "4.4.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-93749",
+      "Affected": [
+        {
+          "AffectedDependency": "source-map-js",
+          "AffectedVersion": "1.2.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-93751",
+      "Affected": [
+        {
+          "AffectedDependency": "uri-js",
+          "AffectedVersion": "4.4.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-93753",
+      "Affected": [
+        {
+          "AffectedDependency": "deepmerge",
+          "AffectedVersion": "4.3.1"
+        }
+      ]
+    },
+    {
+      "Vulnerability": "CVE-2026-97058",
+      "Affected": [
+        {
+          "AffectedDependency": "sprintf-js",
+          "AffectedVersion": "1.0.3"
+        }
+      ]
+    }
+  ],
+  "page": 0,
+  "total_pages": 1
+}

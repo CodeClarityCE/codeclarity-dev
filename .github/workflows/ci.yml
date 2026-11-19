@@ -120,8 +120,8 @@ jobs:
           done
           exit "$status"
 
-  # Fails when a frontend copy of an API enum or allow-list misses values the API defines
-  # (scripts/type-sync/pairs.txt), at the checked-out submodule pointers.
+  # Fails when a frontend copy of an API enum or allow-list misses values the API defines, or a
+  # shared file's vuln-finder copy differs (scripts/type-sync/pairs.txt), at the submodule pointers.
   type-sync:
     name: type sync (api and frontend)
     runs-on: ubuntu-24.04
@@ -132,8 +132,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check out the api and frontend submodules
-        run: git submodule update --init --depth 1 api frontend
+      - name: Check out the api, frontend and vuln-finder submodules
+        run: |
+          git submodule update --init --depth 1 api frontend backend
+          git -C backend submodule update --init --depth 1 plugins/vuln-finder
       - name: Test the check
         run: node --test scripts/type-sync/check.test.mjs
       - name: Check the frontend copies against the API

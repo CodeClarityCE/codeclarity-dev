@@ -39,7 +39,10 @@ const PAIRS = `
 enum  api/types.ts#ActionType  frontend/AuditLog.ts#ActionType
 enum  api/types.ts#ActionSeverity  frontend/AuditLog.ts#ActionSeverity
 list  api/logs.ts#ALLOWED_FIELDS  frontend/logger.ts#ALLOWED_FIELDS
+file  api/cases.json  backend/vuln-finder/cases.json
 `;
+
+const CASES = `[{ "name": "a case", "hidden": null }]\n`;
 
 // Writes a checkout with an api and a frontend copy, overriding any file.
 function checkout(files = {}) {
@@ -49,6 +52,8 @@ function checkout(files = {}) {
     "frontend/AuditLog.ts": FRONTEND_ENUM,
     "api/logs.ts": API_LIST,
     "frontend/logger.ts": API_LIST,
+    "api/cases.json": CASES,
+    "backend/vuln-finder/cases.json": CASES,
     ...files,
   };
   for (const [path, text] of Object.entries(all)) {
@@ -100,6 +105,13 @@ test("changing one entry of either allow-list is a failure", () => {
   assert.equal(check({ "api/logs.ts": changed }).length, 2);
 });
 
+test("a shared file whose copy differs is named", () => {
+  const changed = CASES.replace("null", '"contradicted"');
+  assert.deepEqual(check({ "backend/vuln-finder/cases.json": changed }), [
+    "file api/cases.json: backend/vuln-finder/cases.json differs from it",
+  ]);
+});
+
 test("a symbol that cannot be found fails with a clear message", () => {
   const renamed = FRONTEND_ENUM.replace(
     "enum ActionType",
@@ -124,7 +136,7 @@ test("a malformed pair line is refused", () => {
   assert.throws(() => parsePairs("enum api/types.ts#ActionType"), /line 1/);
   assert.throws(
     () => parsePairs("set api/a.ts#A frontend/b.ts#B"),
-    /kind must be enum or list/,
+    /kind must be enum, list or file/,
   );
 });
 
@@ -134,6 +146,7 @@ test("the declared pairs name existing files in this repository", () => {
   assert.ok(pairs.length >= 10);
   for (const pair of pairs) {
     assert.match(pair.api.file, /^api\//);
-    assert.match(pair.frontend.file, /^frontend\//);
+    if (pair.kind !== "file") assert.match(pair.frontend.file, /^frontend\//);
   }
+  assert.ok(pairs.some((pair) => pair.kind === "file"));
 });

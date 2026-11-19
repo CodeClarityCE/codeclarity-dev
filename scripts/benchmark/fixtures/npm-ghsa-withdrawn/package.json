@@ -1,0 +1,8 @@
+{
+  "name": "benchmark-npm-ghsa-withdrawn",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "sprintf-js": "1.0.3"
+  }
+}

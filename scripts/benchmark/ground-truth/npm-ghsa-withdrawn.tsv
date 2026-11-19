@@ -1,0 +1,2 @@
+vulnerability	package	version	verdict	cause	evidence
+CVE-2026-97058	sprintf-js	1.0.3	FP	withdrawn-not-propagated	https://github.com/advisories?query=CVE-2026-97058

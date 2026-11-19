@@ -1,12 +1,13 @@
 # shellcheck shell=sh
-# Helpers shared by the dev and production fresh-install tests. Source it after defining compose().
+# Helpers shared by the dev and production fresh-install tests and the accuracy benchmark.
+# Source it after defining compose(), which report, report_unsettled and sql need.
 # Settings, set by the caller:
 #   API_BASE        the API's base URL (http://localhost:3000, or https://localhost/api)
 #   CURL_CA         a CA file to verify API_BASE against, or empty
 #   LOGIN_EMAIL, LOGIN_PASSWORD, LOGIN_WAIT_SECONDS   the account the checks log in as
 #   WORK            a scratch directory
 #   ANALYSIS_SERVICES   the services whose logs explain a failed analysis
-#   ANALYSIS_WAIT_SECONDS (default 1200)
+#   ANALYSIS_WAIT_SECONDS (default 1200), ANALYSIS_POLL_SECONDS (default 10)
 
 passed=0 failed=0
 
@@ -110,6 +111,39 @@ EOF
 	tar -czf "$1" -C "$src" package.json package-lock.json
 }
 
+# Uploads the tar.gz archive $3 as the source of project $2 in org $1.
+upload_archive() {
+	api_curl -fsS -X PATCH "$API_BASE/org/$1/file/$2/upload" -H "Authorization: Bearer $token" \
+		--form-string type=source --form-string file_name=app.tar.gz --form-string chunk=true \
+		--form-string id=0 --form-string last=true --form-string "hash=$(sha256sum "$3" | cut -d' ' -f1)" \
+		-F "file=@$3;filename=app.tar.gz" >/dev/null
+}
+
+# Starts the Default Analyzer on the uploaded project $2 in org $1 and prints the analysis id.
+start_analysis() {
+	analyzer=$(get "/org/$1/analyzers?page=0&entries_per_page=100" |
+		jq -er '[.data[] | select(.name == "Default Analyzer")][0].id') || return 1
+	# The same config the frontend sends: each SBOM plugin gets the uploaded project's path.
+	project_path="$1/projects/$2/main"
+	body='{"analyzer_id":"'"$analyzer"'","branch":"main","config":{"js-sbom":{"branch":"main","project":"'"$project_path"'"},"php-sbom":{"branch":"main","project":"'"$project_path"'"},"vuln-finder":{"vulnerabilityPolicy":[]},"license-finder":{"licensePolicy":[]}}}'
+	post "/org/$1/projects/$2/analyses" "$body" | jq -er '.id'
+}
+
+# Polls analysis $3 of project $2 in org $1 into $WORK/analysis.json until it ends, then sets status.
+# Succeeds if it completed with every step succeeded or skipped.
+wait_analysis() {
+	deadline=$(($(date +%s) + ${ANALYSIS_WAIT_SECONDS:-1200}))
+	while :; do
+		get "/org/$1/projects/$2/analyses/$3" >"$WORK/analysis.json" 2>/dev/null || :
+		status=$(jq -r '.data.status // empty' "$WORK/analysis.json" 2>/dev/null) || status=
+		case "$status" in completed | failure | cancelled) break ;; esac
+		[ "$(date +%s)" -lt "$deadline" ] || break
+		sleep "${ANALYSIS_POLL_SECONDS:-10}"
+	done
+	[ "$status" = completed ] || return 1
+	jq -e '[.data.steps[][] | .Status] | length > 0 and all(. == "success" or . == "skipped")' "$WORK/analysis.json" >/dev/null 2>&1
+}
+
 # Imports a tiny npm project as an uploaded archive in org $2 (no OAuth integration), runs the
 # Default Analyzer on it, and checks it completes with every step succeeded; $1 names the run.
 check_analysis() {
@@ -118,35 +152,18 @@ check_analysis() {
 	result=ok
 	project=$(post "/org/$2/projects" '{"name":"fresh-install-app","description":"Fresh install test"}' | jq -er '.id') || result=bad
 	if [ "$result" = ok ]; then
-		api_curl -fsS -X PATCH "$API_BASE/org/$2/file/$project/upload" -H "Authorization: Bearer $token" \
-			--form-string type=source --form-string file_name=app.tar.gz --form-string chunk=true \
-			--form-string id=0 --form-string last=true --form-string "hash=$(sha256sum "$archive" | cut -d' ' -f1)" \
-			-F "file=@$archive;filename=app.tar.gz" >/dev/null || result=bad
+		upload_archive "$2" "$project" "$archive" || result=bad
 	fi
 	check "$1: a project is imported from an uploaded archive" $result
 	[ "$result" = ok ] || return 0
 
 	result=ok
-	analyzer=$(get "/org/$2/analyzers?page=0&entries_per_page=100" |
-		jq -er '[.data[] | select(.name == "Default Analyzer")][0].id') || result=bad
-	# The same config the frontend sends: each SBOM plugin gets the uploaded project's path.
-	project_path="$2/projects/$project/main"
-	body='{"analyzer_id":"'"$analyzer"'","branch":"main","config":{"js-sbom":{"branch":"main","project":"'"$project_path"'"},"php-sbom":{"branch":"main","project":"'"$project_path"'"},"vuln-finder":{"vulnerabilityPolicy":[]},"license-finder":{"licensePolicy":[]}}}'
-	[ "$result" = ok ] && { analysis=$(post "/org/$2/projects/$project/analyses" "$body" | jq -er '.id') || result=bad; }
+	analysis=$(start_analysis "$2" "$project") || result=bad
 	check "$1: an analysis with the Default Analyzer starts" $result
 	[ "$result" = ok ] || return 0
 
-	deadline=$(($(date +%s) + ${ANALYSIS_WAIT_SECONDS:-1200}))
-	while :; do
-		get "/org/$2/projects/$project/analyses/$analysis" >"$WORK/analysis.json" 2>/dev/null || :
-		status=$(jq -r '.data.status // empty' "$WORK/analysis.json" 2>/dev/null) || status=
-		case "$status" in completed | failure | cancelled) break ;; esac
-		[ "$(date +%s)" -lt "$deadline" ] || break
-		sleep 10
-	done
 	result=ok
-	[ "$status" = completed ] || result=bad
-	jq -e '[.data.steps[][] | .Status] | length > 0 and all(. == "success" or . == "skipped")' "$WORK/analysis.json" >/dev/null 2>&1 || result=bad
+	wait_analysis "$2" "$project" "$analysis" || result=bad
 	check "$1: the analysis completes with every step succeeded (status ${status:-none})" $result
 	if [ "$result" = bad ]; then
 		jq '.data | {status, stage, steps: [.steps[][] | {name: .Name, status: .Status}]}' "$WORK/analysis.json" 2>/dev/null || true

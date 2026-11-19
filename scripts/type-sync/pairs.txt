@@ -22,3 +22,16 @@ enum api/src/base_modules/organizations/memberships/organization.memberships.ent
 
 # Analyses
 enum api/src/base_modules/analyses/analysis.entity.ts#AnalysisStatus frontend/src/codeclarity_components/analyses/analysis.entity.ts#AnalysisStatus
+
+# Vulnerability severity
+enum api/src/codeclarity_modules/results/vulnerabilities/vulnerabilities.types.ts#SeverityType frontend/src/codeclarity_components/results/vulnerabilities/VulnStats.ts#SeverityType
+
+# Source verdicts
+enum api/src/codeclarity_modules/results/source-comparison/source-match.types.ts#SourceVerdictValue frontend/src/codeclarity_components/results/vulnerabilities/VulnDetails/VulnDetails.types.ts#SourceVerdictValue
+
+# Instances hidden by default
+enum api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.ts#HiddenReason frontend/src/codeclarity_components/results/vulnerabilities/VulnStats.ts#HiddenReason
+
+# Shared instance-status cases: the API rule and vuln-finder's Go copy both run them.
+# file: the two files must be identical.
+file api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.cases.json backend/plugins/vuln-finder/testdata/instance-status-cases.json
