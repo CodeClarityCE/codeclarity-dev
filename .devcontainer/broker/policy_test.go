@@ -60,7 +60,7 @@ func alloyService(repo string) map[string]any {
 		"image":   alloyImage,
 		"command": alloyCommand,
 		"volumes": []any{
-			map[string]any{"type": "bind", "source": filepath.Join(repo, ".cloud/docker/alloy-config.alloy"), "target": "/etc/alloy/config.alloy", "read_only": true},
+			map[string]any{"type": "bind", "source": filepath.Join(repo, ".cloud/docker/config/alloy-config.alloy"), "target": "/etc/alloy/config.alloy", "read_only": true},
 			map[string]any{"type": "bind", "source": "/var/run/docker.sock", "target": "/var/run/docker.sock", "read_only": true},
 			map[string]any{"type": "bind", "source": "/var/lib/docker/containers", "target": "/var/lib/docker/containers", "read_only": true},
 		},
@@ -217,16 +217,50 @@ func TestRejectsBadJSON(t *testing.T) {
 	}
 }
 
-// The daemon's mounts and the policy must list the same paths.
-func TestPinnedBindsMatchComposeFile(t *testing.T) {
+// daemonRepoMounts lists the repo paths docker-compose.yml mounts into the daemon at the same path.
+func daemonRepoMounts(t *testing.T) []string {
 	raw, err := os.ReadFile("../docker-compose.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
+	var mounts []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		src, dst, ok := strings.Cut(strings.TrimPrefix(strings.TrimSpace(line), "- ../"), ":")
+		if ok && strings.HasPrefix(strings.TrimSpace(line), "- ../") && dst == "/workspaces/codeclarity-dev/"+src {
+			mounts = append(mounts, src)
+		}
+	}
+	return mounts
+}
+
+// Every path the policy allows must be visible to the daemon.
+func TestPinnedBindsAreUnderDaemonMounts(t *testing.T) {
+	mounts := daemonRepoMounts(t)
 	for _, rel := range pinnedBinds {
-		want := "- ../" + rel + ":/workspaces/codeclarity-dev/" + rel + "\n"
-		if !strings.Contains(string(raw), want) {
-			t.Errorf("docker-compose.yml is missing %q", want)
+		covered := false
+		for _, m := range mounts {
+			if rel == m || strings.HasPrefix(rel, m+"/") {
+				covered = true
+			}
+		}
+		if !covered {
+			t.Errorf("no daemon mount in docker-compose.yml covers %q", rel)
+		}
+	}
+}
+
+// A single-file bind keeps the old inode when git replaces the file, so the daemon only gets directories.
+func TestDaemonMountsAreDirectories(t *testing.T) {
+	mounts := daemonRepoMounts(t)
+	if len(mounts) == 0 {
+		t.Fatal("found no daemon mounts in docker-compose.yml")
+	}
+	for _, m := range mounts {
+		info, err := os.Stat(filepath.Join("../..", m))
+		if err != nil {
+			t.Errorf("daemon mount %q: %v", m, err)
+		} else if !info.IsDir() {
+			t.Errorf("daemon mount %q is a file; mount its directory instead", m)
 		}
 	}
 }

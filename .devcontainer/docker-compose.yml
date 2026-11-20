@@ -75,15 +75,12 @@ services:
     volumes:
       - dockerd-data:/var/lib/docker
       - dockerd-socket:/run/dockerd
-      # Exact bind sources for the stack. Keep in sync with pinnedBinds in broker/policy.go.
-      - ../.cloud/docker/alloy-config.alloy:/workspaces/codeclarity-dev/.cloud/docker/alloy-config.alloy
+      # Directories only: a single-file bind goes stale when git replaces the file.
+      # Every path in pinnedBinds (broker/policy.go) must sit under one of these.
+      - ../.cloud/docker/config:/workspaces/codeclarity-dev/.cloud/docker/config
       - ../.cloud/docker/certs/rabbitmq:/workspaces/codeclarity-dev/.cloud/docker/certs/rabbitmq
-      - ../.cloud/docker/config/pg_hba.conf:/workspaces/codeclarity-dev/.cloud/docker/config/pg_hba.conf
-      - ../.cloud/docker/config/rabbitmq.conf:/workspaces/codeclarity-dev/.cloud/docker/config/rabbitmq.conf
       - ../.cloud/docker/grafana/dashboards:/workspaces/codeclarity-dev/.cloud/docker/grafana/dashboards
       - ../.cloud/docker/grafana/provisioning:/workspaces/codeclarity-dev/.cloud/docker/grafana/provisioning
-      - ../.cloud/docker/loki-config.yml:/workspaces/codeclarity-dev/.cloud/docker/loki-config.yml
-      - ../.cloud/docker/prometheus.yml:/workspaces/codeclarity-dev/.cloud/docker/prometheus.yml
       - ../.cloud/env:/workspaces/codeclarity-dev/.cloud/env
       - ../deployment/docker-entrypoint-initdb:/workspaces/codeclarity-dev/deployment/docker-entrypoint-initdb
       - ../deployment/dump:/workspaces/codeclarity-dev/deployment/dump
@@ -91,11 +88,7 @@ services:
       - ../scripts:/workspaces/codeclarity-dev/scripts
       - ../backend:/workspaces/codeclarity-dev/backend
       - ../api:/workspaces/codeclarity-dev/api
-      - ../api/.cloud/docker/pnpm-workspace.yaml:/workspaces/codeclarity-dev/api/.cloud/docker/pnpm-workspace.yaml
       - ../frontend:/workspaces/codeclarity-dev/frontend
-      - ../frontend/.cloud/docker/pnpm-workspace.yaml:/workspaces/codeclarity-dev/frontend/.cloud/docker/pnpm-workspace.yaml
-      - ../frontend/.cloud/docker/conf/caddy/Caddyfile:/workspaces/codeclarity-dev/frontend/.cloud/docker/conf/caddy/Caddyfile
-      - ../frontend/.cloud/docker/conf/certs:/workspaces/codeclarity-dev/frontend/.cloud/docker/conf/certs
 
 volumes:
   node-modules:

@@ -21,16 +21,16 @@ func (v Violation) String() string {
 
 const alloyImage = "grafana/alloy:v1.20.0@sha256:f111cce835516c5f99166342be7038496b52ced16667be5a11e19258a3e4cd30"
 
-// Repo paths the daemon can see. Keep in sync with .devcontainer/docker-compose.yml.
+// Exact bind sources the stack may use. Each must sit under a daemon mount in .devcontainer/docker-compose.yml.
 var pinnedBinds = []string{
-	".cloud/docker/alloy-config.alloy",
+	".cloud/docker/config/alloy-config.alloy",
 	".cloud/docker/certs/rabbitmq",
 	".cloud/docker/config/pg_hba.conf",
 	".cloud/docker/config/rabbitmq.conf",
 	".cloud/docker/grafana/dashboards",
 	".cloud/docker/grafana/provisioning",
-	".cloud/docker/loki-config.yml",
-	".cloud/docker/prometheus.yml",
+	".cloud/docker/config/loki-config.yml",
+	".cloud/docker/config/prometheus.yml",
 	".cloud/env",
 	"deployment/docker-entrypoint-initdb",
 	"deployment/dump",
@@ -172,7 +172,7 @@ func (c *checker) alloy(s map[string]any) {
 			seen[src] = true
 		}
 	}
-	want := []string{filepath.Join(c.repo, ".cloud/docker/alloy-config.alloy")}
+	want := []string{filepath.Join(c.repo, ".cloud/docker/config/alloy-config.alloy")}
 	for src := range alloyHostBinds {
 		want = append(want, src)
 	}

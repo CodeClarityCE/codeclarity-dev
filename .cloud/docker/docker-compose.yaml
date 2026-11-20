@@ -201,7 +201,7 @@ services:
     ports:
       - "9091:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -275,7 +275,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - ./config/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     depends_on:
@@ -296,7 +296,7 @@ services:
     ports:
       - "12345:12345" # Alloy UI
     volumes:
-      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - ./config/alloy-config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command:
