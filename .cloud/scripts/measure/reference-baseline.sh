@@ -307,7 +307,7 @@ run() {
 	CREATE_USER_PASSWORD="baseline-$(date +%s)"
 	export CREATE_USER_PASSWORD
 	ANALYZER="Default Analyzer"
-	JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer"
+	JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 	ANALYSIS_SERVICES="service-dispatcher service-downloader service-follower plugin-js-sbom plugin-php-sbom plugin-vuln-finder plugin-license-finder api"
 	WAIT_SECONDS=${WAIT_SECONDS:-3000}
 	ANALYSIS_WAIT_SECONDS=${ANALYSIS_WAIT_SECONDS:-2400}

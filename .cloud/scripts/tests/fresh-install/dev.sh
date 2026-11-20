@@ -19,7 +19,7 @@ LOGIN_EMAIL=$EMAIL
 LOGIN_PASSWORD='ThisIs4Str0ngP4ssW0rd?'
 CURL_CA=
 ANALYZER="Default Analyzer"
-JOBS="knowledge-restore test-databases migrate migrate-test dev-user default-analyzer"
+JOBS="knowledge-restore test-databases migrate migrate-test dev-user default-analyzer vulnerability-instance-backfill"
 ANALYSIS_SERVICES="service-dispatcher service-downloader service-package-follower plugin-js-sbom plugin-php-sbom plugin-vuln-finder plugin-license-finder api"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

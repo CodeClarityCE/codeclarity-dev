@@ -35,7 +35,7 @@ total=$(awk '$1 == "TOTAL" { print $2 }' "$work/out")
 check "the total is at most 6656 MiB (got $total)" "$([ -n "$total" ] && [ "$total" -le 6656 ] && echo ok || echo bad)"
 check "the db limit leaves room for 1 GB of shared_buffers" "$(awk '$1 == "db" && $3 >= 1536 { ok = 1 } END { print (ok ? "ok" : "bad") }' "$work/out")"
 check "optional components are not counted" "$(grep -qE '^(plugin-codeql|prometheus|grafana|postgres_exporter) ' "$work/out" && echo bad || echo ok)"
-check "one-shot jobs are not counted" "$(grep -qE '^(migrate|knowledge-restore|default-analyzer) ' "$work/out" && echo bad || echo ok)"
+check "one-shot jobs are not counted" "$(grep -qE '^(migrate|knowledge-restore|default-analyzer|vulnerability-instance-backfill) ' "$work/out" && echo bad || echo ok)"
 
 check "RabbitMQ's limit is checked against rabbitmq.conf" "$(grep -q '^rabbitmq ' "$work/out" && echo ok || echo bad)"
 check "RabbitMQ's watermark is relative" "$(grep -qE '^vm_memory_high_watermark\.relative *= *0\.[0-9]+$' "$deployment/config/rabbitmq.conf" && echo ok || echo bad)"
