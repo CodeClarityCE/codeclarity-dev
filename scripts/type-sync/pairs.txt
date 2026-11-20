@@ -43,3 +43,6 @@ enum api/src/codeclarity_modules/vulnerability_instances/vulnerability-trend.typ
 # Shared instance-status cases: the API rule and vuln-finder's Go copy both run them.
 # file: the two files must be identical.
 file api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.cases.json backend/plugins/vuln-finder/testdata/instance-status-cases.json
+
+# Remediations
+enum api/src/codeclarity_modules/remediations/remediation.types.ts#RemediationKind frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#RemediationKind
