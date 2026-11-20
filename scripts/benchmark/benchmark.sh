@@ -69,7 +69,12 @@ archive_input() {
 		src="$dir/fixtures/$1"
 		[ "$4" = . ] || src="$src/$4"
 		[ -d "$src" ] || die "$1: no fixture folder at $src"
-		(cd "$src" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tar -czf "$5" -T -)
+		# Fixture files are stored with a .fixture suffix; the archive gets their real names.
+		staging=$(mktemp -d)
+		cp -R "$src/." "$staging/"
+		find "$staging" -type f -name '*.fixture' | while IFS= read -r f; do mv "$f" "${f%.fixture}"; done
+		(cd "$staging" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tar -czf "$5" -T -)
+		rm -rf "$staging"
 		return
 	fi
 	git -C "$root/$2" cat-file -e "$3^{commit}" 2>/dev/null ||

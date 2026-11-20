@@ -19,6 +19,7 @@
 The devcontainer has its own private Docker daemon and stack, separate from the host's (see `docs/adr/0006-agent-controls-dev-stack-through-a-validating-broker.md`). There is no `docker` CLI in it; `make` targets go through a broker that validates the Compose config first.
 
 - `make up` / `make down` / `make build` / `make pull` / `make ps` / `make reset CONFIRM=reset` / `make migrate` (or `make migrate-codeclarity` and friends, which keep existing data), plus `make restart SERVICE=api`, `make logs SERVICE=api`, `make knowledge-update` and `make dump-knowledge`. `up` and `build` also accept `SERVICE=`.
+- `node_modules` (root, `api/`, `frontend/`) and the pnpm store are devcontainer volumes, filled by `pnpm install --frozen-lockfile` at the repo root on create; the host's copies are hidden. After a lockfile change, run that install again from the repo root. Tests, linters and git hooks need no `NODE_PATH`.
 - First run on an empty daemon: `make up`; the setup jobs do the rest. `make reset CONFIRM=reset` wipes the agent stack's data and runs `up` again; the broker refuses `reset` without that confirmation.
 - The stack is on `localhost` from the agent (`:443`, `:3000`, Postgres `:5432`). Query logs in Loki at `localhost:3100` by `service` or `container` label, and use `make logs` as the fallback.
 - A rejected `up` names the service, key and value. A new Compose key or bind mount needs a change to `.devcontainer/broker/policy.go` (and, for a bind, `.devcontainer/docker-compose.yml`), then a devcontainer rebuild by a developer.
