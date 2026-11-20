@@ -65,7 +65,7 @@ groups:
                 CASE WHEN s.last_outcome IS NULL OR s.watermark IS NULL OR s.watermark < now() - t.stale_after THEN 1 ELSE 0 END AS stale
                 FROM (VALUES
                 ('osv', interval '24 hours'), ('epss', interval '24 hours'),
-                ('nvd', interval '48 hours'), ('gcve', interval '48 hours'),
+                ('nvd', interval '48 hours'), ('gcve', interval '48 hours'), ('kev', interval '48 hours'),
                 ('cwe', interval '7 days'), ('licenses', interval '7 days'),
                 ('friends_of_php', interval '7 days')
                 ) AS t (source, stale_after)

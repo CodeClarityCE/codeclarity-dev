@@ -25,6 +25,19 @@ not in the command line or the broker's logs. Neither the broker nor its client 
 The update takes 2 to 4 hours, and the broker runs one command at a time, so other `make` targets wait until it ends; read
 logs from Loki meanwhile. If the client stops or its terminal closes, the update still runs to the end; the broker log records its exit status.
 
+## Sources in the dump
+
+The dump carries every knowledge source the update mirrors: `cwe`, `epss`, `friends_of_php`, `gcve`, `kev`, `licenses`,
+`nvd` and `osv`, each with its row in `knowledge_source_sync` and its gate checks. `nvd`, `gcve`, `osv` and `kev` also keep
+their source watermark in the `config` row (`nvd_last`, `gcve_last`, `osv_last`, `kev_last`), null until their first sync.
+
+`kev` is the CISA Known Exploited Vulnerabilities catalog, fetched whole from
+`https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` on every update into the `kev`
+table, one row per CVE. Entries the catalog drops are deleted. A catalog whose entries do not match its own `count`, or
+with an entry that has no CVE, fails the source and leaves the stored entries untouched. Its gate checks are `kev.rows`,
+`kev.last_outcome`, `kev.watermark` (48 hours by default) and `kev.upstream_total`, and a waiver can name them
+(`WAIVE='kev.*'`). Offline instances get it only from the dump.
+
 ## What it does
 
 1. Runs the read-only completeness gate (`-knowledge -action validate -read-only`) in `service-package-follower` and prints its JSON report.
