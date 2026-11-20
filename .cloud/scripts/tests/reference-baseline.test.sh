@@ -172,5 +172,15 @@ d=$(good failedstep)
 echo '{"data":{"status":"completed","steps":[[{"Name":"js-sbom","Status":"success"},{"Name":"vuln-finder","Status":"failure"}]]}}' >"$d/analysis.json"
 verdict "$d" 1 "FAIL: the analysis did not finish (status completed, a step did not succeed)" "a completed analysis with a failed step fails"
 
+# The upload tarball holds the baseline project's manifest and lockfile by their real names.
+if sh "$script" tarball "$root/.cloud/scripts/measure/baseline-project" "$work/app.tar.gz" >"$work/tarball.out" 2>&1; then
+	listing=$(tar -tzf "$work/app.tar.gz" | sort | tr '\n' ' ')
+else
+	listing=$(cat "$work/tarball.out")
+fi
+check "the upload tarball has package.json and package-lock.json by their real names" \
+	"$([ "$listing" = "package-lock.json package.json " ] && echo ok || echo bad)"
+[ "$listing" = "package-lock.json package.json " ] || echo "     got: $listing"
+
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]
