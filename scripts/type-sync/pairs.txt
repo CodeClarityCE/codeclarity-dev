@@ -35,6 +35,7 @@ enum api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.t
 # Organization vulnerability list filters
 enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#DependencyScope frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#DependencyScope
 enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#ListHiddenReason frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#ListHiddenReason
+enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#FixAvailability frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#FixAvailability
 
 # Shared instance-status cases: the API rule and vuln-finder's Go copy both run them.
 # file: the two files must be identical.
