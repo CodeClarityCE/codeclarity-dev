@@ -133,3 +133,16 @@ dismiss() {
 	grep -q "FIXTURE_ALERTS_ORG" <<<"$output"
 	[ ! -s "$GH_STUB_LOG" ]
 }
+
+@test "a failed dismissal is reported, the rest still go through, and the run fails" {
+	alerts plugin-sbom-javascript "1:tests/a/yarn.lock" "2:tests/b/yarn.lock" "3:tests/c/yarn.lock"
+	alerts plugin-sbom-php "4:tests/d/composer.lock"
+	# The stand-in gh drops the connection on alert 2.
+	sed -i 's|if \[\[ "$1 $2 $3" == "api -X PATCH" \]\]; then|if [[ "$1 $2 $3" == "api -X PATCH" \&\& "$4" == */alerts/2 ]]; then echo "unexpected EOF" >\&2; return 1; fi\n\tif [[ "$1 $2 $3" == "api -X PATCH" ]]; then|' "$GH_STUB_RULES"
+	run dismiss
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"plugin-sbom-javascript#2: dismissal failed"* ]]
+	[[ "$output" == *"plugin-sbom-javascript: 2 dismissed, 1 failed"* ]]
+	[[ "$output" == *"plugin-sbom-php: 1 dismissed"* ]]
+	[ "$(jq -r '[.[] | select(.state == "open") | .number] | join(" ")' "$ALERTS/plugin-sbom-javascript")" = "2" ]
+}

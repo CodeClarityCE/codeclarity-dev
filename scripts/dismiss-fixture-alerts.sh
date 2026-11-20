@@ -63,7 +63,7 @@ dismiss_alert() {
 }
 
 main() {
-	local dry_run=0 repo number manifest count failed=0 rows
+	local dry_run=0 repo number manifest count errors failed=0 rows
 	case "${1:-}" in
 	"") ;;
 	--dry-run) dry_run=1 ;;
@@ -80,18 +80,24 @@ main() {
 			failed=1
 			continue
 		fi
-		count=0
+		count=0 errors=0
 		while IFS=$'\t' read -r number manifest; do
 			[[ -n "$number" ]] || continue
 			if ((dry_run)); then
 				echo "  would dismiss $repo#$number $manifest"
-			else
-				dismiss_alert "$repo" "$number"
+			elif ! dismiss_alert "$repo" "$number"; then
+				# Keep going: a dropped request must not stop the other dismissals.
+				echo "$repo#$number: dismissal failed" >&2
+				errors=$((errors + 1))
+				failed=1
+				continue
 			fi
 			count=$((count + 1))
 		done <<<"$rows"
 		if ((dry_run)); then
 			echo "$repo: $count would be dismissed"
+		elif ((errors)); then
+			echo "$repo: $count dismissed, $errors failed"
 		else
 			echo "$repo: $count dismissed"
 		fi
