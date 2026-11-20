@@ -138,6 +138,7 @@ dismiss() {
 	alerts plugin-sbom-javascript "1:tests/a/yarn.lock" "2:tests/b/yarn.lock" "3:tests/c/yarn.lock"
 	alerts plugin-sbom-php "4:tests/d/composer.lock"
 	# The stand-in gh drops the connection on alert 2.
+	# shellcheck disable=SC2016 # the $ signs belong to the stub code, not this shell
 	sed -i 's|if \[\[ "$1 $2 $3" == "api -X PATCH" \]\]; then|if [[ "$1 $2 $3" == "api -X PATCH" \&\& "$4" == */alerts/2 ]]; then echo "unexpected EOF" >\&2; return 1; fi\n\tif [[ "$1 $2 $3" == "api -X PATCH" ]]; then|' "$GH_STUB_RULES"
 	run dismiss
 	[ "$status" -ne 0 ]
