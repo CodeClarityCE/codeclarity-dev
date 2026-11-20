@@ -16,7 +16,7 @@ NAME="Fresh Install"
 CREATE_USER_PASSWORD="fresh-install-$(date +%s)"
 export CREATE_USER_PASSWORD
 ANALYZER="Default Analyzer"
-JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer"
+JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 DEPLOYMENT_REPO=CodeClarityCE/deployment
 UPGRADE_FROM=${UPGRADE_FROM:-}
 work=$(mktemp -d)
