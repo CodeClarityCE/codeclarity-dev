@@ -101,8 +101,10 @@ up() {
 
 case ${1:-} in
 up) up ;;
-# shellcheck disable=SC2046 # one word per service
-report) report $(compose config --services) ;;
+report)
+	# shellcheck disable=SC2046 # one word per service
+	report $(compose config --services)
+	;;
 *)
 	echo "usage: stack.sh up | report" >&2
 	exit 2
