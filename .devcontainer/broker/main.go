@@ -7,11 +7,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -131,12 +133,18 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	term, err := termSizeFrom(r.URL.Query())
+	if err != nil {
+		entry.WithError(err).Warn("rejected bad terminal size")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// One operation at a time.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	out := &flushWriter{w: w}
+	out := &flushWriter{w: w, term: term}
 	start := time.Now()
 	var code int
 	if cmd.runWaived != nil {
@@ -144,6 +152,7 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		code = cmd.run(b, out, service)
 	}
+	out.endLine()
 	fmt.Fprintf(out, "%s %d\n", exitMarker, code)
 	entry.WithFields(log.Fields{"exit": code, "seconds": int(time.Since(start).Seconds())}).Info("command finished")
 }
@@ -152,9 +161,23 @@ func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
 type flushWriter struct {
 	w    http.ResponseWriter
 	gone bool
+	// term is the client's terminal size; nil when the client is not on a terminal.
+	term *termSize
+	// midLine is true when the last byte written was not a newline.
+	midLine bool
+}
+
+// endLine starts a new line if output stopped mid-line, so the exit marker begins a line.
+func (f *flushWriter) endLine() {
+	if f.midLine {
+		_, _ = f.Write([]byte("\n"))
+	}
 }
 
 func (f *flushWriter) Write(p []byte) (int, error) {
+	if len(p) > 0 {
+		f.midLine = p[len(p)-1] != '\n'
+	}
 	if f.gone {
 		return len(p), nil
 	}
@@ -182,6 +205,10 @@ func dockerIO(w io.Writer, stdin io.Reader, stdout io.Writer, args ...string) in
 func dockerEnv(w io.Writer, env []string, stdin io.Reader, stdout io.Writer, args ...string) int {
 	cmd := exec.Command("docker", args...)
 	cmd.Env = append(append(os.Environ(), "DOCKER_HOST="+dockerHost), env...)
+	if size := terminal(w); size != nil && stdin == nil && stdout == w {
+		cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+		return runInPTY(cmd, w, *size)
+	}
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = w
@@ -317,7 +344,47 @@ func (b *broker) ps(w io.Writer, _ string) int {
 }
 
 func (b *broker) logs(w io.Writer, service string) int {
-	return docker(w, project("logs", "--no-color", "--tail", "500", service)...)
+	return docker(w, project(logsArgs(terminal(w) != nil, service)...)...)
+}
+
+// logsArgs shows the last lines of a service's logs, in colour only on a terminal.
+func logsArgs(colour bool, service string) []string {
+	args := []string{"logs"}
+	if !colour {
+		args = append(args, "--no-color")
+	}
+	return append(args, "--tail", "500", service)
+}
+
+// terminal returns the client's terminal size when w streams to a client on a terminal.
+func terminal(w io.Writer) *termSize {
+	if f, ok := w.(*flushWriter); ok {
+		return f.term
+	}
+	return nil
+}
+
+// maxTermSide bounds the rows and columns a client may ask for.
+const maxTermSide = 1000
+
+// termSizeFrom reads tty, rows and cols from a request; nil means plain output.
+func termSizeFrom(q url.Values) (*termSize, error) {
+	tty, rows, cols := q.Get("tty"), q.Get("rows"), q.Get("cols")
+	if tty == "" {
+		if rows != "" || cols != "" {
+			return nil, fmt.Errorf("rows and cols need tty=1")
+		}
+		return nil, nil
+	}
+	if tty != "1" {
+		return nil, fmt.Errorf("tty must be 1")
+	}
+	r, errR := strconv.Atoi(rows)
+	c, errC := strconv.Atoi(cols)
+	if errR != nil || errC != nil || r < 1 || c < 1 || r > maxTermSide || c > maxTermSide {
+		return nil, fmt.Errorf("tty=1 needs rows and cols from 1 to %d", maxTermSide)
+	}
+	return &termSize{rows: uint16(r), cols: uint16(c)}, nil
 }
 
 func waitForDB(w io.Writer) bool {
