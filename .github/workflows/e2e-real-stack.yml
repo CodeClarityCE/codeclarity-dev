@@ -15,6 +15,23 @@ permissions: {}
 
 jobs:
   # WIP #310 only.
+  wip-shell:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d \
+            .cloud/scripts/tests/real-stack/stack.sh .cloud/scripts/tests/real-stack.test.sh .cloud/scripts/tests/build-images.test.sh \
+            .cloud/scripts/tests/fresh-install/build-images.sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh .cloud/scripts/tests/stubs/docker
+          sh .cloud/scripts/tests/real-stack.test.sh
+          sh .cloud/scripts/tests/build-images.test.sh
+
   lint:
     if: github.event_name == 'pull_request'
     uses: CodeClarityCE/.github/.github/workflows/workflow-lint.yml@v1
