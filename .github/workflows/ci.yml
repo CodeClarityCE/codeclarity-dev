@@ -103,7 +103,7 @@ jobs:
   # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers.
   e2e-real-stack:
     name: e2e (real stack)
-    uses: ./.github/workflows/e2e-real-stack.yml
+    uses: $/.github/workflows/e2e-real-stack.yml
     permissions:
       contents: read
 
