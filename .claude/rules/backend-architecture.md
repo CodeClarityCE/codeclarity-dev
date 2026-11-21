@@ -9,7 +9,7 @@ paths:
 
 - **dispatcher** - Central message orchestrator, coordinates analysis workflows
 - **downloader** - Downloads source code from Git repositories
-- **knowledge** - Manages vulnerability databases (NVD, OSV, EPSS, CWE, GCVE)
+- **knowledge** - Manages vulnerability databases (NVD, OSV, EPSS, CWE, GCVE, CISA KEV)
 - **notifier** - Handles notifications
 - **packageFollower** - Tracks package updates
 
@@ -35,7 +35,7 @@ paths:
 
 - **Knowledge DB types**: `backend/utilities/types/knowledge_db/` (osv.go, nvd.go, gcve.go)
 - **Mirror pattern**: `backend/services/knowledge/src/mirrors/<source>/main.go` with `Update(db, configDB)` entry point; `Update` wraps its work in `sourcesync.RunCounted` so each source records its own outcome and its watermark moves only on full success
-- **Upstream totals**: the sync returns `sourcesync.Result{Watermark, UpstreamTotal}`; set `UpstreamTotal` (`sourcesync.Total(n)` or `sourcesync.DistinctTotal(ids)`) to the records upstream offers, stored in `knowledge_source_sync.upstream_total` on success for the completeness gate. Nil keeps the recorded total. NVD asks for its current total even on incremental runs; GCVE counts the dump's distinct records
+- **Upstream totals**: the sync returns `sourcesync.Result{Watermark, UpstreamTotal}`; set `UpstreamTotal` (`sourcesync.Total(n)` or `sourcesync.DistinctTotal(ids)`) to the records upstream offers, stored in `knowledge_source_sync.upstream_total` on success for the completeness gate. Nil keeps the recorded total. NVD asks for its current total even on incremental runs; GCVE counts the distinct records of the dump plus the catch-up after a full import or resume, and the dump's alone after a bulk fallback; KEV counts the catalog's entries on every run, since each run reads the whole catalog
 - **Empty upstream**: a feed with no records must fail, not sync nothing: wrap the error with `sourcesync.ErrNoUpstreamRecords` (a total of 0 fails the same way). `sourcesync.Run` is the older form without a total
 - **Persistence**: `backend/services/knowledge/src/utilities/pgsql/<source>.go` with `BatchUpdate`, `GetUUIDs`, `BatchInsert`
 - **Vuln-finder pipeline**: Repository (query DB) -> Matcher (normalize versions) -> Match (range/exact/universal) -> Clean (merge sources) -> ConflictResolver -> Severity -> Output
