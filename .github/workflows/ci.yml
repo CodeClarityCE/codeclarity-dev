@@ -1,5 +1,6 @@
 # CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts (bats for scripts/), and the
-# fresh-install tests (dev and production) and the production upgrade test, on the runner's empty Docker daemon.
+# fresh-install tests (dev and production), the production upgrade test and the real-stack e2e journey, on the
+# runner's empty Docker daemon.
 name: CI
 
 on:
@@ -98,6 +99,13 @@ jobs:
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/dev.sh
+
+  # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers.
+  e2e-real-stack:
+    name: e2e (real stack)
+    uses: ./.github/workflows/e2e-real-stack.yml
+    permissions:
+      contents: read
 
   # The setup scripts' shell tests, with stand-ins for Postgres and Docker.
   shell-tests:
@@ -241,6 +249,7 @@ jobs:
       - type-sync
       - script-tests
       - fresh-install-dev
+      - e2e-real-stack
       - fresh-install-production
       - upgrade-production
       - reference-machine-baseline
