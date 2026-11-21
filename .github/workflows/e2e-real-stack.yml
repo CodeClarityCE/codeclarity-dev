@@ -5,6 +5,8 @@
 name: E2E (real stack)
 
 on:
+  # WIP #310 only: run on the draft PR, whose base ci.yml ignores.
+  pull_request:
   workflow_call:
   schedule:
     - cron: "17 3 * * *"
@@ -12,6 +14,13 @@ on:
 permissions: {}
 
 jobs:
+  # WIP #310 only.
+  lint:
+    if: github.event_name == 'pull_request'
+    uses: CodeClarityCE/.github/.github/workflows/workflow-lint.yml@v1
+    permissions:
+      contents: read
+
   e2e:
     name: e2e (real stack)
     runs-on: ubuntu-24.04
