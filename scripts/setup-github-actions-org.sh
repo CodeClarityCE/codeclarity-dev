@@ -90,9 +90,27 @@ CI_CHECK_APP_ID=15368
 # (works on the Free plan). auto: picks by the org's plan.
 RULESET_SCOPE="auto"
 
-# Code security configuration attached to every public repo. The built-in one
-# turns on CodeQL default setup and is free for public repos.
-CODE_SECURITY_CONFIG_NAME="GitHub recommended"
+# Code security configuration attached to every public repo, created if missing.
+# Same as GitHub's recommended one but with CodeQL default setup off: callers run
+# CodeQL through the central codeql.yml, and GitHub rejects those uploads while
+# default setup is on. All of it is free for public repos.
+CODE_SECURITY_CONFIG_NAME="CodeClarity"
+CODE_SECURITY_CONFIG_SETTINGS='{
+  "description": "GitHub recommended, with CodeQL default setup off: CodeQL runs from the central codeql.yml",
+  "advanced_security": "enabled",
+  "dependency_graph": "enabled",
+  "dependabot_alerts": "enabled",
+  "code_scanning_default_setup": "disabled",
+  "secret_scanning": "enabled",
+  "secret_scanning_push_protection": "enabled",
+  "secret_scanning_validity_checks": "enabled",
+  "secret_scanning_non_provider_patterns": "enabled",
+  "private_vulnerability_reporting": "enabled",
+  "enforcement": "unenforced"
+}'
+# Public repos with no CI caller, so no codeql job: they keep their configuration
+# (GitHub's recommended one, with default setup) so CodeQL still scans them.
+CODE_SECURITY_SKIP_REPOS=(identity plugin-template)
 # ───────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -451,28 +469,41 @@ stage_workflow_token() {
 
 # ── Stage: CodeQL ─────────────────────────────────────────────────────────
 stage_codeql() {
-  stage "CodeQL default setup on every public repo"
-  say "Attaches the \"$CODE_SECURITY_CONFIG_NAME\" code security configuration to public repos"
-  say "and makes it the default for new public repos. It also turns on Dependabot alerts,"
-  say "secret scanning with push protection and private vulnerability reporting, all free"
-  say "for public repos. Private repos are left alone."
+  stage "Code security on every public repo, CodeQL default setup off"
+  say "Attaches the \"$CODE_SECURITY_CONFIG_NAME\" code security configuration to public repos,"
+  say "creating it first if needed, and makes it the default for new public repos. It turns on"
+  say "Dependabot alerts, secret scanning with push protection and private vulnerability"
+  say "reporting, all free for public repos, and turns CodeQL default setup off: callers run"
+  say "CodeQL through the central codeql.yml. Private repos are left alone."
   local configs cfg_id repos need_ids=() need_names=() id name attached defaults rc=0
   gh_get configs "orgs/$ORG/code-security/configurations" || rc=$?
   if (( rc != 0 )); then unknown_state "code security configurations" || return 0; fi
   cfg_id=$(jq -r --arg n "$CODE_SECURITY_CONFIG_NAME" '[.[]? | select(.name == $n)][0].id // empty' <<<"${configs:-[]}")
   if [[ -z "$cfg_id" ]]; then
-    warn "no configuration named \"$CODE_SECURITY_CONFIG_NAME\"; create it in the org settings or fix CODE_SECURITY_CONFIG_NAME"
-    if ! $DRY_RUN; then SKIPPED+=("CodeQL: configuration not found"); return 0; fi
-    cfg_id="<config id>"
+    plan POST "orgs/$ORG/code-security/configurations" \
+      "$(jq -c --arg n "$CODE_SECURITY_CONFIG_NAME" '. + {name: $n}' <<<"$CODE_SECURITY_CONFIG_SETTINGS")" \
+      "create the \"$CODE_SECURITY_CONFIG_NAME\" code security configuration"
+    apply_plan || return 0
+    if $DRY_RUN; then
+      cfg_id="<config id>"
+    else
+      $PLAN_DECLINED && return 0
+      rc=0
+      gh_get configs "orgs/$ORG/code-security/configurations" || rc=$?
+      if (( rc != 0 )); then unknown_state "code security configurations" || return 0; fi
+      cfg_id=$(jq -r --arg n "$CODE_SECURITY_CONFIG_NAME" '[.[]? | select(.name == $n)][0].id // empty' <<<"${configs:-[]}")
+      [[ -n "$cfg_id" ]] || { warn "created \"$CODE_SECURITY_CONFIG_NAME\" but cannot find it"; SKIPPED+=("CodeQL: configuration not found"); return 0; }
+    fi
+  elif [[ "$(jq -r --arg n "$CODE_SECURITY_CONFIG_NAME" '[.[]? | select(.name == $n)][0].code_scanning_default_setup // ""' <<<"${configs:-[]}")" != "disabled" ]]; then
+    warn "\"$CODE_SECURITY_CONFIG_NAME\" does not turn CodeQL default setup off; codeql.yml uploads will be rejected"
   fi
-  [[ "$(jq -r --arg n "$CODE_SECURITY_CONFIG_NAME" '[.[]? | select(.name == $n)][0].code_scanning_default_setup // ""' <<<"${configs:-[]}")" == "enabled" ]] \
-    || $DRY_RUN || warn "\"$CODE_SECURITY_CONFIG_NAME\" does not enable code_scanning_default_setup"
 
   gh_get repos "orgs/$ORG/repos?type=public&per_page=100" \
     '.[] | select(.archived | not) | select(.fork | not) | "\(.id) \(.name)"' \
     || { unknown_state "public repo list" || return 0; }
   while read -r id name; do
     [[ -n "$id" ]] || continue
+    if [[ " ${CODE_SECURITY_SKIP_REPOS[*]} " == *" $name "* ]]; then continue; fi
     attached=""
     gh_get attached "repos/$ORG/$name/code-security-configuration" '.configuration.id // empty' || true
     if [[ "$attached" != "$cfg_id" ]]; then need_ids+=("$id"); need_names+=("$name"); fi
