@@ -148,6 +148,10 @@ _Avoid_: Dataset (that is a repository cohort), feed
 The upstream authority a knowledge source's data derives from. Knowledge sources sharing an origin do not corroborate each other.
 _Avoid_: Provider
 
+**ADP enrichment**:
+Data that an Authorized Data Publisher other than the CNA adds to a CVE record, such as CISA's SSVC decision points or extra affected products. It is part of the CVE record, not a separate knowledge source.
+_Avoid_: Vulnrichment (that is CISA's program name), enrichment (too broad)
+
 **Source watermark**:
 The point up to which a knowledge source is known to be completely synchronized.
 _Avoid_: Cursor, last update
