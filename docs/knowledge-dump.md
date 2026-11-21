@@ -61,7 +61,7 @@ When an upstream outage blocks a source and the rest of the build is worth publi
 explicitly, with a reason:
 
 ```sh
-make dump-knowledge WAIVE='gcve.*' REASON='CIRCL vulnrichment dump is empty upstream since 2026-10-04'
+make dump-knowledge WAIVE='gcve.*' REASON='GCVE upstream unreachable during this build'
 ```
 
 - `WAIVE` lists `<source>.<check>` or `<source>.*` patterns, comma-separated. Only checks of gated sources can be waived;
