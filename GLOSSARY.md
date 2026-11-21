@@ -44,9 +44,25 @@ _Avoid_: Pipeline, workflow
 Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
 _Avoid_: Dispatch (the dispatcher's own step), enqueue
 
+**Current analysis**:
+A project's latest successful analysis of its default branch. A vulnerability is present in a project when its current analysis has a vulnerability instance of it.
+_Avoid_: Latest scan, last analysis (which may have failed or be on another branch)
+
+**Top-level dependency**:
+A dependency the project declares itself, through which a vulnerable package is installed. A package installed through several of them has several top-level dependencies, each with its own path down to it.
+_Avoid_: Root dependency, parent (that is only the next step on a path)
+
+**Remediation**:
+One change to one project that resolves one or more of its vulnerability instances, usually upgrading a top-level dependency or forcing a package to a fixed version.
+_Avoid_: Fix (that is the event ending an exposure), patch
+
 **Ticket**:
-A piece of remediation work for one finding in one project. It belongs to the project and is deleted with it, but it outlives the analysis that found it.
+The tracked work for one remediation in one project, listing every vulnerability instance it resolves. It belongs to the project and is deleted with it, but it outlives the analysis that found it.
 _Avoid_: Issue (that is the external tracker's item), task
+
+**Service level target**:
+The number of days an organization allows for resolving a ticket of a given severity, which sets the ticket's default due date.
+_Avoid_: SLA (informally fine), deadline
 
 ### Experiments
 
@@ -167,6 +183,10 @@ _Avoid_: Primary source, truth
 **Retired record**:
 A knowledge record its source no longer asserts because it was rejected, withdrawn or removed, kept with the reason and date.
 _Avoid_: Deleted record
+
+**Known exploited vulnerability**:
+A vulnerability that a knowledge source lists as exploited in the wild, such as the CISA KEV catalog.
+_Avoid_: Exploitable (that is a likelihood, like EPSS), weaponized
 
 **Malicious package advisory**:
 A statement that a package or version is intentionally harmful, as opposed to carrying a vulnerability.
