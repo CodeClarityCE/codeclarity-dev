@@ -36,6 +36,7 @@ enum api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.t
 enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#DependencyScope frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#DependencyScope
 enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#ListHiddenReason frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#ListHiddenReason
 enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#FixAvailability frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#FixAvailability
+enum api/src/codeclarity_modules/vulnerability_instances/organization-vulnerabilities.types.ts#TicketState frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#TicketState
 
 # Open vulnerabilities over time
 enum api/src/codeclarity_modules/vulnerability_instances/vulnerability-trend.types.ts#TrendPeriod frontend/src/codeclarity_components/vulnerabilities/vulnerability_trend.entity.ts#TrendPeriod
