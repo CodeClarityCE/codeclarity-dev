@@ -44,8 +44,14 @@ jobs:
       # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.
       - name: Create a buildx builder
         run: docker buildx create --use --driver docker-container --name real-stack
+      # Only actions can read the runtime's cache URL and token; this hands them to the next steps.
       - name: Expose the Actions runtime to buildx
-        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const [name, value] of Object.entries(process.env)) {
+              if (name.startsWith("ACTIONS_") && value) core.exportVariable(name, value);
+            }
       - name: Build the trimmed stack's images from the submodules
         run: sh .cloud/scripts/tests/fresh-install/build-images.sh
       - name: Bring up the trimmed stack
