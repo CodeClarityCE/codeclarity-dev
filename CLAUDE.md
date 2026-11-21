@@ -2,7 +2,7 @@
 
 ## Development Environment
 
-- **Setup**: `git clone --recursive`, then `make hooks` and `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
+- **Setup**: `git clone --recursive`, then `make hooks` and `make up`. Host needs only git and Docker. `make up` runs the idempotent setup jobs (knowledge restore from the knowledge dump image, migrate, `_test` databases, dev account, default analyzer, vulnerability instance backfill) before the app starts, so running it again is always safe. A failed job keeps the app stopped; `make logs SERVICE=<job>` shows why
 - `make up` / `make down` - Start/stop all services (`down` keeps data)
 - `make hooks` - Points the git hooks of the umbrella and every submodule at `.githooks/` (local `core.hooksPath`, relative). Its pre-commit runs the repo's own `.githooks/<hook>` first (api and frontend `pre-push` keep working), then scans the staged changes with gitleaks: the binary on PATH (the devcontainer has it), else the pinned image through Docker, else it refuses the commit. `git commit --no-verify` skips it; CI still scans
 - `make build` - Build all Docker images
@@ -30,7 +30,7 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - **Frontend**: Vue.js 3 + TypeScript + Tailwind CSS + Reka UI (port 443)
 - **API**: NestJS + TypeScript + TypeORM
 - **Backend**: Go microservices + Bun ORM
-- **Databases**: PostgreSQL with 4 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (one row of knowledge source watermarks: `nvd_last`, `gcve_last`, `osv_last`), `plugins` (plugin metadata). API migrations own the schema of all four.
+- **Databases**: PostgreSQL with 4 databases: `codeclarity` (app data), `knowledge` (vuln data), `config` (one row of knowledge source watermarks: `nvd_last`, `gcve_last`, `osv_last`, `kev_last`), `plugins` (plugin metadata). API migrations own the schema of all four.
 - **Message Queue**: RabbitMQ for async task processing
 - **Go module paths**: `github.com/CodeClarityCE/plugin-*`, `github.com/CodeClarityCE/utility-types`
 - **Message flow**: API Request -> Dispatcher -> Downloader (if git needed) -> Dispatcher -> Plugins (stage execution) -> Dispatcher (results)
