@@ -11,7 +11,7 @@ API migrations (`api/src/migrations/<database>/`) are the only source of schema 
 
 - **codeclarity** - App data (analyses, projects, users, organizations)
 - **knowledge** - Vulnerability, package and license data, plus per-source sync state (`knowledge_source_sync`)
-- **config** - One row of knowledge source watermarks (`nvd_last`, `gcve_last`, `osv_last`)
+- **config** - One row of knowledge source watermarks (`nvd_last`, `gcve_last`, `osv_last`, `kev_last`)
 - **plugins** - Plugin metadata
 
 ## Running migrations
