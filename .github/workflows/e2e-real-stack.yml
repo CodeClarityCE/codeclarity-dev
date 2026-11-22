@@ -67,7 +67,8 @@ jobs:
         run: |
           sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journeys" \
             --grep-invert "@after-knowledge-update|@upgrade"
-      # Golden journey 7: a pipeline analyses a project with the CLI and an Organization token.
+      # Golden journey 7: a pipeline analyses a project with the CLI and an Organization token,
+      # writes JSON and SARIF, fails on a severity and re-analyses the project by id.
       - name: Run golden journey 7 (CLI)
         if: ${{ !cancelled() && env.STACK_READY != '' }}
         run: sh .cloud/scripts/tests/real-stack/cli-journey.sh "$RUNNER_TEMP/cli-journey"
