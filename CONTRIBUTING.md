@@ -72,6 +72,7 @@ Be respectful and inclusive. Harassment or discrimination of any kind will not b
 - Clearly describe the problem and solution in your PR.
 - Reference related issues if applicable.
 - If your contribution changes existing behavior, update the documentation.
+- If the `results gate` check fails, your change moved what users see: a vulnerability, SBOM entry or licence of a fixture project appeared or disappeared, and the job log lists each one. If that is intended, download the failed job's `results-gate-run` artifact, run `sh scripts/results-gate/gate.sh update <that folder>` and commit `scripts/results-gate/expected/` in the same PR, so the reviewer sees the change in findings. See [scripts/results-gate/README.md](./scripts/results-gate/README.md).
 - All code must be reviewed before merging.
 
 ### AGPL License Requirements

@@ -1,8 +1,10 @@
 # Results gate
 
-The results gate (see `GLOSSARY.md` and [ADR 0021](../../docs/adr/0021-a-results-gate-is-the-correctness-test-for-analyzers.md)) analyses fixed fixture projects with the Default Analyzer on a real instance restored from the accuracy benchmark's pinned knowledge dump, reads the findings through the API, and compares them with the expected results in `expected/`. Any finding that appeared or disappeared fails it, and the log lists each one.
+The results gate (see `GLOSSARY.md` and [ADR 0021](../../docs/adr/0021-a-results-gate-is-the-correctness-test-for-analyzers.md)) analyses fixed fixture projects with the Default Analyzer on a real instance restored from the accuracy benchmark's pinned knowledge dump, reads the findings through the API, and compares them with the expected results in `expected/`. It compares every result type users see: vulnerability instances, SBOM entries and licences. Any finding that appeared or disappeared fails it, and the log lists each one.
 
-It runs in umbrella CI (the `results gate` job of `ci.yml`, part of the required `ci` check) on every pull request to `main` or `develop`, so on every submodule pointer bump, on pushes to `main` and `develop`, and nightly (`.github/workflows/results-gate.yml`).
+The inputs cover every lockfile the analyzers read: npm (`npm-gcve-name-collision`), yarn v1 (`yarn-lodash-minimist`), pnpm (`pnpm-json5-semver`) and Composer (`composer-smarty-php-jwt`).
+
+It runs in umbrella CI (the `results gate` job of `ci.yml`, part of the required `ci` check) on every pull request to `main` or `develop`, so on every submodule pointer bump, on pushes to `main` and `develop`, and nightly (`.github/workflows/results-gate.yml`). On a pull request it first checks out the PR's branch in each submodule that has one of the same name, `develop` in the others ([ADR 0020](../../docs/adr/0020-keep-submodules-and-test-same-named-branches-together.md), `scripts/same-named-branches.sh`), so a cross-repo change is gated as one unit before its pointers are bumped.
 
 ## When it fails
 
@@ -32,7 +34,12 @@ sh scripts/results-gate/gate.sh update [DIR]      # rewrite expected/ from a rec
 
 ## Files
 
-- `inputs.txt`: the accuracy benchmark inputs (`scripts/benchmark/inputs.tsv`) the gate analyses, one name per line. Add one by appending its name and running `update`.
-- `expected/<input>/<result type>.tsv`: the expected results of one input, written by `update`: a header, then one line per finding, sorted with `LC_ALL=C sort -u`. `vulnerabilities.tsv` holds `workspace`, `vulnerability`, `package` and `version`, one line per vulnerability instance shown in the default view of the list.
+- `inputs.txt`: the accuracy benchmark inputs (`scripts/benchmark/inputs.tsv`) the gate analyses, one name per line. Add one by appending its name and running `update`; a new fixture first needs its folder, inputs line and ground truth in the benchmark (see `scripts/benchmark/README.md`).
+- `expected/<input>/<result type>.tsv`: the expected results of one input, written by `update`: a header, then one line per finding, sorted with `LC_ALL=C sort -u`.
+  - `vulnerabilities.tsv`: `workspace`, `vulnerability`, `package` and `version`, one line per vulnerability instance shown in the default view of the list.
+  - `sbom.tsv`: `workspace`, `ecosystem`, `package` and `version`, one line per SBOM entry (the `sbom` endpoint).
+  - `licences.tsv`: `workspace`, `licence`, `package` and `version`, one line per package of each licence in the licence list (the `licenses` endpoint).
+
+A recorded run holds the API's pages of each list (`<input>.pages/`, `<input>.sbom/`, `<input>.licences/`); `check` and `update` refuse a run that lacks one, such as one recorded before the gate compared it.
 
 A new knowledge dump changes findings, so the pinned dump and the expected results are updated in one reviewed commit (see "Refreshing the knowledge" in `scripts/benchmark/README.md`).

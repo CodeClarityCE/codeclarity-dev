@@ -1,0 +1,6 @@
+workspace	vulnerability	package	version
+.	CVE-2023-28447	smarty/smarty	4.3.0
+.	CVE-2024-35226	smarty/smarty	4.3.0
+.	CVE-2025-45769	firebase/php-jwt	6.11.0
+.	CVE-2026-62992	smarty/smarty	4.3.0
+.	CVE-2026-62993	smarty/smarty	4.3.0

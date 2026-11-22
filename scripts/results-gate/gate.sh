@@ -32,13 +32,15 @@ inputs() {
 
 # Prints the result types the gate compares, one per line.
 result_types() {
-	echo vulnerabilities
+	printf '%s\n' vulnerabilities sbom licences
 }
 
 # Prints the header line of result type $1's expected file.
 header() {
 	case "$1" in
 	vulnerabilities) printf 'workspace\tvulnerability\tpackage\tversion\n' ;;
+	sbom) printf 'workspace\tecosystem\tpackage\tversion\n' ;;
+	licences) printf 'workspace\tlicence\tpackage\tversion\n' ;;
 	esac
 }
 
@@ -47,16 +49,44 @@ workspaces() {
 	awk -F '\t' -v name="$1" 'NR > 1 && $1 == name { print ($6 == "" ? "." : $6) }' "$2/run.tsv" | tr ',' '\n'
 }
 
+# Prints the folder of recorded run pages that holds result type $1 (see benchmark.sh run_input).
+pages_dir() {
+	case "$1" in
+	vulnerabilities) echo pages ;;
+	*) echo "$1" ;;
+	esac
+}
+
+# Prints the page file prefix of workspace $1: none for ".", else its name and a dash.
+pages_prefix() {
+	[ "$1" = . ] || printf '%s-' "$1" | tr '/' '_'
+}
+
+# Fails unless recorded run $3 holds the first page of result type $1's list for each workspace of input $2.
+listed() {
+	for ws in $(workspaces "$2" "$3"); do
+		[ -f "$3/$2.$(pages_dir "$1")/$(pages_prefix "$ws")0.json" ] ||
+			die "$2: no $1 list in the recorded run in $3 (workspace $ws); record a new run"
+	done
+}
+
 # Prints the normalised results of type $1 for input $2 in recorded run $3: one line per finding,
 # without header, in a stable order.
 normalise() {
 	for ws in $(workspaces "$2" "$3"); do
-		prefix=
-		[ "$ws" = . ] || prefix=$(printf '%s-' "$ws" | tr '/' '_')
+		prefix=$(pages_prefix "$ws")
 		case "$1" in
 		vulnerabilities)
 			jq -r --arg ws "$ws" '.data[] | .Vulnerability as $v | .Affected[] |
 				[$ws, $v, .AffectedDependency, .AffectedVersion] | @tsv' "$3/$2.pages/$prefix"[0-9]*.json
+			;;
+		sbom)
+			jq -r --arg ws "$ws" '.data[] | [$ws, .ecosystem, .name, .version] | @tsv' "$3/$2.sbom/$prefix"[0-9]*.json
+			;;
+		licences)
+			# Each entry is package@version; a scoped package's name holds an @ too.
+			jq -r --arg ws "$ws" '.data[] | .id as $l | .deps_using_license[] |
+				capture("^(?<p>.+)@(?<v>[^@]*)$") | [$ws, $l, .p, .v] | @tsv' "$3/$2.licences/$prefix"[0-9]*.json
 			;;
 		esac
 	done | LC_ALL=C sort -u
@@ -90,6 +120,7 @@ cmd_check() {
 		for type in $(result_types); do
 			file="$gate/expected/$name/$type.tsv"
 			[ -f "$file" ] || die "$name: no expected results at $file; write them with gate.sh update $rec"
+			listed "$type" "$name" "$rec"
 			normalise "$type" "$name" "$rec" >"$actual"
 			tail -n +2 "$file" | LC_ALL=C sort -u >"$want"
 			appeared=$(LC_ALL=C comm -13 "$want" "$actual")
@@ -118,6 +149,7 @@ write_expected() {
 	for name in $(inputs); do
 		mkdir -p "$gate/expected/$name"
 		for type in $(result_types); do
+			listed "$type" "$name" "$1"
 			{
 				header "$type"
 				normalise "$type" "$name" "$1"

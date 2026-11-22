@@ -1,0 +1,6 @@
+vulnerability	package	version	verdict	cause	evidence
+CVE-2020-28500	lodash	4.17.20	TP	-	https://github.com/advisories/GHSA-29mw-wpgm-hmr9
+CVE-2021-23337	lodash	4.17.20	TP	-	https://github.com/advisories/GHSA-35jh-r3h4-6jhm
+CVE-2025-13465	lodash	4.17.20	TP	-	https://github.com/advisories/GHSA-xxjr-mmjv-4gpg
+CVE-2026-4800	lodash	4.17.20	TP	-	https://github.com/advisories/GHSA-r5fr-rjxr-66jc
+CVE-2021-44906	minimist	1.2.5	TP	-	https://github.com/advisories/GHSA-xvch-5gv4-984h

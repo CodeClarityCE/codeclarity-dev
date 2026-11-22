@@ -1,4 +1,5 @@
-# The results gate (ADR 0021): builds the trimmed real stack at the submodule pointers, restores the
+# The results gate (ADR 0021): builds the trimmed real stack at the submodule pointers (on a PR, the
+# same-named branches; scripts/same-named-branches.sh), restores the
 # knowledge dump the accuracy benchmark is pinned to, analyses the gate's fixtures with the Default
 # Analyzer and compares the findings the API shows with scripts/results-gate/expected/. ci.yml calls
 # it on pull requests (submodule pointer bumps among them) and pushes to main and develop, as part
@@ -31,6 +32,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Use the benchmark's pinned knowledge dump
         run: echo "KNOWLEDGE_DUMP_IMAGE=$(cat scripts/benchmark/knowledge-dump.txt)" >>"$GITHUB_ENV"
       # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.

@@ -1,0 +1,5 @@
+workspace	licence	package	version
+.	ISC	lru-cache	6.0.0
+.	ISC	semver	7.5.1
+.	ISC	yallist	4.0.0
+.	MIT	json5	2.2.1

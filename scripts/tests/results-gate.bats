@@ -30,22 +30,57 @@ page() {
 	printf '{"data": [%s], "page": %s, "total_pages": %s}\n' "$(IFS=,; echo "$*")" "$n" "$total"
 }
 
-# Records a finished benchmark run of fixture input $1 in $REC, with page 0 of the list on stdin.
+# One SBOM page row: package@version, ecosystem.
+sbom_row() {
+	printf '{"name": "%s", "version": "%s", "ecosystem": "%s"}' "${1%@*}" "${1##*@}" "$2"
+}
+
+# One licence page row: licence id, then the package@version entries using it.
+licence_row() {
+	local id=$1 deps
+	shift
+	deps=$(printf '"%s",' "$@")
+	printf '{"id": "%s", "deps_using_license": [%s]}' "$id" "${deps%,}"
+}
+
+# Records a finished benchmark run of fixture input $1 in $REC, with page 0 of the vulnerability
+# list on stdin; its SBOM and licence lists are empty until record_list rewrites them.
 record() {
 	[[ -f "$REC/run.tsv" ]] || printf 'name\trepo\tcommit\tsubdir\tanalysis\tworkspaces\n' >"$REC/run.tsv"
 	printf '%s\tfixture\t-\t.\tana-%s\t.\n' "$1" "$1" >>"$REC/run.tsv"
 	echo "$PIN" >"$REC/knowledge-dump.txt"
-	mkdir -p "$REC/$1.pages"
+	mkdir -p "$REC/$1.pages" "$REC/$1.sbom" "$REC/$1.licences"
 	cat >"$REC/$1.pages/0.json"
+	page 0 0 >"$REC/$1.sbom/0.json"
+	page 0 0 >"$REC/$1.licences/0.json"
 }
 
-# Writes the expected vulnerability instances of input $1 from tab-separated lines on stdin.
+# Rewrites page 0 of input $1's list $2 (sbom or licences) in $REC from stdin.
+record_list() {
+	cat >"$REC/$1.$2/0.json"
+}
+
+# Writes the expected results of type $2 (vulnerabilities by default) of input $1 from tab-separated
+# lines on stdin; the input's other types are expected empty unless written too.
 expected() {
+	local type=${2:-vulnerabilities} t
 	mkdir -p "$RESULTS_GATE_DIR/expected/$1"
+	for t in vulnerabilities sbom licences; do
+		[[ -f "$RESULTS_GATE_DIR/expected/$1/$t.tsv" ]] || header "$t" >"$RESULTS_GATE_DIR/expected/$1/$t.tsv"
+	done
 	{
-		printf 'workspace\tvulnerability\tpackage\tversion\n'
+		header "$type"
 		cat
-	} >"$RESULTS_GATE_DIR/expected/$1/vulnerabilities.tsv"
+	} >"$RESULTS_GATE_DIR/expected/$1/$type.tsv"
+}
+
+# Prints the header line of result type $1's expected file.
+header() {
+	case "$1" in
+	vulnerabilities) printf 'workspace\tvulnerability\tpackage\tversion\n' ;;
+	sbom) printf 'workspace\tecosystem\tpackage\tversion\n' ;;
+	licences) printf 'workspace\tlicence\tpackage\tversion\n' ;;
+	esac
 }
 
 @test "check passes when the run shows exactly the expected findings" {
@@ -73,6 +108,27 @@ EOF2
 	[[ "$output" == *"  disappeared: .  CVE-2  b  2.0.0"* ]]
 	[[ "$output" != *"CVE-1"* ]]
 	[[ "$output" == *"gate.sh update"* ]]
+}
+
+@test "check fails on an SBOM entry or a licence that appeared or disappeared" {
+	expected app sbom <<'EOF2'
+.	npm	a	1.0.0
+.	npm	b	2.0.0
+EOF2
+	expected app licences <<'EOF2'
+.	MIT	a	1.0.0
+EOF2
+	page 0 0 | record app
+	page 0 1 "$(sbom_row a@1.0.0 npm)" "$(sbom_row @s/c@3.0.0 npm)" | record_list app sbom
+	page 0 1 "$(licence_row MIT a@1.0.0)" "$(licence_row ISC @s/c@3.0.0)" | record_list app licences
+	run sh "$GATE" check "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"app vulnerabilities: 0 as expected"* ]]
+	[[ "$output" == *"app sbom: 1 appeared, 1 disappeared"* ]]
+	[[ "$output" == *"  appeared:    .  npm  @s/c  3.0.0"* ]]
+	[[ "$output" == *"  disappeared: .  npm  b  2.0.0"* ]]
+	[[ "$output" == *"app licences: 1 appeared, 0 disappeared"* ]]
+	[[ "$output" == *"  appeared:    .  ISC  @s/c  3.0.0"* ]]
 }
 
 @test "update writes each input's findings, sorted, and check then passes" {
@@ -103,12 +159,27 @@ frontend	CVE-3	c	3.0.0
 EOF2
 	printf 'name\trepo\tcommit\tsubdir\tanalysis\tworkspaces\napp\t.\tabc\t.\tana\tapi,frontend\n' >"$REC/run.tsv"
 	echo "$PIN" >"$REC/knowledge-dump.txt"
-	mkdir -p "$REC/app.pages"
+	expected app sbom <<'EOF2'
+api	npm	a	1.0.0
+frontend	npm	b	2.0.0
+EOF2
+	expected app licences <<'EOF2'
+api	MIT	a	1.0.0
+frontend	MIT	b	2.0.0
+EOF2
+	mkdir -p "$REC/app.pages" "$REC/app.sbom" "$REC/app.licences"
 	page 0 1 "$(row CVE-1 a@1.0.0)" >"$REC/app.pages/api-0.json"
 	page 0 2 "$(row CVE-2 b@2.0.0)" >"$REC/app.pages/frontend-0.json"
 	page 1 2 "$(row CVE-3 c@3.0.0)" >"$REC/app.pages/frontend-1.json"
+	page 0 1 "$(sbom_row a@1.0.0 npm)" >"$REC/app.sbom/api-0.json"
+	page 0 2 >"$REC/app.sbom/frontend-0.json"
+	page 1 2 "$(sbom_row b@2.0.0 npm)" >"$REC/app.sbom/frontend-1.json"
+	page 0 1 "$(licence_row MIT a@1.0.0)" >"$REC/app.licences/api-0.json"
+	page 0 1 "$(licence_row MIT b@2.0.0)" >"$REC/app.licences/frontend-0.json"
 	run sh "$GATE" check "$REC"
 	[ "$status" -eq 0 ]
+	[[ "$output" == *"app sbom: 2 as expected"* ]]
+	[[ "$output" == *"app licences: 2 as expected"* ]]
 }
 
 @test "check fails when an input has no expected results, or the run left it out" {
@@ -122,6 +193,15 @@ EOF2
 	run sh "$GATE" check "$REC"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"other: not in the recorded run"* ]]
+}
+
+@test "check fails on a run that did not record a result type's list" {
+	expected app </dev/null
+	page 0 0 | record app
+	rm -r "$REC/app.licences"
+	run sh "$GATE" check "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"app: no licences list in the recorded run"* ]]
 }
 
 @test "check refuses a run on another knowledge dump than the pinned one" {
@@ -165,6 +245,12 @@ curl_stub() {
 	"GET /org/org1/projects/proj1/analysis/ana1/vulnerabilities")
 		local n=${2##*page=}
 		cat "$BATS_TEST_TMPDIR/pages/${n%%&*}.json" ;;
+	"GET /org/org1/projects/proj1/analysis/ana1/sbom" | "GET /org/org1/projects/proj1/analysis/ana1/licenses")
+		local n=${2##*page=} list=sbom
+		[[ "$path" != *licenses* ]] || list=licences
+		# An empty list unless the test wrote its pages.
+		cat "$BATS_TEST_TMPDIR/$list/${n%%&*}.json" 2>/dev/null ||
+			echo '{"data": [], "page": 0, "total_pages": 0}' ;;
 	*) echo "unexpected: $*" >&2; return 22 ;;
 	esac
 }
@@ -178,10 +264,14 @@ RULES
 .	CVE-1	a	1.0.0
 EOF2
 	page 0 1 "$(row CVE-1 a@1.0.0)" "$(row CVE-2 b@2.0.0)" >"$BATS_TEST_TMPDIR/pages/0.json"
+	mkdir -p "$BATS_TEST_TMPDIR/sbom"
+	page 0 1 "$(sbom_row a@1.0.0 npm)" >"$BATS_TEST_TMPDIR/sbom/0.json"
 	run sh "$GATE" run --out "$REC"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"app vulnerabilities: 1 appeared, 0 disappeared"* ]]
 	[[ "$output" == *"  appeared:    .  CVE-2  b  2.0.0"* ]]
+	[[ "$output" == *"app sbom: 1 appeared, 0 disappeared"* ]]
+	[[ "$output" == *"app licences: 0 as expected"* ]]
 	# One analysis: "other" is a benchmark input but not a gate input.
 	[ "$(grep -c '^POST .*/analyses$' "$CURL_STUB_LOG")" = 1 ]
 	[ "$(cut -f1 "$REC/run.tsv" | tail -n +2)" = app ]
@@ -196,13 +286,29 @@ EOF2
 }
 
 @test "the committed gate inputs are benchmark inputs, each with expected results" {
-	local dir="$BATS_TEST_DIRNAME/../results-gate" name
+	local dir="$BATS_TEST_DIRNAME/../results-gate" name type
 	grep -qv -e '^#' -e '^$' "$dir/inputs.txt"
 	grep -v -e '^#' -e '^$' "$dir/inputs.txt" | while IFS= read -r name; do
 		cut -f1 "$BATS_TEST_DIRNAME/../benchmark/inputs.tsv" | grep -qx "$name"
-		[ -f "$dir/expected/$name/vulnerabilities.tsv" ]
-		# Stored as update writes it: the header, then sorted unique lines.
-		[ "$(head -n 1 "$dir/expected/$name/vulnerabilities.tsv")" = 'workspace	vulnerability	package	version' ]
-		tail -n +2 "$dir/expected/$name/vulnerabilities.tsv" | LC_ALL=C sort -cu
+		for type in vulnerabilities sbom licences; do
+			[ -f "$dir/expected/$name/$type.tsv" ]
+			# Stored as update writes it: the header, then sorted unique lines.
+			[ "$(head -n 1 "$dir/expected/$name/$type.tsv")" = "$(header "$type")" ]
+			tail -n +2 "$dir/expected/$name/$type.tsv" | LC_ALL=C sort -cu
+		done
+	done
+}
+
+@test "the committed gate inputs cover every lockfile the analyzers read" {
+	local dir="$BATS_TEST_DIRNAME/../results-gate" fixtures="$BATS_TEST_DIRNAME/../benchmark/fixtures" lock name found
+	for lock in package-lock.json yarn.lock pnpm-lock.yaml composer.lock; do
+		found=
+		while IFS= read -r name; do
+			[[ ! -f "$fixtures/$name/$lock.fixture" ]] || found=$name
+		done < <(grep -v -e '^#' -e '^$' "$dir/inputs.txt")
+		[[ -n "$found" ]] || {
+			echo "no gate input has a $lock"
+			return 1
+		}
 	done
 }
