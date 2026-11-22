@@ -179,8 +179,9 @@ jobs:
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
-  # Installs the newest deployment release, then upgrades to this checkout's Compose file and
-  # checks the data is kept. Skips while no release has a Compose file attached.
+  # Installs the newest deployment release, seeds a project, an analysis and a ticket through the API,
+  # then upgrades to this checkout's Compose file and checks they are intact (docs/upgrade-test.md).
+  # Skips while no release has a Compose file attached.
   upgrade-production:
     name: upgrade (production)
     runs-on: ubuntu-24.04
