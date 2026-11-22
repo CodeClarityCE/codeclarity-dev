@@ -547,7 +547,10 @@ result=ok
 compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/supplied.crt" || result=bad
 check "with TLS_CERT and TLS_KEY set, Caddy serves the supplied certificate" $result
+# The API is now behind the supplied self-signed certificate, so curl trusts that one.
+CURL_CA="$work/supplied.crt"
 check_support_bundle "with TLS_CERT and TLS_KEY set"
+CURL_CA="$work/ca.crt"
 
 unset TLS_CERT TLS_KEY
 result=ok

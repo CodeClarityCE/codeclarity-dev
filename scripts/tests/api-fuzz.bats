@@ -121,6 +121,19 @@ docker_arg() {
 	[[ "$output" == *"token"* ]]
 }
 
+@test "run accepts the first known provider when awk writes one line at a time" {
+	# Busybox awk in the bats image flushes per line; this one also waits, so a reader that stops early breaks it.
+	local real_awk
+	real_awk=$(command -v awk)
+	cat >"$BATS_TEST_TMPDIR/bin/awk" <<EOF
+#!/usr/bin/env bash
+"$real_awk" "\$@" | while IFS= read -r l; do printf '%s\n' "\$l" 2>/dev/null || exit 141; sleep 0.1; done
+EOF
+	chmod +x "$BATS_TEST_TMPDIR/bin/awk"
+	run bash "$FUZZ" run --auth dev-account --out "$OUT"
+	[ "$status" -eq 0 ]
+}
+
 @test "run fails without calling Schemathesis when the dev account cannot log in" {
 	echo 'curl_stub() { return 22; }' >"$CURL_STUB_RULES"
 	run bash "$FUZZ" run --auth dev-account --out "$OUT"
