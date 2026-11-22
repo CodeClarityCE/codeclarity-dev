@@ -3,6 +3,9 @@
 # creates or edits only those, and other labels are left alone. gh is the stand-in in stubs/.
 # Run from the repo root: bats scripts/tests
 
+# run -1 (exit exactly 1) needs bats 1.5.
+bats_require_minimum_version 1.5.0
+
 setup() {
 	load helpers
 	setup_fake_root
@@ -54,7 +57,7 @@ complete_labels() {
 
 @test "check mode writes nothing" {
 	run "$ROOT_DIR/scripts/sync-labels.sh" --check api
-	! grep -q "label create" "$GH_STUB_LOG"
+	run -1 grep -q "label create" "$GH_STUB_LOG"
 }
 
 @test "apply creates missing labels, edits differing ones and leaves the rest alone" {
@@ -67,7 +70,7 @@ complete_labels() {
 	[ "$(grep -c 'label create' "$GH_STUB_LOG")" -eq 2 ]
 	grep -q -- "label create P1 -R CodeClarityCE/api --force --color B60205 --description Urgent: crash, data loss, security hole or wrong results" "$GH_STUB_LOG"
 	grep -q -- "label create P3 -R CodeClarityCE/api --force --color FBCA04" "$GH_STUB_LOG"
-	! grep -q "bug" "$GH_STUB_LOG"
+	run -1 grep -q "bug" "$GH_STUB_LOG"
 }
 
 @test "with no repo names it covers every non-archived repo in the org" {
