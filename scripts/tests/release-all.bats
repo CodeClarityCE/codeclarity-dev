@@ -8,6 +8,12 @@ setup() {
 	setup_fake_root
 }
 
+# Runs one release-all.sh function after parsing the given flags, e.g. rel_with "--suffix beta" bump.
+rel_with() {
+	bash -c 's=$1 flags=$2; shift 2; args=("$@"); set --; source "$s"; read -ra f <<<"$flags"; parse_args "${f[@]}"; "${args[@]}"' \
+		_ "$ROOT_DIR/scripts/release-all.sh" "$@"
+}
+
 # --- version comparison -------------------------------------------------------------------
 
 @test "version_gt compares patch numbers numerically" {
@@ -39,6 +45,14 @@ setup() {
 	[ "$output" = v0.0.10-alpha ]
 	run rel bump v1.2.3
 	[ "$output" = v1.2.4 ]
+}
+
+@test "bump with a new suffix raises the patch number and swaps the suffix" {
+	run rel bump v0.0.9-alpha beta
+	[ "$status" -eq 0 ]
+	[ "$output" = v0.0.10-beta ]
+	run rel bump v0.0.10-beta beta
+	[ "$output" = v0.0.11-beta ]
 }
 
 @test "bump refuses a version it cannot parse" {
@@ -92,6 +106,38 @@ released_go_repo() {
 	run rel next_tag api v0.1.0-alpha
 	[ "$status" -eq 0 ]
 	[ "$output" = v0.1.1-alpha ]
+}
+
+@test "next_tag with a new suffix bumps the latest tag to that suffix" {
+	released_go_repo
+	commit_file backend/utilities/types main.go 'package types'
+	run rel_with "--suffix beta" next_tag backend/utilities/types v0.1.0-alpha
+	[ "$status" -eq 0 ]
+	[ "$output" = v0.1.1-beta ]
+}
+
+@test "next_tag with a new suffix reuses main's untagged version of that suffix" {
+	released_go_repo
+	commit_file backend/utilities/types config.json '{ "version": "v0.1.1-beta" }'
+	merge_to_main backend/utilities/types
+	run rel_with "--suffix beta" next_tag backend/utilities/types v0.1.0-alpha
+	[ "$status" -eq 0 ]
+	[ "$output" = v0.1.1-beta ]
+}
+
+@test "next_tag with a new suffix bumps past main's untagged version of the old suffix" {
+	released_go_repo
+	commit_file backend/utilities/types config.json '{ "version": "v0.1.1-alpha" }'
+	merge_to_main backend/utilities/types
+	run rel_with "--suffix beta" next_tag backend/utilities/types v0.1.0-alpha
+	[ "$status" -eq 0 ]
+	[ "$output" = v0.1.2-beta ]
+}
+
+@test "--suffix refuses anything but lowercase letters" {
+	run rel_with "--suffix -beta" true
+	[ "$status" -eq 2 ]
+	[[ "$output" == *"--suffix takes lowercase letters only"* ]]
 }
 
 # --- releaser -----------------------------------------------------------------------------
@@ -193,4 +239,64 @@ released_go_repo() {
 	[ "$status" -eq 1 ]
 	run grep -q '^frontend' "$GH_STUB_LOG"
 	[ "$status" -eq 1 ]
+}
+
+# Every repo of the fake tree, tagged v0.1.0-alpha on main with nothing new on develop.
+released_tree() {
+	local key
+	for key in backend/utilities/types backend api frontend deployment .; do
+		init_repo "$key"
+		tag_main "$key" v0.1.0-alpha
+	done
+}
+
+@test "a dry run with a new suffix plans it for every repo, changed or not" {
+	released_tree
+	cd "$ROOT_DIR"
+	run bash scripts/release-all.sh --dry-run --suffix beta
+	[ "$status" -eq 0 ]
+	local key
+	for key in backend/utilities/types backend api frontend deployment .; do
+		[[ "$output" == *$'\n'"$(printf '%-32s' "$key") v0.1.0-alpha    -> v0.1.1-beta "* ]]
+	done
+}
+
+# gh answers for a release PR that merges at once and a release the script creates.
+release_pr_rules() {
+	cat >"$GH_STUB_RULES" <<'RULES'
+gh_stub() {
+	local merged="$GH_STUB_DIR/${repo//\//_}.merged"
+	case "$1 $2" in
+	"pr list") ;;
+	"pr create") echo "https://github.com/CodeClarityCE/x/pull/7" ;;
+	"pr merge") git push -q origin develop:main && touch "$merged" ;;
+	"pr view") if [[ -f "$merged" ]]; then echo MERGED; else echo OPEN; fi ;;
+	"release create") git fetch -q origin && git tag "$3" origin/main && git push -q origin "$3" ;;
+	*) return 1 ;;
+	esac
+}
+RULES
+}
+
+@test "a run with a new suffix releases every repo once, version files included" {
+	released_tree
+	commit_file backend/utilities/types config.json '{ "version": "v0.1.0-alpha" }'
+	commit_file deployment config.json '{ "version": "v0.1.0-alpha" }'
+	release_pr_rules
+
+	cd "$ROOT_DIR"
+	run bash scripts/release-all.sh --yes --suffix beta
+	[ "$status" -eq 0 ]
+	local key
+	for key in backend/utilities/types backend api frontend deployment .; do
+		grep -qx "$key=v0.1.1-beta" scripts/.release-state
+		[ -n "$(git -C "$key" ls-remote --tags origin refs/tags/v0.1.1-beta)" ]
+	done
+	[ "$(git -C deployment show origin/main:config.json | jq -r .version)" = v0.1.1-beta ]
+	[ "$(git -C backend/utilities/types show origin/main:config.json | jq -r .version)" = v0.1.1-beta ]
+
+	# The switch happens once: the next run without the flag keeps beta and has nothing to do.
+	rm scripts/.release-state
+	run bash scripts/release-all.sh --dry-run
+	[[ "$output" == *"$(printf '%-32s' api) v0.1.1-beta     -> v0.1.1-beta     unchanged"* ]]
 }

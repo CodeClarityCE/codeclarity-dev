@@ -5,7 +5,8 @@
 #   1. bump CodeClarityCE go.mod requirements to the tags released upstream in
 #      this run (or, for backend / codeclarity-dev, the submodule pointers);
 #   2. bump the version file CI checks (config.json, or package.json for
-#      api / frontend) to the next vX.Y.(N+1)-alpha;
+#      api / frontend) to the next vX.Y.(N+1), keeping its suffix (such as
+#      -beta) unless --suffix names a new one;
 #   3. open a develop -> main PR with gh, wait for its CI check, merge it;
 #   4. wait for the main build to push the image and create the tag + GitHub
 #      release (or create the release here, see below);
@@ -30,6 +31,11 @@
 #   scripts/release-all.sh                      # release everything
 #   scripts/release-all.sh --only backend/utilities/types
 #   scripts/release-all.sh --yes                # don't ask before each release
+#   scripts/release-all.sh --suffix beta        # switch every repo to -beta
+#
+# --suffix releases every repo whose latest tag lacks the suffix, changed or
+# not, so the switch lands once across every version file and tag. Later runs
+# keep the latest tag's suffix, so the flag is needed only for the switch.
 #
 # Before each repo with changes, it shows the new commits and dependency bumps
 # and asks y (release) / n (keep current tag) / q (quit).
@@ -58,6 +64,7 @@ export GONOPROXY="github.com/CodeClarityCE/*"
 DRY_RUN=0
 ASSUME_YES=0
 ONLY=""
+SUFFIX=""
 parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -67,8 +74,16 @@ parse_args() {
 			ONLY="${2:?--only needs a repo path}"
 			shift
 			;;
+		--suffix)
+			SUFFIX="${2:?--suffix needs a name, such as beta}"
+			[[ "$SUFFIX" =~ ^[a-z]+$ ]] || {
+				echo "--suffix takes lowercase letters only, such as beta" >&2
+				exit 2
+			}
+			shift
+			;;
 		-h | --help)
-			sed -n '2,42p' "$0"
+			sed -n '2,48p' "$0"
 			exit 0
 			;;
 		*)
@@ -186,9 +201,13 @@ latest_tag() {
 	in_repo "$1" tag --merged origin/main --list 'v*' --sort=-v:refname | head -1
 }
 
+# Next patch version; keeps the suffix unless a new one is given (beta for -beta).
 bump() {
+	local suffix
 	[[ "$1" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]] || die "cannot bump version '$1'"
-	echo "v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))${BASH_REMATCH[4]}"
+	suffix="${BASH_REMATCH[4]}"
+	[[ -n "${2:-}" ]] && suffix="-$2"
+	echo "v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))$suffix"
 }
 
 # Version as written in the repo's version file (package.json has no "v").
@@ -207,20 +226,26 @@ version_gt() {
 	[[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
 }
 
+# Succeeds when the version lacks the --suffix being switched to.
+needs_suffix() {
+	[[ -n "$SUFFIX" && "$1" != *"-$SUFFIX" ]]
+}
+
 # Next version: one past the latest tag, unless main holds a merged release
-# that never got its tag. Then reuse it, or go one past it if develop moved on.
+# that never got its tag. Then reuse it, or go one past it if develop moved on
+# or it lacks the new --suffix.
 next_tag() {
 	local key="$1" cur="$2" mainv
 	mainv="$(main_version "$key")"
 	if [[ -n "$mainv" ]] && version_gt "$mainv" "$cur"; then
-		if in_repo "$key" merge-base --is-ancestor HEAD origin/main; then
+		if in_repo "$key" merge-base --is-ancestor HEAD origin/main && ! needs_suffix "$mainv"; then
 			echo "$mainv"
 		else
-			bump "$mainv"
+			bump "$mainv" "$SUFFIX"
 		fi
 		return
 	fi
-	bump "$cur"
+	bump "$cur" "$SUFFIX"
 }
 
 file_version() {
@@ -459,9 +484,9 @@ release() {
 		mapfile -t changes < <(moved_submodules "$key" | sed 's/$/ (submodule moved)/')
 	fi
 
-	# Nothing on develop beyond the latest tag. Also covers a run that died after
-	# the tag but before develop was fast-forwarded: no second version.
-	if in_repo "$key" merge-base --is-ancestor HEAD "$cur" && [[ ${#changes[@]} -eq 0 ]]; then
+	# Nothing on develop beyond the latest tag and no new suffix. Also covers a run
+	# that died after the tag but before develop was fast-forwarded: no second version.
+	if in_repo "$key" merge-base --is-ancestor HEAD "$cur" && [[ ${#changes[@]} -eq 0 ]] && ! needs_suffix "$cur"; then
 		log "$key" "nothing new since $cur"
 		finish_develop "$key"
 		record "$key" "$cur"
@@ -514,6 +539,9 @@ plan() {
 	elif ((ahead > 0 || ${#bumps[@]} > 0)); then
 		tag="$(next_tag "$key" "$cur")"
 		reason="$ahead commits"
+	elif needs_suffix "$cur"; then
+		tag="$(next_tag "$key" "$cur")"
+		reason="new suffix"
 	else
 		tag="$cur"
 		reason="unchanged"
