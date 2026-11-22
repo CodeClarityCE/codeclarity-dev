@@ -201,6 +201,16 @@ released_go_repo() {
 	[ "$output" = workflow ]
 }
 
+@test "releaser ignores a release workflow that only runs on tag pushes" {
+	write_file backend .github/workflows/release.yml "on:
+  push:
+    tags:
+      - \"cli-v*\""
+	run rel releaser backend
+	[ "$status" -eq 0 ]
+	[ "$output" = script ]
+}
+
 @test "releaser stops on a release workflow with CI_RELEASE unset" {
 	write_file . .github/workflows/release.yml "on:
   workflow_dispatch:"
