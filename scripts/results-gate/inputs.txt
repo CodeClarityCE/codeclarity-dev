@@ -1,2 +1,5 @@
 # The accuracy benchmark inputs (scripts/benchmark/inputs.tsv) the results gate analyses, one per line.
 npm-gcve-name-collision
+composer-smarty-php-jwt
+yarn-lodash-minimist
+pnpm-json5-semver

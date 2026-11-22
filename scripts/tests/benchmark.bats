@@ -221,6 +221,12 @@ curl_stub() {
 	"GET /org/org1/projects/proj1/analysis/ana1/vulnerabilities")
 		local n=${2##*page=}
 		cat "$BATS_TEST_TMPDIR/pages/${n%%&*}.json" ;;
+	"GET /org/org1/projects/proj1/analysis/ana1/sbom" | "GET /org/org1/projects/proj1/analysis/ana1/licenses")
+		local n=${2##*page=} list=sbom
+		[[ "$path" != *licenses* ]] || list=licences
+		# An empty list unless the test wrote its pages.
+		cat "$BATS_TEST_TMPDIR/$list/${n%%&*}.json" 2>/dev/null ||
+			echo '{"data": [], "page": 0, "total_pages": 0}' ;;
 	*) echo "unexpected: $*" >&2; return 22 ;;
 	esac
 }
@@ -250,6 +256,23 @@ EOF
 	# The recorded run reports the same again offline.
 	run sh "$BENCHMARK" report "$REC"
 	[[ "$(squeezed)" == *"app 2 1 1 0 1 1 0 50.0% 100.0%"* ]]
+}
+
+@test "run records every page of the SBOM and licence lists" {
+	app_input
+	fake_api
+	ground_truth app </dev/null
+	page 0 0 >"$BATS_TEST_TMPDIR/pages/0.json"
+	mkdir -p "$BATS_TEST_TMPDIR/sbom" "$BATS_TEST_TMPDIR/licences"
+	page 0 2 '{"name": "a"}' >"$BATS_TEST_TMPDIR/sbom/0.json"
+	page 1 2 '{"name": "b"}' >"$BATS_TEST_TMPDIR/sbom/1.json"
+	page 0 1 '{"id": "MIT"}' >"$BATS_TEST_TMPDIR/licences/0.json"
+	run sh "$BENCHMARK" run --input app --out "$REC"
+	[ "$status" -eq 0 ]
+	[ "$(jq -r '.data[].name' "$REC/app.sbom/0.json" "$REC/app.sbom/1.json")" = "$(printf 'a\nb')" ]
+	[ "$(jq -r '.data[].id' "$REC/app.licences/0.json")" = MIT ]
+	grep -qx "GET http://localhost:3000/org/org1/projects/proj1/analysis/ana1/sbom?workspace=.&entries_per_page=100&page=1" "$CURL_STUB_LOG"
+	grep -qx "GET http://localhost:3000/org/org1/projects/proj1/analysis/ana1/licenses?workspace=.&entries_per_page=100&page=0" "$CURL_STUB_LOG"
 }
 
 # A repo at $BENCHMARK_ROOT/umbrella whose api and frontend folders are submodules, listed as
@@ -416,6 +439,8 @@ EOF
 		case "$name" in
 		npm-*) expected="package-lock.json package.json " ;;
 		composer-*) expected="composer.json composer.lock " ;;
+		yarn-*) expected="package.json yarn.lock " ;;
+		pnpm-*) expected="package.json pnpm-lock.yaml " ;;
 		*) echo "no expected listing for $name"; return 1 ;;
 		esac
 		[ "$(tar -tzf "$REC/$name.tar.gz" | sort | tr '\n' ' ')" = "$expected" ] || {

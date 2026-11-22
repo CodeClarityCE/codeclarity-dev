@@ -1,0 +1,5 @@
+workspace	ecosystem	package	version
+.	npm	json5	2.2.1
+.	npm	lru-cache	6.0.0
+.	npm	semver	7.5.1
+.	npm	yallist	4.0.0
