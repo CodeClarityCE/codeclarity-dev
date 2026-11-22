@@ -52,14 +52,14 @@ report_unsettled() {
 }
 
 # Prints "<service> <state> <exit code> <health>" for every container, one per line.
-states() {
+container_states() {
 	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.ExitCode) \(.Health // "")"'
 }
 
 # Prints what keeps the stack from being settled: a job not exited 0, or a service not
 # running and healthy (when it has a healthcheck). Prints nothing when it is settled.
 unsettled() {
-	states | while read -r service state code health; do
+	container_states | while read -r service state code health; do
 		case " $JOBS " in
 		*" $service "*)
 			if [ "$state" != exited ] || [ "$code" != 0 ]; then echo "$service $state $code"; fi
