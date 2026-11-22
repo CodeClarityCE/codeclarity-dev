@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Test stand-in for curl. Logs each call to CURL_STUB_LOG as "<method> <url>", then hands the
 # method, URL and request body (-d) to the curl_stub function in CURL_STUB_RULES, or fails as unexpected.
+# Headers (-H) go to CURL_STUB_HEADERS, one per line, when it is set.
 method=GET url='' data=''
 while (($#)); do
 	case "$1" in
@@ -12,7 +13,11 @@ while (($#)); do
 		data=$2
 		shift
 		;;
-	-H | --form-string | -F | --cacert) shift ;;
+	-H)
+		[[ -z "${CURL_STUB_HEADERS:-}" ]] || echo "$2" >>"$CURL_STUB_HEADERS"
+		shift
+		;;
+	--form-string | -F | --cacert) shift ;;
 	http://* | https://*) url=$1 ;;
 	esac
 	shift

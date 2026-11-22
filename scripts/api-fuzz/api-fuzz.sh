@@ -13,9 +13,11 @@ CHECKS=not_a_server_error,response_schema_conformance
 usage() {
 	cat >&2 <<'EOF'
 usage: api-fuzz.sh run --auth PROVIDER --out DIR [--seed N] [-- SCHEMATHESIS_ARGS...]
+       api-fuzz.sh issue-token
        api-fuzz.sh issue-body DIR
        api-fuzz.sh report DIR
 run fuzzes the API at API_URL as PROVIDER (dev-account, token) and records the run in DIR;
+issue-token prints the secret of a new Organization token for the token provider's API_TOKEN;
 issue-body prints the ci-failure issue text for a recorded run; report opens, comments on or
 closes that issue with gh. Env: API_URL, CURL_CA, MAX_TIME, SCHEMATHESIS_IMAGE, API_TOKEN, RUN_URL.
 EOF
@@ -40,12 +42,18 @@ auth_providers() {
 	declare -F | awk '$3 ~ /^auth_/ && $3 != "auth_providers" { sub("^auth_", "", $3); gsub("_", "-", $3); print $3 }'
 }
 
+# Prints a JWT of the dev account, logged in through the API.
+dev_login() {
+	local email=${LOGIN_EMAIL:-john.doe@codeclarity.io} password=${LOGIN_PASSWORD:-'ThisIs4Str0ngP4ssW0rd?'}
+	api_curl -fsS -X POST "$API_URL/auth/authenticate" -H 'Content-Type: application/json' \
+		-d "$(jq -cn --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" 2>/dev/null |
+		jq -er '.data.token' 2>/dev/null || die "$email could not log in through $API_URL"
+}
+
 # The dev account, logged in through the API.
 auth_dev_account() {
-	local email=${LOGIN_EMAIL:-john.doe@codeclarity.io} password=${LOGIN_PASSWORD:-'ThisIs4Str0ngP4ssW0rd?'} token
-	token=$(api_curl -fsS -X POST "$API_URL/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "$(jq -cn --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" 2>/dev/null |
-		jq -er '.data.token' 2>/dev/null) || die "$email could not log in through $API_URL"
+	local token
+	token=$(dev_login) || exit 1
 	echo "Authorization: Bearer $token"
 }
 
@@ -53,6 +61,22 @@ auth_dev_account() {
 auth_token() {
 	[[ -n "${API_TOKEN:-}" ]] || die "the token provider needs API_TOKEN"
 	echo "Authorization: Bearer $API_TOKEN"
+}
+
+# Issues an analyze Organization token, valid for a day, in the dev account's personal
+# organization and prints its secret, for the token provider's API_TOKEN.
+cmd_issue_token() {
+	local jwt org secret
+	jwt=$(dev_login) || exit 1
+	org=$(api_curl -fsS "$API_URL/org?page=0&entries_per_page=50" -H "Authorization: Bearer $jwt" 2>/dev/null |
+		jq -er '[.data[].organization | select(.personal)][0].id' 2>/dev/null) ||
+		die "found no personal organization of the dev account"
+	secret=$(api_curl -fsS -X POST "$API_URL/org/$org/tokens" -H "Authorization: Bearer $jwt" \
+		-H 'Content-Type: application/json' \
+		-d "$(jq -cn '{name: "api-fuzz", scope: "analyze", expires_on: (now + 86400 | todate)}')" 2>/dev/null |
+		jq -er '.data.secret | select(. != "")' 2>/dev/null) ||
+		die "could not issue an Organization token in organization $org"
+	echo "$secret"
 }
 
 cmd_run() {
@@ -218,6 +242,7 @@ run)
 	shift
 	cmd_run "$@"
 	;;
+issue-token) cmd_issue_token ;;
 issue-body) cmd_issue_body "${2:-}" ;;
 report) cmd_report "${2:-}" ;;
 *) usage ;;

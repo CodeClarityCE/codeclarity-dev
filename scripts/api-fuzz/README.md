@@ -4,7 +4,7 @@ Nightly Schemathesis run against a real instance's OpenAPI description (`/api/ap
 
 ## Files
 
-- `api-fuzz.sh`: `run`, `issue-body` and `report`; `api-fuzz.sh` with no arguments prints the usage.
+- `api-fuzz.sh`: `run`, `issue-token`, `issue-body` and `report`; `api-fuzz.sh` with no arguments prints the usage.
 - `schemathesis-image.txt`: the image, pinned by version and digest. To bump it, pick a release at least two weeks old and take the digest of its multi-arch index from the registry.
 - `excluded-operations.txt`: operationIds the run never calls, because they would delete the account or end its sessions.
 
@@ -13,7 +13,7 @@ Nightly Schemathesis run against a real instance's OpenAPI description (`/api/ap
 `--auth NAME` calls the function `auth_<name>` (dashes become underscores) in `api-fuzz.sh`, which prints the header sent on every request.
 
 - `dev-account`: logs in through `POST /auth/authenticate` (`LOGIN_EMAIL` and `LOGIN_PASSWORD`, default the dev account).
-- `token`: sends `API_TOKEN` as a bearer token, for an Organization token.
+- `token`: sends `API_TOKEN` as a bearer token, for an Organization token. `api-fuzz.sh issue-token` prints the secret of a new `analyze` token, valid for a day, in the dev account's personal organization; the workflow exports it as `API_TOKEN`. Routes that do not allow tokens answer 403, which is the intended answer.
 
 To add a provider, write its function, then add its name to the `auth` matrix of both jobs in the workflow.
 

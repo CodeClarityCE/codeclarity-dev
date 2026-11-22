@@ -129,6 +129,53 @@ docker_arg() {
 	[ ! -f "$DOCKER_LOG" ]
 }
 
+# The dev account logs in, has personal org org-1, and the token endpoint answers with secret $1.
+stub_token_api() {
+	cat >"$CURL_STUB_RULES" <<RULES
+curl_stub() {
+	case "\$1 \$2" in
+	"POST https://localhost/api/auth/authenticate") echo '{"data": {"token": "dev-token-123"}}' ;;
+	"GET https://localhost/api/org?page=0&entries_per_page=50")
+		echo '{"data": [{"organization": {"id": "team-1", "personal": false}}, {"organization": {"id": "org-1", "personal": true}}]}' ;;
+	"POST https://localhost/api/org/org-1/tokens")
+		echo "\$3" >"$BATS_TEST_TMPDIR/token-body"
+		echo '{"data": {"id": "t-1", "secret": "$1"}}' ;;
+	*) return 22 ;;
+	esac
+}
+RULES
+}
+
+@test "issue-token issues an analyze Organization token in the dev account's personal organization and prints its secret" {
+	stub_token_api ccot_secret-1
+	export CURL_STUB_HEADERS="$BATS_TEST_TMPDIR/headers"
+	run --separate-stderr bash "$FUZZ" issue-token
+	[ "$status" -eq 0 ]
+	[ "$output" = ccot_secret-1 ]
+	grep -qxF 'POST https://localhost/api/org/org-1/tokens' "$CURL_STUB_LOG"
+	grep -qxF 'Authorization: Bearer dev-token-123' "$CURL_STUB_HEADERS"
+	[ "$(jq -r .scope "$BATS_TEST_TMPDIR/token-body")" = analyze ]
+	[ "$(jq -r .name "$BATS_TEST_TMPDIR/token-body")" = api-fuzz ]
+	# It expires about a day from now.
+	expires=$(date -d "$(jq -r .expires_on "$BATS_TEST_TMPDIR/token-body")" +%s)
+	now=$(date +%s)
+	((expires > now + 82800 && expires < now + 90000))
+}
+
+@test "issue-token fails when the API answers without a secret" {
+	stub_token_api ''
+	run bash "$FUZZ" issue-token
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"could not issue an Organization token"* ]]
+}
+
+@test "issue-token fails when the dev account cannot log in" {
+	echo 'curl_stub() { return 22; }' >"$CURL_STUB_RULES"
+	run bash "$FUZZ" issue-token
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"could not log in"* ]]
+}
+
 # A recorded run in $OUT: provider $1, exit code $2, the fixture log.
 recorded() {
 	mkdir -p "$OUT"

@@ -12,7 +12,6 @@ COMMENT="test fixture: deliberately vulnerable input"
 # starts with the folder, so a root go.mod or pnpm-lock.yaml never does.
 FIXTURE_FOLDERS="
 plugin-sbom-javascript tests/
-plugin-sca-patching tests/
 plugin-sbom-php tests/
 codeclarity-dev .cloud/scripts/measure/baseline-project/
 codeclarity-dev scripts/benchmark/fixtures/
