@@ -14,6 +14,7 @@
 passed=0 failed=0
 
 # The deployment Compose file's one-shot setup jobs.
+# shellcheck disable=SC2034 # read by the scripts that source this file
 PRODUCTION_JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 
 check() {
