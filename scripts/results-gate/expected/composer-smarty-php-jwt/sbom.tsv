@@ -1,0 +1,3 @@
+workspace	ecosystem	package	version
+.	packagist	firebase/php-jwt	v6.11.0
+.	packagist	smarty/smarty	v4.3.0

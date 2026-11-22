@@ -1,8 +1,12 @@
 #!/bin/sh
-# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing).
+# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing),
+# including the support bundle's secret redaction on the running instance.
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
 # Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
-#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh).
+#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh,
+#      seeds a project, an analysis and a ticket there and checks them after the upgrade),
+#      UPGRADE_JOURNEY_ENV (with UPGRADE_FROM: a file to write the seeded account's login to when
+#      every check passed, for the upgrade journey run against the stack left up).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -38,6 +42,8 @@ compose() {
 
 # shellcheck source=lib.sh
 . "$root/.cloud/scripts/tests/fresh-install/lib.sh"
+# shellcheck source=seed.sh
+. "$root/.cloud/scripts/tests/fresh-install/seed.sh"
 JOBS=$PRODUCTION_JOBS
 # A settled stack must then run 30 seconds without a restart.
 SETTLE_SECONDS=30
@@ -355,6 +361,66 @@ check_monitoring_on() {
 	check "$1: Grafana's Prometheus data source returns data" $result
 }
 
+# Prints every secret value the instance holds, one per line: the secrets store, without
+# certificates, public keys, the salt or PEM armour lines.
+known_secrets() {
+	compose run --rm --no-deps -T --entrypoint sh generate-secrets -c \
+		'find /secrets/.store -type f ! -name "*.crt" ! -name "*public*" ! -name "*_salt" ! -name "*.tmp" -exec cat {} +' |
+		grep -v '^-----' | awk 'length($0) >= 8'
+}
+
+# Runs `make support-bundle` with a TLS key and made-up settings secrets in the environment, then
+# checks it holds versions, config, error logs and a fresh error report, and no secret value; $1 names the run.
+check_support_bundle() {
+	wait_for_login
+	marker="support bundle check $(date +%s)"
+	result=ok
+	post /logs '{"level":"error","msg":"'"$marker"'","fields":{"route":"/fresh-install"}}' >/dev/null || result=bad
+	check "$1: the web app's error report endpoint accepts a report" $result
+
+	mail="mail-password-$(date +%s)-x" clickup="clickup-secret-$(date +%s)-y" nvd="nvd-key-$(date +%s)-z"
+	result=ok
+	mkdir -p "$work/bundle"
+	MAIL_AUTH_PASSWORD=$mail CLICKUP_CLIENT_SECRET=$clickup NVD_API_KEY=$nvd \
+		make --no-print-directory -C "$cdir" support-bundle OUT="$work/bundle" >"$work/bundle.out" 2>"$work/bundle.err" || result=bad
+	archive=$(tail -n 1 "$work/bundle.out")
+	case $archive in "$work/bundle/codeclarity-support-"*.tar.gz) [ -f "$archive" ] || result=bad ;; *) result=bad ;; esac
+	check "$1: make support-bundle writes an archive and prints its path (${archive:-nothing})" $result
+	if [ "$result" != ok ]; then
+		cat "$work/bundle.out" "$work/bundle.err"
+		return 0
+	fi
+
+	rm -rf "$work/bundle.x"
+	mkdir -p "$work/bundle.x"
+	tar -xzf "$archive" -C "$work/bundle.x"
+	result=ok
+	grep -q "$CODECLARITY_VERSION" "$work"/bundle.x/*/versions.txt || result=bad
+	grep -q 'codeclarityce/api' "$work"/bundle.x/*/versions.txt || result=bad
+	grep -q 'pgbouncer' "$work"/bundle.x/*/config.yaml || result=bad
+	[ -n "$(find "$work"/bundle.x/*/logs -name '*.log')" ] || result=bad
+	grep -qF "$marker" "$work"/bundle.x/*/error-reports.log || result=bad
+	check "$1: the bundle holds versions, config, service logs and the new error report" $result
+
+	result=ok
+	{
+		known_secrets || result=bad
+		printf '%s\n' "$CREATE_USER_PASSWORD" "$mail" "$clickup" "$nvd"
+		printf '%s\n' "$TLS_KEY" | grep -v '^-----'
+	} >"$work/secrets.known"
+	[ "$(wc -l <"$work/secrets.known")" -gt 10 ] || result=bad
+	find "$work/bundle.x" -type f -exec cat {} + >"$work/bundle.all"
+	while IFS= read -r secret; do
+		[ -n "$secret" ] || continue
+		if grep -qF -- "$secret" "$work/bundle.all"; then
+			result=bad
+			echo "a known secret is in the bundle, in: $(grep -rlF -- "$secret" "$work/bundle.x" | sed "s#$work/bundle.x/##" | tr '\n' ' ')"
+		fi
+	done <"$work/secrets.known"
+	check "$1: no known secret value is in the bundle ($(wc -l <"$work/secrets.known") values checked)" $result
+	rm -f "$work/secrets.known"
+}
+
 # Row counts of what an upgrade must keep.
 kept_rows() {
 	for table in '"user"' organization analyzer project analysis; do
@@ -368,7 +434,7 @@ latest_release() {
 		--jq '[.[] | select(any(.assets[]; .name == "docker-compose.yaml"))][0].tag_name // empty'
 }
 
-# Installs the previous release from its assets and creates the user there.
+# Installs the previous release from its assets, creates the user there and seeds data through the API.
 install_previous() {
 	prev="$work/previous"
 	mkdir -p "$prev"
@@ -384,6 +450,11 @@ install_previous() {
 	result=ok
 	compose run --rm -T -e CREATE_USER_PASSWORD api create-user --email "$EMAIL" --name "$NAME" || result=bad
 	check "previous release $UPGRADE_FROM: create-user succeeds" $result
+	result=ok
+	fetch_ca || result=bad
+	check "previous release $UPGRADE_FROM: Caddy serves $DOMAIN from its internal CA" $result
+	check_user "previous release $UPGRADE_FROM"
+	if [ -n "${org:-}" ]; then seed_upgrade_data "previous release $UPGRADE_FROM" "$org"; fi
 	kept_rows >"$work/rows.before" || true
 	cdir=$dir
 }
@@ -436,6 +507,7 @@ result=ok
 fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
+if [ -n "$UPGRADE_FROM" ]; then check_seeded_data "upgrade from $UPGRADE_FROM"; fi
 check_deep_links "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 # An upgraded instance keeps the previous release's monitoring and CodeQL containers until removed.
@@ -453,6 +525,7 @@ wait_settled || { result=bad; report_unsettled; }
 check "second up -d: every job succeeds and every service runs" $result
 check_stack "second up -d"
 check_user "second up -d"
+if [ -n "$UPGRADE_FROM" ]; then check_seeded_data "second up -d"; fi
 
 result=ok
 compose logs --no-color knowledge-restore | grep -q 'nothing to restore' || result=bad
@@ -474,6 +547,10 @@ result=ok
 compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/supplied.crt" || result=bad
 check "with TLS_CERT and TLS_KEY set, Caddy serves the supplied certificate" $result
+# The API is now behind the supplied self-signed certificate, so curl trusts that one.
+CURL_CA="$work/supplied.crt"
+check_support_bundle "with TLS_CERT and TLS_KEY set"
+CURL_CA="$work/ca.crt"
 
 unset TLS_CERT TLS_KEY
 result=ok
@@ -514,6 +591,10 @@ wait_settled || { result=bad; report_unsettled; }
 check "with COMPOSE_PROFILES=monitoring: up -d succeeds and every service runs" $result
 check_monitoring_on "with COMPOSE_PROFILES=monitoring"
 check_user "with COMPOSE_PROFILES=monitoring"
+
+if [ -n "$UPGRADE_FROM" ] && [ -n "${UPGRADE_JOURNEY_ENV:-}" ] && [ "$failed" -eq 0 ]; then
+	write_journey_login "$UPGRADE_JOURNEY_ENV"
+fi
 
 if [ "$failed" -gt 0 ]; then
 	# shellcheck disable=SC2086 # a list of service names

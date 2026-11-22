@@ -1,6 +1,6 @@
 # Contradicted source matches are hidden by default, not dropped
 
-A vulnerability instance whose every source match is contradicted by a source of a different source origin is hidden from default views, stats, the grade, notifications and experiment metrics, but every source match is still stored with its source verdict and can be shown with a filter. Only a different source origin can contradict, so NVD and GCVE (both derived from the CVE List) never contradict each other, and an unreviewed advisory with no package data is silence, not contradiction. A record retired by one source contradicts the other sources' matches for the same package. This extends ADR 0007: sources stay independent matchers, and the judgement is a layer on top of their matches.
+A vulnerability instance whose every source match is contradicted by a source of a different source origin is hidden from default views, stats, the grade, notifications and experiment metrics, but every source match is still stored with its source verdict and can be shown with a filter. Only a different source origin can contradict, so NVD and GCVE (both derived from the CVE List) never contradict each other, and an unreviewed advisory with no package data is silence, not contradiction. A record retired by one source contradicts the other sources' matches for the same package. This extends ADR 0010: sources stay independent matchers, and the judgement is a layer on top of their matches.
 
 ## Considered Options
 

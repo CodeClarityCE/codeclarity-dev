@@ -234,5 +234,17 @@ check_analysis() {
 		jq '.data | {status, stage, steps: [.steps[][] | {name: .Name, status: .Status}]}' "$WORK/analysis.json" 2>/dev/null || true
 		# shellcheck disable=SC2086 # a list of service names
 		report $ANALYSIS_SERVICES
+		return 0
+	fi
+
+	# The license comes from the package the package follower imported into the knowledge database.
+	result=ok
+	get "/org/$2/projects/$project/analysis/$analysis/licenses?workspace=.&page=0&entries_per_page=100" >"$WORK/licenses.json" || result=bad
+	jq -e 'any(.data[]; .id == "MIT" and (.deps_using_license | index("ms@2.1.3")))' "$WORK/licenses.json" >/dev/null 2>&1 || result=bad
+	check "$1: the analysis lists ms@2.1.3 under the MIT license" $result
+	if [ "$result" = bad ]; then
+		jq -c '[.data[]? | {id, deps_using_license}]' "$WORK/licenses.json" 2>/dev/null || true
+		# shellcheck disable=SC2086 # a list of service names
+		report $ANALYSIS_SERVICES
 	fi
 }

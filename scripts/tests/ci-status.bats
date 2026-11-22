@@ -3,6 +3,9 @@
 # query, and waiting on PRs' ci checks. gh is the stand-in in stubs/.
 # Run from the repo root: bats scripts/tests
 
+# run -1 (exit exactly 1) needs bats 1.5.
+bats_require_minimum_version 1.5.0
+
 setup() {
 	load helpers
 	setup_fake_root
@@ -51,6 +54,12 @@ gh_stub() {
 		[[ -f "$file" ]] || { echo "HTTP 404: Not Found" >&2; return 1; }
 		cat "$file"
 		;;
+	"api repos/CodeClarityCE/"*/private-vulnerability-reporting)
+		local repo="${2#repos/CodeClarityCE/}" file
+		file="$BATS_TEST_TMPDIR/reporting/${repo%%/*}"
+		[[ -f "$file" ]] || { echo "HTTP 404: Not Found" >&2; return 1; }
+		cat "$file"
+		;;
 	*) echo "unexpected: $*" >&2; return 1 ;;
 	esac
 }
@@ -62,6 +71,12 @@ RULES
 ci_release() {
 	mkdir -p "$BATS_TEST_TMPDIR/vars"
 	echo "$2" >"$BATS_TEST_TMPDIR/vars/$1"
+}
+
+# Sets whether private vulnerability reporting is on for a repo (true or false).
+reporting() {
+	mkdir -p "$BATS_TEST_TMPDIR/reporting"
+	echo "$2" >"$BATS_TEST_TMPDIR/reporting/$1"
 }
 
 # --- submodule paths ----------------------------------------------------------------------
@@ -86,7 +101,7 @@ api api" ]
 
 # --- status table -------------------------------------------------------------------------
 
-@test "the table shows path, ci per branch, CI_RELEASE, PRs and other branches per repo" {
+@test "the table shows path, ci per branch, CI_RELEASE, private reporting, PRs and other branches per repo" {
 	answer_status \
 		"$(repo_node api "$(branch "$(check_run COMPLETED '"SUCCESS"' push)")" \
 			"$(branch "$(check_run IN_PROGRESS null push)")" '[12, 15]' '["main", "develop", "fix/x"]')" \
@@ -94,14 +109,16 @@ api api" ]
 		"$(repo_node sandbox "$(branch '{}')" "$(branch '')" '[]' '["main", "develop", "a", "b"]')"
 	ci_release api true
 	ci_release utility-types false
+	reporting api true
+	reporting utility-types false
 
 	run sourced ci-status.sh status_table
 	[ "$status" -eq 0 ]
 	echo "$output"
-	[ "$(sed -n 1p <<<"$output" | tr -s ' ')" = "PATH REPO MAIN DEVELOP CI_RELEASE PRS BRANCHES" ]
-	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "- sandbox - - unset - a,b" ]
-	[ "$(sed -n 3p <<<"$output" | tr -s ' ')" = "api api success pending true #12 #15 fix/x" ]
-	[ "$(sed -n 4p <<<"$output" | tr -s ' ')" = "backend/utilities/types utility-types failure no-branch false - -" ]
+	[ "$(sed -n 1p <<<"$output" | tr -s ' ')" = "PATH REPO MAIN DEVELOP CI_RELEASE REPORTING PRS BRANCHES" ]
+	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "- sandbox - - unset unknown - a,b" ]
+	[ "$(sed -n 3p <<<"$output" | tr -s ' ')" = "api api success pending true on #12 #15 fix/x" ]
+	[ "$(sed -n 4p <<<"$output" | tr -s ' ')" = "backend/utilities/types utility-types failure no-branch false off - -" ]
 }
 
 @test "the table prefers a branch's push run of ci over a pull_request run" {
@@ -109,7 +126,15 @@ api api" ]
 		"$(branch "$(check_run COMPLETED '"FAILURE"' pull_request),$(check_run COMPLETED '"SUCCESS"' push)")" \
 		"$(branch '')" '[]' '[]')"
 	run sourced ci-status.sh status_table
-	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "api api success - unset - -" ]
+	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "api api success - unset unknown - -" ]
+}
+
+@test "the table shows private for a private repo, where GitHub offers no private reporting" {
+	answer_status "$(repo_node admin-tools null null '[]' '[]' | jq -c '.visibility = "PRIVATE"')"
+	run sourced ci-status.sh status_table
+	[ "$status" -eq 0 ]
+	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "- admin-tools no-branch no-branch unset private - -" ]
+	run -1 grep -q private-vulnerability-reporting "$GH_STUB_LOG"
 }
 
 @test "the table comes from one GraphQL query over non-archived repos" {

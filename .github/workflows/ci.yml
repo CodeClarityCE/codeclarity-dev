@@ -1,6 +1,6 @@
 # CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts (bats for scripts/), and the
-# fresh-install tests (dev and production), the production upgrade test and the real-stack e2e journey, on the
-# runner's empty Docker daemon.
+# fresh-install tests (dev and production), the production upgrade test, the real-stack e2e journey and the
+# results gate, on the runner's empty Docker daemon.
 name: CI
 
 on:
@@ -95,15 +95,28 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/dev.sh
 
-  # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers.
+  # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers
+  # (the same-named branches on a PR).
   e2e-real-stack:
     name: e2e (real stack)
     uses: $/.github/workflows/e2e-real-stack.yml
+    permissions:
+      contents: read
+
+  # The findings of the results gate's fixtures on the pinned knowledge dump, against expected results (ADR 0021).
+  results-gate:
+    name: results gate
+    uses: $/.github/workflows/results-gate.yml
     permissions:
       contents: read
 
@@ -118,6 +131,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Shell tests
         run: |
           status=0
@@ -165,6 +183,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       - name: Build the CodeClarity images from the submodules
@@ -172,8 +195,10 @@ jobs:
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/production.sh
 
-  # Installs the newest deployment release, then upgrades to this checkout's Compose file and
-  # checks the data is kept. Skips while no release has a Compose file attached.
+  # Installs the newest deployment release, seeds a project, an analysis and a ticket through the API,
+  # then upgrades to this checkout's Compose file and checks they are intact (docs/upgrade-test.md),
+  # through the API and then in the browser (golden journey 5, the frontend's @upgrade journey).
+  # Skips while no release has a Compose file attached.
   upgrade-production:
     name: upgrade (production)
     runs-on: ubuntu-24.04
@@ -189,6 +214,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       # The previous release pins its own images by digest; these are the upgrade's.
@@ -197,7 +227,29 @@ jobs:
       - name: Upgrade test
         env:
           GH_TOKEN: ${{ github.token }}
+          UPGRADE_JOURNEY_ENV: ${{ runner.temp }}/upgrade-journey.env
         run: sh .cloud/scripts/tests/fresh-install/production.sh
+      # production.sh leaves the upgraded stack up and writes the seeded account's login once every check passed.
+      - name: Run the upgrade journey
+        env:
+          UPGRADE_JOURNEY_ENV: ${{ runner.temp }}/upgrade-journey.env
+        run: |
+          if [ ! -s "$UPGRADE_JOURNEY_ENV" ]; then
+            echo "skip: nothing was upgraded, so there is no seeded data to see"
+            exit 0
+          fi
+          set -a
+          # shellcheck source=/dev/null
+          . "$UPGRADE_JOURNEY_ENV"
+          set +a
+          sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/upgrade-journey" --grep @upgrade
+      - name: Keep the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upgrade-journey
+          path: ${{ runner.temp }}/upgrade-journey
+          if-no-files-found: ignore
 
   # The default production stack on arm64 running a real npm analysis, failing on the reference-machine thresholds.
   reference-machine-baseline:
@@ -211,6 +263,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       # Built natively on arm64, so the thresholds gate the pointers' code.
       - name: Build the CodeClarity images from the submodules
         run: sh .cloud/scripts/tests/fresh-install/build-images.sh
@@ -250,6 +307,7 @@ jobs:
       - script-tests
       - fresh-install-dev
       - e2e-real-stack
+      - results-gate
       - fresh-install-production
       - upgrade-production
       - reference-machine-baseline

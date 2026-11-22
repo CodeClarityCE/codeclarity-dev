@@ -1,0 +1,132 @@
+# Releases CodeClarity (this umbrella, which pins every component) with its own SBOM attached.
+# scripts/release-all.sh dispatches it on main with the new tag once the umbrella's release PR has
+# merged. The sbom job builds the images of the released submodules, brings up the trimmed stack with
+# the published knowledge dump, and runs the CLI on the released checkout (.cloud/scripts/release-sbom.sh).
+# The release job needs it, so a failed SBOM leaves no tag and no release. A real release needs the
+# repo variable CI_RELEASE to be true and runs in the release environment, which attests the SBOM.
+# dry-run builds the SBOM on any branch (kept as the release-sbom artifact) and releases nothing.
+name: Release
+# release-all.sh finds the run by this title.
+run-name: Release ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag, such as v0.0.40-alpha.
+        type: string
+        required: true
+      dry-run:
+        description: Build the SBOM only, on any branch, and release nothing.
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: release meta
+    if: github.ref == 'refs/heads/main' || inputs.dry-run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          CI_RELEASE: ${{ vars.CI_RELEASE }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          [[ "$DRY_RUN" == true || "$CI_RELEASE" == true ]] || { echo "::error::CI_RELEASE is not true (see docs/ci-release-test.md)"; exit 1; }
+          # The version goes into refs and file names, so only allow a plain tag.
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+)?$ ]] || { echo "::error::Unexpected version format: $VERSION"; exit 1; }
+          found=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$VERSION" --jq "map(select(.ref == \"refs/tags/$VERSION\")) | length")
+          [[ "$found" == 0 ]] || { echo "::error::Release $VERSION already exists"; exit 1; }
+          prerelease=false
+          if grep -q 'alpha\|beta' <<<"$VERSION"; then prerelease=true; fi
+          echo "prerelease=$prerelease" >>"$GITHUB_OUTPUT"
+
+  sbom:
+    name: release sbom
+    needs: [meta]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      COMPOSE_OVERRIDE: ${{ github.workspace }}/.cloud/scripts/tests/real-stack/docker-compose.yaml
+      BUILD_JOBS: "6"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # No layer cache, as for release images: the analyzer is built from the released code alone.
+      - name: Build the trimmed stack's images from the released submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
+      # The published knowledge dump restores in the knowledge-restore job, so allow it longer.
+      - name: Bring up the trimmed stack
+        env:
+          WAIT_SECONDS: "2700"
+        run: sh .cloud/scripts/tests/real-stack/stack.sh up
+      - name: Analyse the released code with the CLI
+        env:
+          VERSION: ${{ inputs.version }}
+        run: sh .cloud/scripts/release-sbom.sh . "$VERSION" "$RUNNER_TEMP/sbom.cdx.json"
+      - name: Stack logs
+        if: failure()
+        run: sh .cloud/scripts/tests/real-stack/stack.sh report
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-sbom
+          path: ${{ runner.temp }}/sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: github release
+    needs: [meta, sbom]
+    if: ${{ !inputs.dry-run && vars.CI_RELEASE == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-sbom
+          path: ${{ runner.temp }}/sbom
+      - name: Name the SBOM after the release
+        env:
+          VERSION: ${{ inputs.version }}
+        working-directory: ${{ runner.temp }}/sbom
+        run: mv sbom.cdx.json "codeclarity-$VERSION.cdx.json"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/sbom/codeclarity-${{ inputs.version }}.cdx.json
+      - name: Create the release with the SBOM
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        working-directory: ${{ runner.temp }}/sbom
+        run: |
+          set -euo pipefail
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Release $VERSION" --generate-notes --prerelease="$PRERELEASE" "codeclarity-$VERSION.cdx.json"
+          {
+            echo "### Released \`$VERSION\`"
+            echo "Commit \`$GITHUB_SHA\`, SBOM \`codeclarity-$VERSION.cdx.json\` (CycloneDX, $(jq '.components | length' "codeclarity-$VERSION.cdx.json") components)."
+          } >>"$GITHUB_STEP_SUMMARY"

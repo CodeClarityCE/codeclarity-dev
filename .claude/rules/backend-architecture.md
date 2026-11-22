@@ -19,7 +19,6 @@ paths:
 - **php-sbom** - PHP SBOM generation (Composer)
 - **vuln-finder** - Multi-language vulnerability detection (JS & PHP)
 - **license-finder** - Multi-language license compliance (JS & PHP)
-- **js-patching** - Vulnerability patching recommendations
 - **codeql** - Static analysis using CodeQL
 
 ## Plugin System

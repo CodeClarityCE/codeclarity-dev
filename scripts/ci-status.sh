@@ -6,9 +6,11 @@
 #   scripts/ci-status.sh --wait api#12 codeclarity-dev#200
 #
 # The table shows each repo's submodule path (named as scripts/release-all.sh names it, "." for
-# this repo, "-" for a repo that is not a submodule), ci on main and develop, CI_RELEASE, open
-# PRs and branches other than main and develop. One GraphQL query reads everything but
-# CI_RELEASE, which GraphQL does not expose; those lookups run in parallel.
+# this repo, "-" for a repo that is not a submodule), ci on main and develop, CI_RELEASE, private
+# vulnerability reporting (on, off, unknown, or private for a private repo, which GitHub does
+# not offer it on), open PRs and branches other than main and
+# develop. One GraphQL query reads everything but CI_RELEASE and REPORTING, which GraphQL does
+# not expose; those lookups run in parallel. scripts/private-reporting.sh turns reporting on.
 #
 # --wait polls each PR's pull_request ci check until it finishes, prints pass or fail per PR,
 # and exits non-zero if any failed or timed out.
@@ -69,6 +71,7 @@ query(\$org: String!) {
       pageInfo { hasNextPage }
       nodes {
         name
+        visibility
         main: ref(qualifiedName: "refs/heads/main") { $BRANCH_FIELDS }
         develop: ref(qualifiedName: "refs/heads/develop") { $BRANCH_FIELDS }
         refs(refPrefix: "refs/heads/", first: 100) { nodes { name } }
@@ -79,7 +82,7 @@ query(\$org: String!) {
 }
 EOF
 
-# Turns the query result into tab-separated "repo main develop prs branches" rows.
+# Turns the query result into tab-separated "repo visibility main develop prs branches" rows.
 read -r -d '' ROWS_JQ <<'EOF' || true
 def ci:
   if . == null then "no-branch"
@@ -90,7 +93,7 @@ def ci:
       else .conclusion | ascii_downcase end
   end;
 .data.organization.repositories.nodes[]
-| [ .name, (.main | ci), (.develop | ci),
+| [ .name, (.visibility // "PUBLIC" | ascii_downcase), (.main | ci), (.develop | ci),
     ([.pullRequests.nodes[] | "#\(.number)"] | join(" ") | if . == "" then "-" else . end),
     ([.refs.nodes[].name | select(. != "main" and . != "develop")] | join(",") | if . == "" then "-" else . end) ]
 | @tsv
@@ -105,27 +108,40 @@ status_table() {
 
 	work="$(mktemp -d)"
 	trap 'rm -rf "$work"' EXIT
-	mkdir "$work/release" "$work/path"
+	mkdir "$work/release" "$work/reporting" "$work/path"
 	while read -r repo path; do
 		echo "$path" >"$work/path/$repo"
 	done < <(submodule_map)
 
 	jq -r "$ROWS_JQ" <<<"$result" >"$work/rows"
-	while IFS=$'\t' read -r repo _; do
+	while IFS=$'\t' read -r repo visibility _; do
 		{
 			value="$(gh api "repos/$ORG/$repo/actions/variables/CI_RELEASE" --jq .value 2>/dev/null)" || value="unset"
 			echo "$value" >"$work/release/$repo"
+		} &
+		if [[ "$visibility" == private ]]; then
+			echo private >"$work/reporting/$repo"
+			continue
+		fi
+		{
+			value="$(gh api "repos/$ORG/$repo/private-vulnerability-reporting" --jq '.enabled' 2>/dev/null)" || value=""
+			case "$value" in
+			true) value="on" ;;
+			false) value="off" ;;
+			*) value="unknown" ;;
+			esac
+			echo "$value" >"$work/reporting/$repo"
 		} &
 	done <"$work/rows"
 	wait
 
 	{
-		printf 'PATH\tREPO\tMAIN\tDEVELOP\tCI_RELEASE\tPRS\tBRANCHES\n'
-		while IFS=$'\t' read -r repo main develop prs branches; do
+		printf 'PATH\tREPO\tMAIN\tDEVELOP\tCI_RELEASE\tREPORTING\tPRS\tBRANCHES\n'
+		while IFS=$'\t' read -r repo _ main develop prs branches; do
 			path="-"
 			[[ -f "$work/path/$repo" ]] && path="$(cat "$work/path/$repo")"
-			printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$path" "$repo" "$main" "$develop" \
-				"$(cat "$work/release/$repo")" "$prs" "$branches"
+			printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$path" "$repo" "$main" "$develop" \
+				"$(cat "$work/release/$repo")" "$(cat "$work/reporting/$repo")" "$prs" "$branches"
 		done <"$work/rows" | sort -t $'\t' -k1,1 -k2,2
 	} | align
 }
@@ -191,7 +207,7 @@ main() {
 		shift
 		wait_prs "$@"
 		;;
-	-h | --help) sed -n '2,17p' "$0" ;;
+	-h | --help) sed -n '2,19p' "$0" ;;
 	*) die "unknown argument: $1 (see --help)" ;;
 	esac
 }

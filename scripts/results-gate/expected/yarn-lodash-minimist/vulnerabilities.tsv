@@ -1,0 +1,6 @@
+workspace	vulnerability	package	version
+.	CVE-2020-28500	lodash	4.17.20
+.	CVE-2021-23337	lodash	4.17.20
+.	CVE-2021-44906	minimist	1.2.5
+.	CVE-2025-13465	lodash	4.17.20
+.	CVE-2026-4800	lodash	4.17.20

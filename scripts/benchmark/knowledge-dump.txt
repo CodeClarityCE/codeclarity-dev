@@ -1,1 +1,1 @@
-codeclarityce/knowledge-dump:2026-11-16@sha256:56361cd4f946bf7bd25582baf386314382988f9d918f1fc1956f814aa5bb2fea
+codeclarityce/knowledge-dump:2026-11-21@sha256:45c4f0e77c3c8b94bfe2ef7485a1e1304913baf5a9a57f44f5aeff2c17d4783f

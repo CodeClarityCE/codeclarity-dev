@@ -3,10 +3,13 @@
 # docker-compose.yaml from this folder merged over it, on the images build-images.sh built.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
-# Usage: sh .cloud/scripts/tests/real-stack/stack.sh up | report
-#   up      starts the stack on an empty daemon, creates the dev account and waits until it
-#           logs in through Caddy at https://localhost
-#   report  prints the stack state and the last logs of every service
+# Usage: sh .cloud/scripts/tests/real-stack/stack.sh up | knowledge-update | report | ca FILE
+#   up                starts the stack on an empty daemon, creates the dev account and waits until
+#                     it logs in through Caddy at https://localhost
+#   knowledge-update  runs one knowledge update in service-knowledge from the advisories in
+#                     advisory-database/ (GHSA-w9mr-4mfr-499f of the dump plus GHSA-3fx5-fwvr-xrjg)
+#   report            prints the stack state and the last logs of every service
+#   ca                writes Caddy's internal root certificate to FILE, for curl --cacert
 # Env: DEPLOYMENT_DIR (default: the deployment submodule), WAIT_SECONDS (default 600),
 #      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see ../fresh-install/knowledge-dump-fixture.sh).
 set -eu
@@ -67,14 +70,34 @@ up() {
 	echo "real-stack: ready in $(($(date +%s) - start))s; $LOGIN_EMAIL logs in through $API_BASE"
 }
 
+# The OSV advisories of a github/advisory-database checkout replace the knowledge's, as an
+# update from upstream would, without reaching the network.
+knowledge_update() {
+	compose run --rm --no-deps -T -v "$here/advisory-database:/advisory-database:ro" service-knowledge \
+		./plugin -knowledge -action update-asof -asof "$(date -u +%Y-%m-%d)" -advisory-repo /advisory-database || {
+		echo "real-stack: the knowledge update failed" >&2
+		exit 1
+	}
+	echo "real-stack: the knowledge holds the advisories of $here/advisory-database"
+}
+
 case ${1:-} in
 up) up ;;
+knowledge-update) knowledge_update ;;
 report)
 	# shellcheck disable=SC2046 # one word per service
 	report $(compose config --services)
 	;;
+ca)
+	[ -n "${2:-}" ] || {
+		echo "usage: stack.sh ca FILE" >&2
+		exit 2
+	}
+	CURL_CA=$2
+	fetch_ca
+	;;
 *)
-	echo "usage: stack.sh up | report" >&2
+	echo "usage: stack.sh up | knowledge-update | report | ca FILE" >&2
 	exit 2
 	;;
 esac
