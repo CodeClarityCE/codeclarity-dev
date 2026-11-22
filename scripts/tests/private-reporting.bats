@@ -119,3 +119,36 @@ admin-tools private
 all 1 public repos have private vulnerability reporting on" ]
 	run -1 grep -q -- '-X PUT' "$GH_STUB_LOG"
 }
+
+@test "--check fails when the org's repos cannot be listed" {
+	cat >>"$GH_STUB_RULES" <<'RULES'
+eval "$(declare -f gh_stub | sed '1s/gh_stub/inner_gh_stub/')"
+gh_stub() {
+	[[ "$1 $2" == "api --paginate" ]] && { echo "HTTP 502" >&2; return 1; }
+	inner_gh_stub "$@"
+}
+RULES
+	run "$ROOT_DIR/scripts/private-reporting.sh" --check
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"could not list the repos of CodeClarityCE"* ]]
+}
+
+@test "--check fails when the org lists no repos" {
+	run "$ROOT_DIR/scripts/private-reporting.sh" --check
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"no repos listed for CodeClarityCE"* ]]
+}
+
+@test "--apply fails when the org's repos cannot be listed, and turns nothing on" {
+	repo frontend false
+	cat >>"$GH_STUB_RULES" <<'RULES'
+eval "$(declare -f gh_stub | sed '1s/gh_stub/inner_gh_stub/')"
+gh_stub() {
+	[[ "$1 $2" == "api --paginate" ]] && { echo "HTTP 502" >&2; return 1; }
+	inner_gh_stub "$@"
+}
+RULES
+	run "$ROOT_DIR/scripts/private-reporting.sh" --apply
+	[ "$status" -eq 1 ]
+	run -1 grep -q -- '-X PUT' "$GH_STUB_LOG"
+}
