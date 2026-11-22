@@ -105,7 +105,8 @@ cmd_run() {
 		shift
 	done
 	[[ -n "$auth" && -n "$out" ]] || usage
-	if ! auth_providers | grep -qxF "$auth"; then
+	# grep reads the whole list: -q would stop early and fail the pipeline under pipefail.
+	if ! auth_providers | grep -xF "$auth" >/dev/null; then
 		echo "api fuzz: unknown auth provider '$auth'; known: $(auth_providers | paste -sd' ')" >&2
 		exit 2
 	fi
