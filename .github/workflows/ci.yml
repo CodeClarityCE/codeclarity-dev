@@ -95,12 +95,18 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       - name: Fresh install test
         run: sh .cloud/scripts/tests/fresh-install/dev.sh
 
-  # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers.
+  # The frontend's real-stack Playwright journey on a trimmed stack built at the submodule pointers
+  # (the same-named branches on a PR).
   e2e-real-stack:
     name: e2e (real stack)
     uses: $/.github/workflows/e2e-real-stack.yml
@@ -118,6 +124,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Shell tests
         run: |
           status=0
@@ -165,6 +176,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       - name: Build the CodeClarity images from the submodules
@@ -189,6 +205,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       # The previous release pins its own images by digest; these are the upgrade's.
@@ -211,6 +232,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       # Built natively on arm64, so the thresholds gate the pointers' code.
       - name: Build the CodeClarity images from the submodules
         run: sh .cloud/scripts/tests/fresh-install/build-images.sh
