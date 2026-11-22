@@ -1,5 +1,6 @@
-# The real-stack e2e job: builds the images of a trimmed stack at the submodule pointers (with the
-# GitHub Actions layer cache), brings it up with the knowledge dump fixture and the dev account,
+# The real-stack e2e job: builds the images of a trimmed stack at the submodule pointers (on a PR,
+# the same-named branches; scripts/same-named-branches.sh) with the GitHub Actions layer cache,
+# brings it up with the knowledge dump fixture and the dev account,
 # then runs the frontend's real-stack Playwright journey, which mocks nothing. ci.yml calls it on
 # pull requests and pushes, as part of its `ci` gate; it also runs nightly on its own.
 name: E2E (real stack)
@@ -30,6 +31,11 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
       - name: Build the fixture knowledge dump image
         run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
       # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.

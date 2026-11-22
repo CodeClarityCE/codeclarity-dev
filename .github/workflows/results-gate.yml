@@ -1,0 +1,67 @@
+# The results gate (ADR 0021): builds the trimmed real stack at the submodule pointers, restores the
+# knowledge dump the accuracy benchmark is pinned to, analyses the gate's fixtures with the Default
+# Analyzer and compares the findings the API shows with scripts/results-gate/expected/. ci.yml calls
+# it on pull requests (submodule pointer bumps among them) and pushes to main and develop, as part
+# of its `ci` gate; it also runs nightly on its own.
+name: Results gate
+
+on:
+  workflow_call:
+  schedule:
+    - cron: "47 3 * * *"
+
+permissions: {}
+
+jobs:
+  results-gate:
+    name: results gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      COMPOSE_OVERRIDE: ${{ github.workspace }}/.cloud/scripts/tests/real-stack/docker-compose.yaml
+      BUILD_CACHE: gha
+      BUILD_JOBS: "6"
+      # Restoring the full knowledge dump takes longer than the fixture's.
+      WAIT_SECONDS: "2400"
+      API_URL: https://localhost/api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Use the benchmark's pinned knowledge dump
+        run: echo "KNOWLEDGE_DUMP_IMAGE=$(cat scripts/benchmark/knowledge-dump.txt)" >>"$GITHUB_ENV"
+      # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.
+      - name: Create a buildx builder
+        run: docker buildx create --use --driver docker-container --name results-gate
+      # Only actions can read the runtime's cache URL and token; this hands them to the next steps.
+      - name: Expose the Actions runtime to buildx
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const [name, value] of Object.entries(process.env)) {
+              if (name.startsWith("ACTIONS_") && value) core.exportVariable(name, value);
+            }
+      - name: Build the trimmed stack's images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
+      - name: Bring up the trimmed stack
+        run: |
+          sh .cloud/scripts/tests/real-stack/stack.sh up
+          sh .cloud/scripts/tests/real-stack/stack.sh ca "$RUNNER_TEMP/ca.crt"
+      - name: Compare the findings with the expected results
+        env:
+          CURL_CA: ${{ runner.temp }}/ca.crt
+        run: sh scripts/results-gate/gate.sh run --out "$RUNNER_TEMP/results"
+      - name: Stack logs
+        if: failure()
+        run: sh .cloud/scripts/tests/real-stack/stack.sh report
+      # Download it to regenerate the expected results without a local stack (see scripts/results-gate/README.md).
+      - name: Keep the recorded run
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: results-gate-run
+          path: ${{ runner.temp }}/results
+          if-no-files-found: warn

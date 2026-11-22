@@ -1,7 +1,7 @@
 #!/bin/sh
 # Accuracy benchmark: analyses each pinned input on the running dev stack, records the API's
 # answers, and compares every vulnerability instance shown with the committed ground truth.
-# See scripts/benchmark/README.md. Never run it in CI.
+# See scripts/benchmark/README.md. Its report never runs in CI; the results gate reuses its run.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
