@@ -28,7 +28,12 @@ cmd_run() {
 	mkdir -p "$out"
 	out=$(cd "$out" && pwd)
 	MONKEY_SEED=${MONKEY_SEED:-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}
-	MONKEY_SEED=$((MONKEY_SEED % 2147483648))
+	# Checked before any arithmetic, which would run commands hidden in the value.
+	[[ "$MONKEY_SEED" =~ ^[0-9]{1,18}$ ]] || {
+		echo "monkey: MONKEY_SEED must be a number, got '$MONKEY_SEED'" >&2
+		exit 2
+	}
+	MONKEY_SEED=$((10#$MONKEY_SEED % 2147483648))
 	export MONKEY_SEED MONKEY_STEPS
 	echo "$MONKEY_SEED" >"$out/seed"
 	echo "monkey: seed $MONKEY_SEED against $url (replay with MONKEY_SEED=$MONKEY_SEED)"
@@ -102,9 +107,9 @@ cmd_report() {
 
 	labels=$(gh label list --limit 500 --json name --jq '.[].name')
 	grep -qxF ci-failure <<<"$labels" ||
-		gh label create ci-failure --color B60205 --description "The CI required check failed on main or develop"
+		gh label create ci-failure --color B60205 --description "A CI or nightly check failed"
 	grep -qxF needs-triage <<<"$labels" ||
-		gh label create needs-triage --color FBCA04 --description "Needs triage"
+		gh label create needs-triage --color 1D76DB --description "Maintainer needs to evaluate this issue"
 	body=$(cmd_issue_body "$dir")
 	if [[ -n "$issue" ]]; then
 		gh issue comment "$issue" --body "$body"

@@ -226,9 +226,9 @@ cmd_report() {
 
 	labels=$(gh label list --limit 500 --json name --jq '.[].name')
 	grep -qxF ci-failure <<<"$labels" ||
-		gh label create ci-failure --color B60205 --description "The CI required check failed on main or develop"
+		gh label create ci-failure --color B60205 --description "A CI or nightly check failed"
 	grep -qxF needs-triage <<<"$labels" ||
-		gh label create needs-triage --color FBCA04 --description "Needs triage"
+		gh label create needs-triage --color 1D76DB --description "Maintainer needs to evaluate this issue"
 	body=$(cmd_issue_body "$dir")
 	if [[ -n "$issue" ]]; then
 		gh issue comment "$issue" --body "$body"
