@@ -1,9 +1,11 @@
 #!/bin/sh
-# Golden journey 7: a CI pipeline analyses a project with the CLI and an Organization token.
+# Golden journey 7: a CI pipeline analyses a project with the CLI and an Organization token,
+# writes JSON and SARIF, and fails on a severity.
 # Runs against the trimmed real stack after `stack.sh up`; never against a stack you use.
 #
 # Usage: sh .cloud/scripts/tests/real-stack/cli-journey.sh OUTDIR
-#   OUTDIR receives the CLI's output (analysis.json, results.json) and the token's Audit log entries.
+#   OUTDIR receives the CLI's output (analysis.json, results.json, results.sarif, ...) and the
+#   token's Audit log entries.
 # Env: DEPLOYMENT_DIR (default: the deployment submodule), CLI (a built codeclarity binary;
 #      default: built from backend/ in the pinned Go image), E2E_RUN (names this run's data).
 set -eu
@@ -82,6 +84,7 @@ cli() {
 
 sh "$here/stack.sh" ca "$CURL_CA"
 cli_bin=$(build_cli)
+case $cli_bin in /*) ;; *) cli_bin=$(pwd)/$cli_bin ;; esac
 mkdir -p "$WORK/home"
 wait_for_login
 [ -n "$token" ] || {
@@ -121,6 +124,46 @@ cli results --format json >"$OUT/results.json" 2>"$OUT/results.log" || result=ba
 jq -e --arg re "$ADVISORY" '[.findings[] | select((.id | test($re)) and any(.affected[]; .package == "ms" and .version == "0.7.1"))] | length == 1' \
 	"$OUT/results.json" >/dev/null || result=bad
 check "results --format json lists the ms@0.7.1 advisory" $result
+
+# The pipeline fails on the advisory's severity, and passes on the next one up.
+severity=$(jq -er '.findings[0].severity' "$OUT/results.json" 2>/dev/null) || severity=none
+result=ok
+code=0
+cli results --format json --fail-on "$severity" >/dev/null 2>"$OUT/fail-on.log" || code=$?
+[ "$code" -eq 3 ] || result=bad
+check "results --fail-on $severity exits 3 on the $severity advisory (exit $code)" $result
+case $severity in
+high) above=critical ;;
+medium) above=high ;;
+low) above=medium ;;
+none) above=low ;;
+*) above= ;;
+esac
+if [ -n "$above" ]; then
+	result=ok
+	cli results --format json --fail-on "$above" >/dev/null 2>>"$OUT/fail-on.log" || result=bad
+	check "results --fail-on $above exits 0" $result
+fi
+
+# Run in the checkout, as a pipeline does, so SARIF points at its lockfile.
+result=ok
+(cd "$WORK/checkout" && cli results --format sarif) >"$OUT/results.sarif" 2>"$OUT/sarif.log" || result=bad
+jq -e --arg re "$ADVISORY" '.version == "2.1.0" and (.runs[0].results | length == 1) and
+	(.runs[0].results[0] | (.ruleId | test($re)) and .locations[0].physicalLocation.artifactLocation.uri == "package-lock.json") and
+	(.runs[0].tool.driver.rules[0].properties.tags | index("security"))' "$OUT/results.sarif" >/dev/null || result=bad
+check "results --format sarif points the advisory at the checkout's package-lock.json" $result
+
+# A project already on the instance is analysed by id, without an upload.
+project_id=$(jq -er '.project_id' "$OUT/analysis.json")
+result=ok
+cli analyze --project "$project_id" --analyzer "Default Analyzer" --wait --timeout 15m \
+	>"$OUT/project-analysis.json" 2>"$OUT/project-analyze.log" || result=bad
+jq -e --arg p "$project_id" --slurpfile first "$OUT/analysis.json" \
+	'.project_id == $p and .analysis_id != $first[0].analysis_id' "$OUT/project-analysis.json" >/dev/null 2>&1 || result=bad
+cli results --format json >"$OUT/project-results.json" 2>>"$OUT/project-analyze.log" || result=bad
+jq -e --arg re "$ADVISORY" '[.findings[] | select(.id | test($re))] | length == 1' "$OUT/project-results.json" >/dev/null 2>&1 || result=bad
+check "analyze --project analyses the project again without an upload, and results read the new analysis" $result
+[ "$result" = ok ] || cat "$OUT/project-analyze.log" "$OUT/project-analysis.json" >&2
 
 # A read token may read results but not start an analysis.
 result=ok
