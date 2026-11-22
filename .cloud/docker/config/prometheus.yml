@@ -31,7 +31,6 @@ scrape_configs:
           - "codeclarity-dev-plugin-license-finder-1:8080"
           - "codeclarity-dev-plugin-vuln-finder-1:8080"
           - "codeclarity-dev-plugin-codeql-1:8080"
-          - "codeclarity-dev-plugin-js-patching-1:8080"
     metrics_path: "/metrics"
     scrape_interval: 10s
     scrape_timeout: 5s
