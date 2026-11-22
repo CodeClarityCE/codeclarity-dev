@@ -109,7 +109,13 @@ Once it is up, visit [https://localhost:443](https://localhost:443) and log in w
 
 ### 1. Update the Knowledge Database (Optional)
 
-The restored knowledge database is a recent snapshot. To bring it up to date:
+The restored knowledge database is a recent snapshot of every knowledge source, so analyses work as soon as `make up` is done. To bring it up to date, start with the OSV advisories, which need no key and no account:
+
+```bash
+make knowledge-update-osv
+```
+
+A full update of every source (`make knowledge-update`) needs an NVD API key and takes hours; you only need it when you work on the knowledge sources:
 
 1. **Get an NVD API Key**: Apply for a free API key from the [National Vulnerability Database](https://nvd.nist.gov/developers/request-an-api-key)
 
@@ -126,7 +132,7 @@ The restored knowledge database is a recent snapshot. To bring it up to date:
    ```
 
 > [!NOTE]
-> A full update takes hours. It runs inside the running stack, so it needs `make up` first and nothing beyond git and Docker on your machine; `make knowledge-update-osv` refreshes only the OSV advisories and needs no key. See [docs/knowledge-dump.md](docs/knowledge-dump.md).
+> Both updates run inside the running stack, so they need `make up` first and nothing beyond git and Docker on your machine. See [docs/knowledge-dump.md](docs/knowledge-dump.md).
 
 ### 2. Available Make Commands
 
@@ -159,8 +165,8 @@ make down-prod                # Stop production environment
 #### 💾 Knowledge Database Commands
 
 ```bash
-make knowledge-update         # Update vulnerability data (needs an NVD API key)
-make knowledge-update-osv     # Update only the OSV advisories
+make knowledge-update-osv     # Update only the OSV advisories (no key needed; the first update to run)
+make knowledge-update         # Update every source (needs an NVD API key)
 make dump-knowledge           # Dump knowledge + config with a manifest, after the completeness gate
 ```
 
@@ -251,15 +257,15 @@ Your development environment is ready! Access CodeClarity at [https://localhost:
 
 1. **Explore the Platform** - Familiarize yourself with the UI and features
 2. **Create Your First Analysis** - Follow the [analysis guide](https://doc.codeclarity.io/docs/0.0.21/tutorials/basic/create-analysis)
-3. **Review the Architecture** - Understand how components interact
+3. **Review the Architecture** - Read the [architecture overview](./docs/architecture.md)
 4. **Start Contributing** - Check out our [contribution guidelines](./CONTRIBUTING.md)
 
 ## 🤝 Contributing
 
 We welcome contributions from developers of all skill levels! Here's how to get started:
 
-1. **Fork the Repository** - Create your own copy of the project
-2. **Create a Feature Branch** - `git checkout -b feature/your-feature-name`
+1. **Fork the Repository** - Create your own copy of the repository you change (most code lives in a submodule, such as `api` or `frontend`)
+2. **Create a Feature Branch from `develop`** - `git switch develop && git switch -c feature/your-feature-name`; PRs go into `develop`
 3. **Make Your Changes** - Follow our coding standards
 4. **Test Thoroughly** - Ensure your changes don't break existing functionality
 5. **Submit a Pull Request** - Describe your changes and their impact
