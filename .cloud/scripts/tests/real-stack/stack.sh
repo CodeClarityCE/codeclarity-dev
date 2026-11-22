@@ -3,10 +3,11 @@
 # docker-compose.yaml from this folder merged over it, on the images build-images.sh built.
 # It never removes anything, so run it on a throwaway daemon (CI) only.
 #
-# Usage: sh .cloud/scripts/tests/real-stack/stack.sh up | report
+# Usage: sh .cloud/scripts/tests/real-stack/stack.sh up | report | ca FILE
 #   up      starts the stack on an empty daemon, creates the dev account and waits until it
 #           logs in through Caddy at https://localhost
 #   report  prints the stack state and the last logs of every service
+#   ca      writes Caddy's internal root certificate to FILE, for curl --cacert
 # Env: DEPLOYMENT_DIR (default: the deployment submodule), WAIT_SECONDS (default 600),
 #      KNOWLEDGE_DUMP_IMAGE (passed to Compose; see ../fresh-install/knowledge-dump-fixture.sh).
 set -eu
@@ -73,8 +74,16 @@ report)
 	# shellcheck disable=SC2046 # one word per service
 	report $(compose config --services)
 	;;
+ca)
+	[ -n "${2:-}" ] || {
+		echo "usage: stack.sh ca FILE" >&2
+		exit 2
+	}
+	CURL_CA=$2
+	fetch_ca
+	;;
 *)
-	echo "usage: stack.sh up | report" >&2
+	echo "usage: stack.sh up | report | ca FILE" >&2
 	exit 2
 	;;
 esac
