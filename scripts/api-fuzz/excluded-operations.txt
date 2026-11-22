@@ -1,0 +1,5 @@
+# Operations the nightly run never calls, by OpenAPI operationId, with why.
+# Deletes the account the run is logged in as.
+UsersController_deleteAccount
+# Changes the account's password, which ends its sessions.
+UsersController_updateAccountPassword
