@@ -62,6 +62,7 @@ Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its
 - **Type sync**: the `type-sync` job fails when a frontend copy of an API enum or allow-list (`scripts/type-sync/pairs.txt`) misses a value the API defines, at the submodule pointers. Add a pair as one line there; run it with `node scripts/type-sync/check.mjs`
 - **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
 - **Org status**: `scripts/ci-status.sh` prints one row per non-archived repo (submodule path, `ci` on `main` and `develop`, `CI_RELEASE`, open PRs, other branches) in a few seconds; `scripts/ci-status.sh --wait api#12 codeclarity-dev#200` waits for those PRs' `pull_request` `ci` and exits non-zero if any failed
+- **Labels and owners**: `scripts/sync-labels.sh --check` lists the severity (`P1` includes wrong results), contributor and triage labels a repo lacks (see `docs/agents/triage-labels.md`); without `--check` it creates or edits them. Each repo has its own `.github/CODEOWNERS`; the default PR template lives in `.github`'s `.github/pull_request_template.md`
 
 Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.
 
