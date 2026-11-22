@@ -10,7 +10,7 @@ setup() {
 	mkdir -p "$ALERTS"
 	export ALERTS
 	# Every repo the script reads starts with no open alerts.
-	for repo in plugin-sbom-javascript plugin-sca-patching plugin-sbom-php codeclarity-dev .github; do
+	for repo in plugin-sbom-javascript plugin-sbom-php codeclarity-dev .github; do
 		echo '[]' >"$ALERTS/$repo"
 	done
 	cat >"$GH_STUB_RULES" <<'RULES'
@@ -82,19 +82,19 @@ dismiss() {
 }
 
 @test "it prints a count per repo, and a re-run dismisses nothing new" {
-	alerts plugin-sca-patching 1:tests/a/package-lock.json 2:tests/b/yarn.lock 3:go.mod
+	alerts plugin-sbom-javascript 1:tests/a/package-lock.json 2:tests/b/yarn.lock 3:go.mod
 	alerts codeclarity-dev 4:scripts/benchmark/fixtures/x/composer.lock
 
 	run dismiss
 	[ "$status" -eq 0 ]
-	grep -qx "plugin-sca-patching: 2 dismissed" <<<"$output"
+	grep -qx "plugin-sbom-javascript: 2 dismissed" <<<"$output"
 	grep -qx "codeclarity-dev: 1 dismissed" <<<"$output"
 	grep -qx "plugin-sbom-php: 0 dismissed" <<<"$output"
 
 	: >"$GH_STUB_LOG"
 	run dismiss
 	[ "$status" -eq 0 ]
-	grep -qx "plugin-sca-patching: 0 dismissed" <<<"$output"
+	grep -qx "plugin-sbom-javascript: 0 dismissed" <<<"$output"
 	grep -qx "codeclarity-dev: 0 dismissed" <<<"$output"
 	[ "$(grep -c PATCH "$GH_STUB_LOG")" -eq 0 ]
 }

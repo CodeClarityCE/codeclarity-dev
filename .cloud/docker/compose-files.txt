@@ -9,7 +9,6 @@ backend/services/downloader/.cloud/docker/docker-compose.yaml
 backend/services/dispatcher/.cloud/docker/docker-compose.yaml
 backend/plugins/codeql/.cloud/docker/docker-compose.yaml
 backend/plugins/license-finder/.cloud/docker/docker-compose.yaml
-backend/plugins/js-patching/.cloud/docker/docker-compose.yaml
 backend/plugins/js-sbom/.cloud/docker/docker-compose.yaml
 backend/plugins/vuln-finder/.cloud/docker/docker-compose.yaml
 backend/plugins/php-sbom/.cloud/docker/docker-compose.yaml
