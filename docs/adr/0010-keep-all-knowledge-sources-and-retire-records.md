@@ -11,3 +11,5 @@ Every knowledge source stays an independent matcher, and each source match is st
 ## Consequences
 
 Product-name matching stays in the vulnerability pipeline despite its lower precision, so do not remove NVD or GCVE matching as a cleanup. Consumers must exclude retired records by default. Retirement applies to advisory records only: EPSS, CWE and license rows are reference data, so rows their source no longer publishes are deleted. Overlap between sources with the same origin is not corroboration, and comparisons must flag any source that was stale or failed at the time of the analysis.
+
+This ADR was numbered 0007 until #345, which gave it the free number 0010 because ADR 0007 was also taken by the published results decision.

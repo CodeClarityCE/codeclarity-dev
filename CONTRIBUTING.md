@@ -35,7 +35,10 @@ Thank you for your interest in contributing to CodeClarity! We welcome contribut
 - [Contributing to CodeClarity](#contributing-to-codeclarity)
   - [How to Contribute](#how-to-contribute)
   - [Code of Conduct](#code-of-conduct)
+  - [Repositories and Submodules](#repositories-and-submodules)
   - [Development Setup](#development-setup)
+  - [First Run Without an NVD Key](#first-run-without-an-nvd-key)
+  - [Changes That Span Repositories](#changes-that-span-repositories)
   - [Pull Request Process](#pull-request-process)
   - [AGPL License Requirements](#agpl-license-requirements)
   - [Reporting Issues](#reporting-issues)
@@ -49,7 +52,7 @@ Thank you for your interest in contributing to CodeClarity! We welcome contribut
 
 ### How to Contribute
 
-- Fork the repository and create your branch from `main`.
+- Fork the repository and create your branch from `develop`. Every repository takes pull requests into `develop`; `main` only receives releases, so a PR opened against `main` will be retargeted.
 - Make your changes, following our code style and best practices.
 - Add or update tests as needed.
 - Ensure your code builds and passes all tests.
@@ -59,6 +62,28 @@ Thank you for your interest in contributing to CodeClarity! We welcome contribut
 
 Be respectful and inclusive. Harassment or discrimination of any kind will not be tolerated.
 
+### Repositories and Submodules
+
+This repository (`codeclarity-dev`, the umbrella) holds the dev stack, the docs, the ADRs and the cross-repo CI. The code lives in other repositories, checked out here as git submodules:
+
+| Path                  | Repository                     | What it is                                                                     |
+| --------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `api`                 | `CodeClarityCE/api`            | NestJS API, and the migrations of every database                               |
+| `frontend`            | `CodeClarityCE/frontend`       | Vue web app                                                                    |
+| `deployment`          | `CodeClarityCE/deployment`     | Production Compose file and the operator guide                                 |
+| `backend`             | `CodeClarityCE/backend`        | Holds the Go repositories below as its own submodules                          |
+| `backend/services/*`  | `CodeClarityCE/service-<name>` | Dispatcher, downloader, knowledge and other services                           |
+| `backend/plugins/*`   | `CodeClarityCE/plugin-<name>`  | Analysis plugins (SBOM builders, vulnerability finder, licence finder, CodeQL) |
+| `backend/utilities/*` | `CodeClarityCE/utility-<name>` | Shared Go libraries                                                            |
+
+Each submodule is a full repository with its own issues, CI, releases and history (`docs/adr/0020-keep-submodules-and-test-same-named-branches-together.md`). A few things follow from that:
+
+- Clone with `git clone --recursive`, or run `git submodule update --init --recursive` in an existing clone.
+- The umbrella records one commit of each submodule (its pointer). `git submodule update` checks out those commits, detached; run `git switch develop` (or your branch) inside a submodule before you commit there.
+- Commit and push inside the submodule, then open the PR in that submodule's repository. The umbrella only changes when its own files change, or when maintainers move the pointers.
+- A change to one area goes to that area's repository; work that spans repositories is tracked in `CodeClarityCE/codeclarity-dev`.
+- How the parts fit together: [docs/architecture.md](./docs/architecture.md).
+
 ### Development Setup
 
 - Setup instruction can be found in the [README](./README.md).
@@ -66,6 +91,62 @@ Be respectful and inclusive. Harassment or discrimination of any kind will not b
 - Tests that need a token-shaped value should use one like `glpat-test-token`, or build it at run time (a prefix joined to repeated characters), since `glpat-` followed by 20 x's is flagged by the scan and rejected by GitHub push protection.
 - If the scan flags a dev key or test fixture on purpose, add its fingerprint (printed by the scan) to that repo's `.gitleaksignore`, under a `#` line saying why. If it might be a real secret, rotate it and tell the maintainers instead.
 - Ensure you can build and run the project locally before submitting changes.
+
+### First Run Without an NVD Key
+
+You do not need an NVD API key, or any account, to run the stack and an analysis:
+
+```bash
+git clone --recursive https://github.com/CodeClarityCE/codeclarity-dev.git
+cd codeclarity-dev
+make hooks
+make up                    # restores the knowledge database from the knowledge dump image
+make knowledge-update-osv  # brings the OSV advisories up to date, no key needed
+```
+
+Then log in at <https://localhost:443> with the dev account from the [README](./README.md#default-development-credentials) and run the Default Analyzer on a project. The restored dump already holds every knowledge source (NVD, GCVE, OSV, KEV and the rest), so results are complete up to the dump's date; `make knowledge-update-osv` adds the OSV advisories published since the dump was made. A full `make knowledge-update` (every source, a few hours) needs an NVD API key and is only worth it when you work on the knowledge sources themselves; see [docs/knowledge-dump.md](./docs/knowledge-dump.md).
+
+### Changes That Span Repositories
+
+When one change needs edits in more than one repository, use **the same branch name in every repository you touch**, and open a PR in each one, including one in this umbrella. Umbrella CI then tests them as one unit: on an umbrella PR it checks out your branch in each submodule that has a branch of that name, and `develop` in the others, before it builds the stack and runs the real-stack journeys and the results gate (`scripts/same-named-branches.sh`, ADR 0020). The branch name is the only link between the PRs.
+
+Example: a new field shown in the UI needs an API change and a frontend change.
+
+```bash
+# In each submodule you change, branch from develop with the same name.
+cd api && git switch develop && git pull && git switch -c feat/123-risk-score
+# ...edit, test, commit...
+git push -u origin feat/123-risk-score
+
+cd ../frontend && git switch develop && git pull && git switch -c feat/123-risk-score
+# ...edit, test, commit...
+git push -u origin feat/123-risk-score
+
+# In the umbrella, the same name again, from develop.
+cd .. && git switch develop && git pull && git switch -c feat/123-risk-score
+git add api frontend   # optional: point the submodules at your commits
+git commit -m "Test the risk score across api and frontend"
+git push -u origin feat/123-risk-score
+```
+
+Open three PRs into `develop`: `api`, `frontend` and `codeclarity-dev`, each from `feat/123-risk-score`, and link them to each other in their descriptions. The umbrella PR's `Check out the same-named branches in the submodules` step prints which commit each submodule was tested at:
+
+```text
+Submodule checkouts for the same-named-branch PR feat/123-risk-score:
+backend                                  develop (fallback)                       9a0b1c2
+backend/services/dispatcher              develop (fallback)                       3d4e5f6
+...
+api                                      PR branch feat/123-risk-score            1a2b3c4
+frontend                                 PR branch feat/123-risk-score            5d6e7f8
+deployment                               develop (fallback)                       7a8b9c0
+```
+
+Things to know:
+
+- The umbrella PR needs a commit to exist. If you have no umbrella change, moving the pointers of the submodules you changed (`git add api frontend`) is a good one: it is what the umbrella will record once your PRs are merged.
+- Branches are looked up on the CodeClarityCE repositories, not on forks. If you work from forks, say so in the umbrella PR and a maintainer will push your branches upstream so CI can find them.
+- If no submodule has a branch of that name, CI tests the submodules at their pointers, as for any umbrella PR.
+- Merge order is the dependency order: libraries in `backend/utilities` first, then the repositories that use them. `scripts/release-all.sh` releases them in that order.
 
 ### Pull Request Process
 
