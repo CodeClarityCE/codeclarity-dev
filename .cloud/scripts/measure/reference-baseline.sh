@@ -280,15 +280,6 @@ stop_samplers() {
 	pids=""
 }
 
-# Copies Caddy's internal CA to $CURL_CA once Caddy has made it.
-fetch_ca() {
-	deadline=$(($(date +%s) + 120))
-	until compose exec -T frontend cat /data/caddy/pki/authorities/local/root.crt >"$CURL_CA" 2>/dev/null && [ -s "$CURL_CA" ]; do
-		[ "$(date +%s)" -lt "$deadline" ] || return 1
-		sleep 2
-	done
-}
-
 run() {
 	out=$1
 	mkdir -p "$out"
