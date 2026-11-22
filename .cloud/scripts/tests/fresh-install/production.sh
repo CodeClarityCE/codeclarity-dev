@@ -2,7 +2,8 @@
 # Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing).
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
 # Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
-#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh).
+#      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh,
+#      seeds a project, an analysis and a ticket there and checks them after the upgrade).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -38,6 +39,8 @@ compose() {
 
 # shellcheck source=lib.sh
 . "$root/.cloud/scripts/tests/fresh-install/lib.sh"
+# shellcheck source=seed.sh
+. "$root/.cloud/scripts/tests/fresh-install/seed.sh"
 JOBS=$PRODUCTION_JOBS
 # A settled stack must then run 30 seconds without a restart.
 SETTLE_SECONDS=30
@@ -368,7 +371,7 @@ latest_release() {
 		--jq '[.[] | select(any(.assets[]; .name == "docker-compose.yaml"))][0].tag_name // empty'
 }
 
-# Installs the previous release from its assets and creates the user there.
+# Installs the previous release from its assets, creates the user there and seeds data through the API.
 install_previous() {
 	prev="$work/previous"
 	mkdir -p "$prev"
@@ -384,6 +387,11 @@ install_previous() {
 	result=ok
 	compose run --rm -T -e CREATE_USER_PASSWORD api create-user --email "$EMAIL" --name "$NAME" || result=bad
 	check "previous release $UPGRADE_FROM: create-user succeeds" $result
+	result=ok
+	fetch_ca || result=bad
+	check "previous release $UPGRADE_FROM: Caddy serves $DOMAIN from its internal CA" $result
+	check_user "previous release $UPGRADE_FROM"
+	if [ -n "${org:-}" ]; then seed_upgrade_data "previous release $UPGRADE_FROM" "$org"; fi
 	kept_rows >"$work/rows.before" || true
 	cdir=$dir
 }
@@ -436,6 +444,7 @@ result=ok
 fetch_ca || result=bad
 check "Caddy serves $DOMAIN from its internal CA" $result
 check_user "after create-user"
+if [ -n "$UPGRADE_FROM" ]; then check_seeded_data "upgrade from $UPGRADE_FROM"; fi
 check_deep_links "after create-user"
 if [ -n "${org:-}" ]; then check_analysis "after create-user" "$org"; fi
 # An upgraded instance keeps the previous release's monitoring and CodeQL containers until removed.
@@ -453,6 +462,7 @@ wait_settled || { result=bad; report_unsettled; }
 check "second up -d: every job succeeds and every service runs" $result
 check_stack "second up -d"
 check_user "second up -d"
+if [ -n "$UPGRADE_FROM" ]; then check_seeded_data "second up -d"; fi
 
 result=ok
 compose logs --no-color knowledge-restore | grep -q 'nothing to restore' || result=bad
