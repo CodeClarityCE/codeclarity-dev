@@ -145,5 +145,16 @@ r=ok
 [ "$failed" = 3 ] && [ "$passed" = 0 ] || r=bad
 expect "with no seeded data recorded, all three checks fail" $r
 
+# The upgrade journey logs in as the seeded account from a file only its owner reads.
+LOGIN_EMAIL=operator@example.com
+LOGIN_PASSWORD="it's a \$secret"
+rm -f "$work/journey.env"
+write_journey_login "$work/journey.env" >"$work/out" 2>&1
+r=ok
+[ "$(stat -c %a "$work/journey.env" 2>/dev/null)" = 600 ] || r=bad
+got=$(env -i sh -c 'set -a; . "$1"; printf "%s|%s" "$E2E_LOGIN_EMAIL" "$E2E_LOGIN_PASSWORD"' sh "$work/journey.env" 2>&1) || r=bad
+[ "$got" = "operator@example.com|it's a \$secret" ] || r=bad
+expect "the journey login file gives the seeded account's email and password, readable by its owner only (got $got)" $r
+
 echo "$tests_passed passed, $tests_failed failed"
 [ "$tests_failed" -eq 0 ]

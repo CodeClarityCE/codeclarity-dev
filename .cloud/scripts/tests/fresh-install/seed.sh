@@ -71,3 +71,13 @@ check_seeded_data() {
 		fi
 	done
 }
+
+# Writes the seeded account's login as a shell env file $1 for the upgrade journey (owner-only).
+write_journey_login() {
+	(
+		umask 077
+		printf "E2E_LOGIN_EMAIL='%s'\nE2E_LOGIN_PASSWORD='%s'\n" \
+			"$(printf '%s' "$LOGIN_EMAIL" | sed "s/'/'\\\\''/g")" \
+			"$(printf '%s' "$LOGIN_PASSWORD" | sed "s/'/'\\\\''/g")" >"$1"
+	)
+}
