@@ -4,7 +4,9 @@
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
 # Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
 #      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh,
-#      seeds a project, an analysis and a ticket there and checks them after the upgrade).
+#      seeds a project, an analysis and a ticket there and checks them after the upgrade),
+#      UPGRADE_JOURNEY_ENV (with UPGRADE_FROM: a file to write the seeded account's login to when
+#      every check passed, for the upgrade journey run against the stack left up).
 set -eu
 
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -586,6 +588,10 @@ wait_settled || { result=bad; report_unsettled; }
 check "with COMPOSE_PROFILES=monitoring: up -d succeeds and every service runs" $result
 check_monitoring_on "with COMPOSE_PROFILES=monitoring"
 check_user "with COMPOSE_PROFILES=monitoring"
+
+if [ -n "$UPGRADE_FROM" ] && [ -n "${UPGRADE_JOURNEY_ENV:-}" ] && [ "$failed" -eq 0 ]; then
+	write_journey_login "$UPGRADE_JOURNEY_ENV"
+fi
 
 if [ "$failed" -gt 0 ]; then
 	# shellcheck disable=SC2086 # a list of service names

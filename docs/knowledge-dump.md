@@ -8,6 +8,13 @@ The broker's code is baked into its image, so a change to its `dump-knowledge` c
 developer rebuilds the devcontainer.
 Nothing is needed where you run it beyond the running stack: Go and Postgres tools come from its containers.
 
+## First run: OSV only, no key
+
+`make up` restores the knowledge dump, so a new stack can run analyses without any update. The first update to run
+is `make knowledge-update-osv` (`-knowledge -action update-osv` in `service-package-follower`): it brings only the
+OSV advisories up to date and needs no NVD API key, from the host or the devcontainer. Run the full update below only
+when you need every source current or want to build a dump.
+
 ## Building the knowledge data
 
 `make knowledge-update` runs the full update (`-knowledge -action update`) that a dump is built from, in the stack's
