@@ -3,6 +3,9 @@
 # query, and waiting on PRs' ci checks. gh is the stand-in in stubs/.
 # Run from the repo root: bats scripts/tests
 
+# run -1 (exit exactly 1) needs bats 1.5.
+bats_require_minimum_version 1.5.0
+
 setup() {
 	load helpers
 	setup_fake_root
@@ -131,7 +134,7 @@ api api" ]
 	run sourced ci-status.sh status_table
 	[ "$status" -eq 0 ]
 	[ "$(sed -n 2p <<<"$output" | tr -s ' ')" = "- admin-tools no-branch no-branch unset private - -" ]
-	! grep -q private-vulnerability-reporting "$GH_STUB_LOG"
+	run -1 grep -q private-vulnerability-reporting "$GH_STUB_LOG"
 }
 
 @test "the table comes from one GraphQL query over non-archived repos" {

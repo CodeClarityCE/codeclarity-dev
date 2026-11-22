@@ -3,6 +3,9 @@
 # vulnerability reporting state in a file and turns it on when the script PUTs it.
 # Run from the repo root: bats scripts/tests
 
+# run -1 (exit exactly 1) needs bats 1.5.
+bats_require_minimum_version 1.5.0
+
 setup() {
 	load helpers
 	setup_fake_root
@@ -95,7 +98,7 @@ deployment unknown
 	[ "$output" = "api on
 frontend on
 all 2 public repos have private vulnerability reporting on" ]
-	! grep -q -- '-X PUT' "$GH_STUB_LOG"
+	run -1 grep -q -- '-X PUT' "$GH_STUB_LOG"
 }
 
 @test "with no mode it changes nothing and asks for one" {
@@ -103,7 +106,7 @@ all 2 public repos have private vulnerability reporting on" ]
 	run "$ROOT_DIR/scripts/private-reporting.sh"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"expected --check or --apply"* ]]
-	! grep -q -- '-X PUT' "$GH_STUB_LOG"
+	run -1 grep -q -- '-X PUT' "$GH_STUB_LOG"
 }
 
 @test "private repos, where GitHub offers no private reporting, are listed but neither fail nor change" {
@@ -114,5 +117,5 @@ all 2 public repos have private vulnerability reporting on" ]
 	[ "$output" = "api on
 admin-tools private
 all 1 public repos have private vulnerability reporting on" ]
-	! grep -q -- '-X PUT' "$GH_STUB_LOG"
+	run -1 grep -q -- '-X PUT' "$GH_STUB_LOG"
 }
