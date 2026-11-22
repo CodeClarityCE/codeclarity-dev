@@ -171,8 +171,9 @@ actions_releases() {
 }
 
 # The repo's own release workflow, dispatched on main with the new tag (the umbrella's attaches the SBOM).
+# A release.yml without workflow_dispatch (backend's runs on cli-v* tags) is not one.
 has_release_workflow() {
-	[[ -f "$ROOT/$1/.github/workflows/release.yml" ]]
+	grep -qs 'workflow_dispatch' "$ROOT/$1/.github/workflows/release.yml"
 }
 
 # Who creates the tag + GitHub release: workflow, actions or script.
