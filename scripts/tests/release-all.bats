@@ -191,13 +191,23 @@ released_go_repo() {
 	[[ "$output" == *"backend has a releasing caller but CI_RELEASE is not true"* ]]
 }
 
-@test "releaser is the release workflow for a repo with one" {
+@test "releaser is the release workflow for a repo with one and CI_RELEASE true" {
+	write_file . .github/workflows/release.yml "on:
+  workflow_dispatch:"
+	caller . workflow-lint.yml
+	set_variable . CI_RELEASE true
+	run rel releaser .
+	[ "$status" -eq 0 ]
+	[ "$output" = workflow ]
+}
+
+@test "releaser stops on a release workflow with CI_RELEASE unset" {
 	write_file . .github/workflows/release.yml "on:
   workflow_dispatch:"
 	caller . workflow-lint.yml
 	run rel releaser .
-	[ "$status" -eq 0 ]
-	[ "$output" = workflow ]
+	[ "$status" -ne 0 ]
+	[[ "$output" == *". has a release workflow but CI_RELEASE is not true"* ]]
 }
 
 # --- release workflow ---------------------------------------------------------------------
@@ -227,6 +237,7 @@ RULES
   workflow_dispatch:"
 	merge_to_main .
 	release_workflow_rules ok in_progress
+	set_variable . CI_RELEASE true
 	run rel publish_tag . v0.1.1-alpha
 	[ "$status" -eq 0 ]
 	grep -qx '.: workflow run release.yml --ref main -f version=v0.1.1-alpha' "$GH_STUB_LOG"
@@ -238,6 +249,7 @@ RULES
 	write_file . .github/workflows/release.yml "on:
   workflow_dispatch:"
 	release_workflow_rules fails failure
+	set_variable . CI_RELEASE true
 	run rel publish_tag . v0.1.1-alpha
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"the Release workflow for v0.1.1-alpha ended with failure"*"https://github.com/x/runs/2"* ]]
