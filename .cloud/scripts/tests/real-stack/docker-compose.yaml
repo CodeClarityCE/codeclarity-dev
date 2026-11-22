@@ -1,10 +1,60 @@
 # The trimmed stack of the `e2e (real stack)` CI job, merged over the deployment Compose file by
-# stack.sh. It turns off the services the journey never uses, so only the setup jobs and the
-# services one Default Analyzer run needs start. The dev stack's file list never names it.
+# stack.sh. It turns off the services the journeys never use, so only the setup jobs and the
+# services one Default Analyzer run needs start, plus a mail catcher the journeys read their
+# emails from. The dev stack's file list never names it.
 services:
   service-scheduler:
     profiles: [not-in-real-stack]
   service-notifier:
     profiles: [not-in-real-stack]
+  # Never started; `stack.sh knowledge-update` runs one update in it from the fixture advisories.
   service-knowledge:
-    profiles: [not-in-real-stack]
+    profiles: [knowledge-update]
+
+  # Also signs a certificate for the mail catcher with the instance's internal CA, once.
+  generate-secrets:
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        sh /usr/local/bin/generate-secrets.sh /secrets
+        [ -s /secrets/mail/server.crt ] && exit 0
+        printf 'subjectAltName=DNS:mail\nextendedKeyUsage=serverAuth\n' >/tmp/mail.ext
+        openssl req -new -newkey rsa:2048 -nodes -keyout /secrets/mail/server.key -subj /CN=mail 2>/dev/null |
+          openssl x509 -req -days 2 -CA /secrets/.store/ca.crt -CAkey /secrets/.store/ca.key \
+            -set_serial "0x$$(openssl rand -hex 16)" -extfile /tmp/mail.ext -out /secrets/mail/server.crt 2>/dev/null
+        chmod 444 /secrets/mail/server.key /secrets/mail/server.crt
+    volumes:
+      - secrets-mail:/secrets/mail
+
+  # Catches every email the API sends; its API is on 127.0.0.1:8025 for the journeys.
+  mail:
+    image: axllent/mailpit:v1.33.1@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
+    restart: always
+    environment:
+      MP_SMTP_TLS_CERT: /run/codeclarity/server.crt
+      MP_SMTP_TLS_KEY: /run/codeclarity/server.key
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+    ports:
+      - 127.0.0.1:8025:8025
+    volumes:
+      - secrets-mail:/run/codeclarity:ro
+    depends_on:
+      generate-secrets:
+        condition: service_completed_successfully
+
+  # Sends through the mail catcher over STARTTLS, trusting the internal CA that signed it, and
+  # logs in as an operator's mail server asks; the catcher accepts any login.
+  api:
+    environment:
+      MAIL_HOST: mail
+      MAIL_PORT: "1025"
+      MAIL_AUTH_PASSWORD: not-a-secret
+      NODE_EXTRA_CA_CERTS: /home/codeclarity/app/env/ca.crt
+    depends_on:
+      mail:
+        condition: service_started
+
+volumes:
+  secrets-mail:
