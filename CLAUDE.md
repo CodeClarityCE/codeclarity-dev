@@ -43,6 +43,7 @@ The devcontainer has its own private Docker daemon and stack, separate from the 
 - **Frontend**: `cd frontend && pnpm test:unit` (Vitest) / `pnpm test:e2e` (Playwright)
 - **API**: `cd api && pnpm test` (Jest) / `pnpm test:e2e`
 - **Backend plugins**: `cd backend/plugins/<name> && go test ./tests/`
+- **Results gate** (ADR 0021): CI fails when a fixture's findings differ from `scripts/results-gate/expected/`; after an intended change, `sh scripts/results-gate/gate.sh update <recorded run>` rewrites them (see `scripts/results-gate/README.md`)
 - **Release script** (`scripts/`): `bats scripts/tests` (bats tests with `gh` stubbed and local git remotes; CI runs them in the pinned `bats/bats` image)
 - **Linting**: `cd frontend && pnpm lint` / `cd api && pnpm lint`
 - **Formatting (root)**: root CI's `prettier` job checks every tracked Markdown, YAML and JSON file outside the submodules (`.prettierignore` skips tool-written ones) with the Prettier root `package.json` pins; fix with `node_modules/.bin/prettier --write <files>`, or check as CI does with `git ls-files -z '*.md' '*.yml' '*.yaml' '*.json' | xargs -0 sh .cloud/scripts/prettier-check.sh`
@@ -62,6 +63,7 @@ Pipeline logic lives once, in reusable workflows in `CodeClarityCE/.github` (its
 - **Type sync**: the `type-sync` job fails when a frontend copy of an API enum or allow-list (`scripts/type-sync/pairs.txt`) misses a value the API defines, at the submodule pointers. Add a pair as one line there; run it with `node scripts/type-sync/check.mjs`
 - **Dependabot**: weekly grouped updates into `develop` with a 3-day cooldown; `github.com/CodeClarityCE/*` is bumped only by `scripts/release-all.sh`.
 - **Org status**: `scripts/ci-status.sh` prints one row per non-archived repo (submodule path, `ci` on `main` and `develop`, `CI_RELEASE`, open PRs, other branches) in a few seconds; `scripts/ci-status.sh --wait api#12 codeclarity-dev#200` waits for those PRs' `pull_request` `ci` and exits non-zero if any failed
+- **Labels and owners**: `scripts/sync-labels.sh --check` lists the severity (`P1` includes wrong results), contributor and triage labels a repo lacks (see `docs/agents/triage-labels.md`); without `--check` it creates or edits them. Each repo has its own `.github/CODEOWNERS`; the default PR template lives in `.github`'s `.github/pull_request_template.md`
 
 Why it is built this way: `docs/adr/0009-ci-on-github-actions-via-central-reusable-workflows.md`. Org setup: `scripts/setup-github-actions-org.sh`.
 

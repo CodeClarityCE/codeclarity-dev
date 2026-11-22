@@ -188,6 +188,10 @@ _Avoid_: Match uncertain, possibly incorrect
 A fixed set of projects pinned to commits and to one knowledge dump, with an adjudicated verdict for every (canonical vulnerability, package, version), used to measure precision and recall.
 _Avoid_: Ground truth (that is its verdicts), test suite
 
+**Results gate**:
+The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
+_Avoid_: Snapshot test, accuracy benchmark (that judges results against verdicts)
+
 **Winning source**:
 The knowledge source whose data is displayed for a vulnerability instance when several source matches exist.
 _Avoid_: Primary source, truth
