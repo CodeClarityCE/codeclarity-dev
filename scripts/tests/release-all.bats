@@ -191,6 +191,61 @@ released_go_repo() {
 	[[ "$output" == *"backend has a releasing caller but CI_RELEASE is not true"* ]]
 }
 
+@test "releaser is the release workflow for a repo with one" {
+	write_file . .github/workflows/release.yml "on:
+  workflow_dispatch:"
+	caller . workflow-lint.yml
+	run rel releaser .
+	[ "$status" -eq 0 ]
+	[ "$output" = workflow ]
+}
+
+# --- release workflow ---------------------------------------------------------------------
+
+# gh answers for the umbrella's release workflow: on dispatch it tags main (ok) or its run fails (fails).
+release_workflow_rules() {
+	cat >"$GH_STUB_RULES" <<RULES
+gh_stub() {
+	case "\$1 \$2" in
+	"workflow run")
+		[[ "$1" == ok ]] && git fetch -q origin && git tag "\${7#version=}" origin/main && git push -q origin "\${7#version=}"
+		return 0
+		;;
+	"run list")
+		echo '[{"displayTitle":"Release v0.1.0-alpha","status":"completed","conclusion":"failure","createdAt":"2000-01-01T00:00:00Z","url":"https://github.com/x/runs/1"},
+		  {"displayTitle":"Release v0.1.1-alpha","status":"completed","conclusion":"$2","createdAt":"2999-01-01T00:00:00Z","url":"https://github.com/x/runs/2"}]'
+		;;
+	*) return 1 ;;
+	esac
+}
+RULES
+}
+
+@test "publish_tag dispatches the release workflow on main with the tag and waits for the tag" {
+	init_repo .
+	write_file . .github/workflows/release.yml "on:
+  workflow_dispatch:"
+	merge_to_main .
+	release_workflow_rules ok in_progress
+	run rel publish_tag . v0.1.1-alpha
+	[ "$status" -eq 0 ]
+	grep -qx '.: workflow run release.yml --ref main -f version=v0.1.1-alpha' "$GH_STUB_LOG"
+	[ -n "$(git -C "$ROOT_DIR" ls-remote --tags origin refs/tags/v0.1.1-alpha)" ]
+}
+
+@test "publish_tag stops with the run's link when the release workflow fails, as a failed SBOM does" {
+	init_repo .
+	write_file . .github/workflows/release.yml "on:
+  workflow_dispatch:"
+	release_workflow_rules fails failure
+	run rel publish_tag . v0.1.1-alpha
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"the Release workflow for v0.1.1-alpha ended with failure"*"https://github.com/x/runs/2"* ]]
+	[ -z "$(git -C "$ROOT_DIR" ls-remote --tags origin refs/tags/v0.1.1-alpha)" ]
+	run grep -q 'release create' "$GH_STUB_LOG"
+	[ "$status" -eq 1 ]
+}
+
 # --- version file -------------------------------------------------------------------------
 
 @test "version_file is config.json when the repo has one" {

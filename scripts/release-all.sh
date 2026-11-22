@@ -19,6 +19,10 @@
 #   actions  the caller uses a releasing workflow (go-library, go-image,
 #            node-image) or has its own release job (deployment), and the
 #            repo variable CI_RELEASE is true;
+#   workflow the repo has a .github/workflows/release.yml, which this script
+#            dispatches on main with the tag and waits for (the umbrella's
+#            runs the CLI on the released code and attaches CodeClarity's
+#            SBOM; a failed run stops this script and leaves no tag);
 #   script   the caller has no release jobs, so this script creates the
 #            release itself.
 # A releasing caller with CI_RELEASE off stops the run, since no image would ship.
@@ -45,7 +49,8 @@
 # resumes with the same version: every step is skipped once it is done.
 #
 # Env: CI_CHECK_PATTERN (regex of PR checks that must pass, default "^ci$"),
-#      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each).
+#      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each),
+#      RELEASE_WORKFLOW_TIMEOUT_SECONDS (default 9000: the SBOM job builds and starts a stack).
 
 set -euo pipefail
 
@@ -54,6 +59,7 @@ STATE_FILE="$ROOT/scripts/.release-state"
 CI_CHECK_PATTERN="${CI_CHECK_PATTERN:-^ci\$}"
 CI_TIMEOUT_SECONDS="${CI_TIMEOUT_SECONDS:-3600}"
 TAG_TIMEOUT_SECONDS="${TAG_TIMEOUT_SECONDS:-3600}"
+RELEASE_WORKFLOW_TIMEOUT_SECONDS="${RELEASE_WORKFLOW_TIMEOUT_SECONDS:-9000}"
 POLL_SECONDS=30
 
 # Resolve our own modules straight from GitHub (no proxy.golang.org lag on
@@ -83,7 +89,7 @@ parse_args() {
 			shift
 			;;
 		-h | --help)
-			sed -n '2,48p' "$0"
+			sed -n '2,53p' "$0"
 			exit 0
 			;;
 		*)
@@ -160,9 +166,16 @@ actions_releases() {
 	[[ "${CI_RELEASE_OF[$1]}" == true ]]
 }
 
-# Who creates the tag + GitHub release: actions or script.
+# The repo's own release workflow, dispatched on main with the new tag (the umbrella's attaches the SBOM).
+has_release_workflow() {
+	[[ -f "$ROOT/$1/.github/workflows/release.yml" ]]
+}
+
+# Who creates the tag + GitHub release: workflow, actions or script.
 releaser() {
-	if actions_releases "$1"; then
+	if has_release_workflow "$1"; then
+		echo workflow
+	elif actions_releases "$1"; then
 		echo actions
 	elif actions_can_release "$1"; then
 		die "$1 has a releasing caller but CI_RELEASE is not true (see docs/ci-release-test.md)"
@@ -412,11 +425,30 @@ merge_pr() {
 	wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr to merge" pr_merged "$key" "$pr"
 }
 
+# Succeeds once the tag exists; dies when the release workflow run for it, started since $3, failed.
+release_workflow_done() {
+	local key="$1" tag="$2" since="$3" run
+	tag_on_remote "$key" "$tag" && return
+	run="$(gh_in "$key" run list --workflow release.yml --branch main --event workflow_dispatch --limit 20 \
+		--json displayTitle,status,conclusion,createdAt,url |
+		jq -c --arg title "Release $tag" --arg since "$since" \
+			'[.[] | select(.displayTitle == $title and .createdAt >= $since)] | sort_by(.createdAt) | last // empty')"
+	[[ -z "$run" || "$(jq -r .status <<<"$run")" != completed ]] && return 1
+	[[ "$(jq -r .conclusion <<<"$run")" == success ]] && return 1
+	die "$key: the Release workflow for $tag ended with $(jq -r .conclusion <<<"$run"), so nothing was released: $(jq -r .url <<<"$run")"
+}
+
 publish_tag() {
-	local key="$1" tag="$2" prerelease=false by
+	local key="$1" tag="$2" prerelease=false by since
 	tag_on_remote "$key" "$tag" && return
 	by="$(releaser "$key")" || exit 1
 	case "$by" in
+	workflow)
+		since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		gh_in "$key" workflow run release.yml --ref main -f "version=$tag"
+		log "$key" "dispatched the Release workflow for $tag"
+		wait_until "$RELEASE_WORKFLOW_TIMEOUT_SECONDS" "the Release workflow to release $key $tag" release_workflow_done "$key" "$tag" "$since"
+		;;
 	actions)
 		log "$key" "waiting for the Actions main run (if it failed or never ran, re-run it)"
 		wait_until "$TAG_TIMEOUT_SECONDS" "Actions to release $key $tag" tag_on_remote "$key" "$tag"
