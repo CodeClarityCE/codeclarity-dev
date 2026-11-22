@@ -1,7 +1,8 @@
 # The real-stack e2e job: builds the images of a trimmed stack at the submodule pointers (on a PR,
 # the same-named branches; scripts/same-named-branches.sh) with the GitHub Actions layer cache,
 # brings it up with the knowledge dump fixture and the dev account,
-# then runs the frontend's real-stack Playwright journey, which mocks nothing. ci.yml calls it on
+# then runs the frontend's real-stack Playwright journey, which mocks nothing, and golden journey 7
+# (the CLI with an Organization token, cli-journey.sh). ci.yml calls it on
 # pull requests and pushes, as part of its `ci` gate; it also runs nightly on its own.
 name: E2E (real stack)
 
@@ -57,6 +58,10 @@ jobs:
           echo "STACK_READY=$(date +%s)" >>"$GITHUB_ENV"
       - name: Run the real-stack journey
         run: sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journey"
+      # Golden journey 7: a pipeline analyses a project with the CLI and an Organization token.
+      - name: Run golden journey 7 (CLI)
+        if: ${{ !cancelled() && env.STACK_READY != '' }}
+        run: sh .cloud/scripts/tests/real-stack/cli-journey.sh "$RUNNER_TEMP/cli-journey"
       - name: Timings
         if: always()
         run: |
@@ -77,5 +82,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-real-stack
-          path: ${{ runner.temp }}/journey
+          path: |
+            ${{ runner.temp }}/journey
+            ${{ runner.temp }}/cli-journey
           if-no-files-found: warn
