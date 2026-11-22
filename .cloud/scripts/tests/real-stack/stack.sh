@@ -21,7 +21,6 @@ export DOMAIN
 LOGIN_EMAIL=john.doe@codeclarity.io
 LOGIN_PASSWORD='ThisIs4Str0ngP4ssW0rd?'
 API_BASE="https://$DOMAIN/api"
-JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 CURL_CA="$WORK/ca.crt"
@@ -32,38 +31,7 @@ compose() {
 
 # shellcheck source=../fresh-install/lib.sh
 . "$root/.cloud/scripts/tests/fresh-install/lib.sh"
-
-# Prints each container that is not settled yet: a job not exited 0, or a service not running.
-unsettled() {
-	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.ExitCode)"' |
-		while read -r service state code; do
-			case " $JOBS " in
-			*" $service "*) if [ "$state" != exited ] || [ "$code" != 0 ]; then echo "$service $state $code"; fi ;;
-			*) if [ "$state" != running ]; then echo "$service $state"; fi ;;
-			esac
-		done
-}
-
-# Waits for every job to succeed and every service to run; fails early when a job failed.
-wait_settled() {
-	deadline=$(($(date +%s) + WAIT_SECONDS))
-	while left=$(unsettled) && [ -n "$left" ]; do
-		if echo "$left" | grep -Eq "^($(echo "$JOBS" | tr ' ' '|')) exited [1-9]" || [ "$(date +%s)" -ge "$deadline" ]; then
-			echo "$left" >&2
-			return 1
-		fi
-		sleep 2
-	done
-}
-
-# Copies Caddy's internal root certificate, which a DOMAIN=localhost instance serves from.
-fetch_ca() {
-	deadline=$(($(date +%s) + 120))
-	until compose exec -T frontend cat /data/caddy/pki/authorities/local/root.crt >"$CURL_CA" 2>/dev/null && [ -s "$CURL_CA" ]; do
-		[ "$(date +%s)" -lt "$deadline" ] || return 1
-		sleep 2
-	done
-}
+JOBS=$PRODUCTION_JOBS
 
 up() {
 	if [ -n "$(compose ps -aq)" ]; then
