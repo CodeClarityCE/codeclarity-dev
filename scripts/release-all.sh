@@ -156,14 +156,18 @@ actions_can_release() {
 		grep -qE "CodeClarityCE/\.github/.+/(go-library|go-image|node-image)\.yml@|vars\.CI_RELEASE == 'true'" "$(actions_caller "$1")"
 }
 
-# Actions releases once the repo variable CI_RELEASE is true (looked up once per repo).
+# True when the repo variable CI_RELEASE is true (looked up once per repo).
 declare -A CI_RELEASE_OF
-actions_releases() {
-	actions_can_release "$1" || return 1
+ci_release_on() {
 	if [[ -z "${CI_RELEASE_OF[$1]:-}" ]]; then
 		CI_RELEASE_OF[$1]="$(gh_in "$1" variable get CI_RELEASE 2>/dev/null || echo unset)"
 	fi
 	[[ "${CI_RELEASE_OF[$1]}" == true ]]
+}
+
+# Actions releases once the repo variable CI_RELEASE is true.
+actions_releases() {
+	actions_can_release "$1" && ci_release_on "$1"
 }
 
 # The repo's own release workflow, dispatched on main with the new tag (the umbrella's attaches the SBOM).
@@ -174,6 +178,8 @@ has_release_workflow() {
 # Who creates the tag + GitHub release: workflow, actions or script.
 releaser() {
 	if has_release_workflow "$1"; then
+		ci_release_on "$1" ||
+			die "$1 has a release workflow but CI_RELEASE is not true (see docs/ci-release-test.md)"
 		echo workflow
 	elif actions_releases "$1"; then
 		echo actions

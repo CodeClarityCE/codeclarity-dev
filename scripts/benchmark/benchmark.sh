@@ -216,7 +216,7 @@ cmd_run() {
 		shift
 	done
 	for n in $names; do
-		inputs | cut -f1 | grep -qx "$n" || {
+		inputs | cut -f1 | grep -x "$n" >/dev/null || {
 			echo "benchmark: unknown input: $n" >&2
 			usage
 		}

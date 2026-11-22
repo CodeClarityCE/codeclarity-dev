@@ -244,6 +244,7 @@ check_analysis() {
 	check "$1: the analysis lists ms@2.1.3 under the MIT license" $result
 	if [ "$result" = bad ]; then
 		jq -c '[.data[]? | {id, deps_using_license}]' "$WORK/licenses.json" 2>/dev/null || true
-		report service-follower
+		# shellcheck disable=SC2086 # a list of service names
+		report $ANALYSIS_SERVICES
 	fi
 }

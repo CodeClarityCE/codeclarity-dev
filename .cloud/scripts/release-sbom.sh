@@ -90,7 +90,7 @@ jq -e '.bomFormat == "CycloneDX" and (.components | length) > 0' "$WORK/sbom.cdx
 	exit 1
 }
 for prefix in $SBOM_REQUIRED; do
-	jq -e --arg p "$prefix" 'any(.components[]; .purl | startswith($p))' "$WORK/sbom.cdx.json" >/dev/null || {
+	jq -e --arg p "$prefix" 'any(.components[]; (.purl // "") | startswith($p))' "$WORK/sbom.cdx.json" >/dev/null || {
 		echo "release-sbom: the SBOM has no $prefix component, so it misses part of the release" >&2
 		exit 1
 	}

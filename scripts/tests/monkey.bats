@@ -51,6 +51,14 @@ EOF
 	grep -qxF "monkey results seed" "$RUNNER_LOG"
 }
 
+@test "run refuses a seed that is not a number, without evaluating it" {
+	MONKEY_SEED='x[$(touch '"$BATS_TEST_TMPDIR"'/ran)]' run bash "$MONKEY" run https://localhost "$OUT"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"MONKEY_SEED must be a number"* ]]
+	[ ! -e "$BATS_TEST_TMPDIR/ran" ]
+	[ ! -e "$RUNNER_LOG" ]
+}
+
 @test "run fails with the runner's exit code and records it" {
 	stub_runner 1
 	run bash "$MONKEY" run https://localhost "$OUT"
@@ -137,7 +145,7 @@ EOF
 	run bash "$MONKEY" report "$OUT"
 	[ "$status" -eq 0 ]
 	grep -q 'label create ci-failure' "$GH_STUB_LOG"
-	grep -q 'label create needs-triage' "$GH_STUB_LOG"
+	grep -q 'label create needs-triage --color 1D76DB --description Maintainer needs to evaluate this issue' "$GH_STUB_LOG"
 }
 
 @test "report on a failed run comments on the open monkey issue instead of opening another" {

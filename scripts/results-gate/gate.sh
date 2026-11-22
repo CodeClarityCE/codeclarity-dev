@@ -104,7 +104,7 @@ recorded() {
 	got=$(cat "$1/knowledge-dump.txt" 2>/dev/null || :)
 	[ "$got" = "$pin" ] || die "the run in $1 used ${got:-an unknown dump} but the gate is pinned to $pin"
 	for name in $(inputs); do
-		cut -f1 "$1/run.tsv" | grep -qx "$name" || die "$name: not in the recorded run in $1"
+		cut -f1 "$1/run.tsv" | grep -x "$name" >/dev/null || die "$name: not in the recorded run in $1"
 	done
 }
 

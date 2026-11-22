@@ -25,7 +25,7 @@ check() {
 }
 
 # The stand-in CLI logs each call and answers as STUB_CLI says: ok, analyze-fails,
-# results-fails, no-components or no-frontend.
+# results-fails, no-components, no-frontend or unnamed (a component without a purl).
 cat >"$work/codeclarity" <<'EOF'
 #!/bin/sh
 echo "$*" >>"$STUB_CLI_LOG"
@@ -39,6 +39,7 @@ results)
 	case "$STUB_CLI" in
 	no-components) components='[]' ;;
 	no-frontend) components='[{"type":"library","purl":"pkg:npm/%40nestjs/core@11.0.0"}]' ;;
+	unnamed) components='[{"type":"library","name":"local"},{"type":"library","purl":"pkg:npm/%40nestjs/core@11.0.0"},{"type":"library","purl":"pkg:npm/vue@3.5.0"}]' ;;
 	*) components='[{"type":"library","purl":"pkg:npm/%40nestjs/core@11.0.0"},{"type":"library","purl":"pkg:npm/vue@3.5.0"}]' ;;
 	esac
 	echo '{"bomFormat":"CycloneDX","specVersion":"1.6","metadata":{"component":{"name":"codeclarity","version":"'"$STUB_VERSION"'"}},"components":'"$components"'}'
@@ -68,6 +69,11 @@ result=ok
 grep -qx "analyze $work/release --name codeclarity-$VERSION --analyzer Default Analyzer --wait --timeout 45m" "$work/cli.log" || result=bad
 grep -qx "results --format cyclonedx --component-name codeclarity --component-version $VERSION" "$work/cli.log" || result=bad
 check "it analyses the released checkout and names the release in the SBOM" $result
+
+result=ok
+sbom unnamed || result=bad
+[ -e "$work/sbom.cdx.json" ] || result=bad
+check "a component without a purl does not stop the SBOM" $result
 
 for mode in analyze-fails results-fails no-components no-frontend; do
 	result=ok

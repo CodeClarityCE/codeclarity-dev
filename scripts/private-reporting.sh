@@ -21,10 +21,15 @@ die() {
 	exit 1
 }
 
-# "name visibility" of each non-archived repo, in the order the API lists them.
+# "name visibility" of each non-archived repo, in the order the API lists them; dies when the
+# listing fails or is empty, so a gh failure never reads as "all repos on".
 org_repos() {
-	gh api --paginate "orgs/$ORG/repos?type=all&per_page=100" \
-		--jq '.[] | select(.archived | not) | "\(.name) \(.visibility)"'
+	local repos
+	repos="$(gh api --paginate "orgs/$ORG/repos?type=all&per_page=100" \
+		--jq '.[] | select(.archived | not) | "\(.name) \(.visibility)"')" ||
+		die "could not list the repos of $ORG"
+	[[ -n "$repos" ]] || die "no repos listed for $ORG"
+	printf '%s\n' "$repos"
 }
 
 # on, off or unknown for one repo, retrying a failed read once.
@@ -42,7 +47,8 @@ reporting_state() {
 
 # Prints each repo's state and exits non-zero if any is not on.
 check() {
-	local repo visibility state total=0 bad=0
+	local repo visibility state total=0 bad=0 repos
+	repos="$(org_repos)" || exit 1
 	while read -r repo visibility; do
 		if [[ "$visibility" == private ]]; then
 			echo "$repo private"
@@ -52,7 +58,7 @@ check() {
 		echo "$repo $state"
 		total=$((total + 1))
 		[[ "$state" == on ]] || bad=$((bad + 1))
-	done < <(org_repos)
+	done <<<"$repos"
 	if ((bad > 0)); then
 		echo "$bad of $total public repos have private vulnerability reporting off or unknown"
 		return 1
@@ -62,7 +68,8 @@ check() {
 
 # Turns reporting on in each repo where it is off; repos that are on or unknown are left alone.
 apply() {
-	local repo visibility
+	local repo visibility repos
+	repos="$(org_repos)" || exit 1
 	while read -r repo visibility; do
 		[[ "$visibility" != private ]] || continue
 		[[ "$(reporting_state "$repo")" == off ]] || continue
@@ -71,7 +78,7 @@ apply() {
 		else
 			echo "$repo: could not turn it on" >&2
 		fi
-	done < <(org_repos)
+	done <<<"$repos"
 }
 
 main() {
