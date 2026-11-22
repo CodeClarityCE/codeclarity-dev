@@ -1,5 +1,6 @@
 #!/bin/sh
-# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing).
+# Fresh-install test of the deployment Compose file on an empty Docker daemon (CI only; it removes nothing),
+# including the support bundle's secret redaction on the running instance.
 # Usage: sh .cloud/scripts/tests/fresh-install/production.sh
 # Env: DEPLOYMENT_DIR, WAIT_SECONDS (900), ANALYSIS_WAIT_SECONDS (1200), KNOWLEDGE_DUMP_IMAGE,
 #      KNOWLEDGE_FIXTURE_CWE, UPGRADE_FROM (a release tag or "latest"; installs it first, needs gh).
@@ -355,6 +356,66 @@ check_monitoring_on() {
 	check "$1: Grafana's Prometheus data source returns data" $result
 }
 
+# Prints every secret value the instance holds, one per line: the secrets store, without
+# certificates, public keys, the salt or PEM armour lines.
+known_secrets() {
+	compose run --rm --no-deps -T --entrypoint sh generate-secrets -c \
+		'find /secrets/.store -type f ! -name "*.crt" ! -name "*public*" ! -name "*_salt" ! -name "*.tmp" -exec cat {} +' |
+		grep -v '^-----' | awk 'length($0) >= 8'
+}
+
+# Runs `make support-bundle` with a TLS key and made-up settings secrets in the environment, then
+# checks it holds versions, config, error logs and a fresh error report, and no secret value; $1 names the run.
+check_support_bundle() {
+	wait_for_login
+	marker="support bundle check $(date +%s)"
+	result=ok
+	post /logs '{"level":"error","msg":"'"$marker"'","fields":{"route":"/fresh-install"}}' >/dev/null || result=bad
+	check "$1: the web app's error report endpoint accepts a report" $result
+
+	mail="mail-password-$(date +%s)-x" clickup="clickup-secret-$(date +%s)-y" nvd="nvd-key-$(date +%s)-z"
+	result=ok
+	mkdir -p "$work/bundle"
+	MAIL_AUTH_PASSWORD=$mail CLICKUP_CLIENT_SECRET=$clickup NVD_API_KEY=$nvd \
+		make --no-print-directory -C "$cdir" support-bundle OUT="$work/bundle" >"$work/bundle.out" 2>"$work/bundle.err" || result=bad
+	archive=$(tail -n 1 "$work/bundle.out")
+	case $archive in "$work/bundle/codeclarity-support-"*.tar.gz) [ -f "$archive" ] || result=bad ;; *) result=bad ;; esac
+	check "$1: make support-bundle writes an archive and prints its path (${archive:-nothing})" $result
+	if [ "$result" != ok ]; then
+		cat "$work/bundle.out" "$work/bundle.err"
+		return 0
+	fi
+
+	rm -rf "$work/bundle.x"
+	mkdir -p "$work/bundle.x"
+	tar -xzf "$archive" -C "$work/bundle.x"
+	result=ok
+	grep -q "$CODECLARITY_VERSION" "$work"/bundle.x/*/versions.txt || result=bad
+	grep -q 'codeclarityce/api' "$work"/bundle.x/*/versions.txt || result=bad
+	grep -q 'pgbouncer' "$work"/bundle.x/*/config.yaml || result=bad
+	[ -n "$(find "$work"/bundle.x/*/logs -name '*.log')" ] || result=bad
+	grep -qF "$marker" "$work"/bundle.x/*/error-reports.log || result=bad
+	check "$1: the bundle holds versions, config, service logs and the new error report" $result
+
+	result=ok
+	{
+		known_secrets || result=bad
+		printf '%s\n' "$CREATE_USER_PASSWORD" "$mail" "$clickup" "$nvd"
+		printf '%s\n' "$TLS_KEY" | grep -v '^-----'
+	} >"$work/secrets.known"
+	[ "$(wc -l <"$work/secrets.known")" -gt 10 ] || result=bad
+	find "$work/bundle.x" -type f -exec cat {} + >"$work/bundle.all"
+	while IFS= read -r secret; do
+		[ -n "$secret" ] || continue
+		if grep -qF -- "$secret" "$work/bundle.all"; then
+			result=bad
+			echo "a known secret is in the bundle, in: $(grep -rlF -- "$secret" "$work/bundle.x" | sed "s#$work/bundle.x/##" | tr '\n' ' ')"
+		fi
+	done <"$work/secrets.known"
+	check "$1: no known secret value is in the bundle ($(wc -l <"$work/secrets.known") values checked)" $result
+	rm -f "$work/secrets.known"
+}
+
 # Row counts of what an upgrade must keep.
 kept_rows() {
 	for table in '"user"' organization analyzer project analysis; do
@@ -474,6 +535,7 @@ result=ok
 compose up -d || { result=bad; report_unsettled; }
 wait_for_cert "$work/supplied.crt" || result=bad
 check "with TLS_CERT and TLS_KEY set, Caddy serves the supplied certificate" $result
+check_support_bundle "with TLS_CERT and TLS_KEY set"
 
 unset TLS_CERT TLS_KEY
 result=ok

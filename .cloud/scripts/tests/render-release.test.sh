@@ -109,6 +109,8 @@ source_with_images() {
 		done
 	} >"$dir/docker-compose.yaml"
 	cp "$DEPLOYMENT_DIR/.env.example" "$dir/.env.example"
+	mkdir -p "$dir/scripts"
+	cp "$DEPLOYMENT_DIR/scripts/support-bundle.sh" "$dir/scripts/support-bundle.sh"
 }
 
 test_an_image_the_registry_does_not_know_fails_the_release() {
@@ -212,6 +214,15 @@ test_the_release_notes_name_the_knowledge_dump_image() {
 	check "the release notes name the knowledge dump image and every pinned image" $result
 }
 
+test_the_release_ships_the_support_bundle_script() {
+	registry_with_every_image
+	out="$work/bundle"
+	result=ok
+	render "$DEPLOYMENT_DIR" "$out" || result=bad
+	cmp -s "$DEPLOYMENT_DIR/scripts/support-bundle.sh" "$out/support-bundle.sh" || result=bad
+	check "the release ships the support bundle script as it is" $result
+}
+
 test_an_empty_config_file_fails_the_release() {
 	registry_with_every_image
 	source_with_images empty codeclarityce/api
@@ -227,6 +238,7 @@ test_an_empty_config_file_fails_the_release() {
 }
 
 test_every_image_in_the_released_compose_file_is_pinned_by_digest
+test_the_release_ships_the_support_bundle_script
 test_an_empty_config_file_fails_the_release
 test_the_released_files_name_the_release_version
 test_the_release_notes_name_the_knowledge_dump_image
