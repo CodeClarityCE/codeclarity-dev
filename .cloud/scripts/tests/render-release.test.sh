@@ -214,6 +214,16 @@ test_the_release_notes_name_the_knowledge_dump_image() {
 	check "the release notes name the knowledge dump image and every pinned image" $result
 }
 
+# ADR 0018: only the last alpha upgrades to beta, so the notes send older alphas there first.
+test_the_release_notes_send_an_older_alpha_to_the_last_alpha_first() {
+	registry_with_every_image
+	out="$work/upgrade-notes"
+	result=ok
+	render "$DEPLOYMENT_DIR" "$out" || result=bad
+	grep -Fq "an instance on an older alpha must first upgrade to v0.0.32-alpha, the last alpha" "$out/release-notes.md" 2>/dev/null || result=bad
+	check "the release notes say an older alpha must first upgrade to the last alpha" $result
+}
+
 test_the_release_ships_the_support_bundle_script() {
 	registry_with_every_image
 	out="$work/bundle"
@@ -242,6 +252,7 @@ test_the_release_ships_the_support_bundle_script
 test_an_empty_config_file_fails_the_release
 test_the_released_files_name_the_release_version
 test_the_release_notes_name_the_knowledge_dump_image
+test_the_release_notes_send_an_older_alpha_to_the_last_alpha_first
 test_every_config_file_is_inlined_with_its_dollar_signs_escaped
 test_a_missing_config_file_fails_the_release
 test_the_knowledge_dump_default_is_pinned_and_stays_overridable
