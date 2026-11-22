@@ -144,3 +144,21 @@ recursive_checkout_jobs() {
 	[ "$(grep -c ' ok$' <<<"$output")" -ge 6 ]
 	[[ "$output" != *" missing"* ]]
 }
+
+@test "skips a .gitmodules entry that has no gitlink, and names it in the log" {
+	# backend's .gitmodules keeps an entry whose submodule was removed from its tree.
+	local work="$BATS_TEST_TMPDIR/work/backend"
+	git -C "$work" fetch -q origin
+	git -C "$work" checkout -q -B develop origin/develop
+	git -C "$work" config -f .gitmodules submodule.common-types.path common-types
+	git -C "$work" config -f .gitmodules submodule.common-types.url "$REMOTES/api.git"
+	git -C "$work" commit -q -am "Leave a stale entry"
+	git -C "$work" push -q origin develop
+	push_commit js-sbom feat/x
+
+	run resolve feat/x
+
+	[ "$status" -eq 0 ]
+	[ "$(head_at backend/plugins/js-sbom)" = "$(tip js-sbom feat/x)" ]
+	[[ "$output" == *"Skipping backend/common-types"* ]]
+}
