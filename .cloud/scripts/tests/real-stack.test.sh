@@ -27,6 +27,12 @@ result=ok
 grep -v '^#' "$root/.cloud/docker/compose-files.txt" | grep -q 'real-stack' && result=bad
 check "the dev stack's Compose file list does not name the override" $result
 
+# Golden journey 7 runs the CLI in the same job, against the stack the browser journey used.
+result=ok
+workflow="$root/.github/workflows/e2e-real-stack.yml"
+grep -q 'sh .cloud/scripts/tests/real-stack/cli-journey.sh ' "$workflow" || result=bad
+check "the real-stack workflow runs golden journey 7 (the CLI)" $result
+
 if docker compose version >/dev/null 2>&1 && [ -f "$root/deployment/docker-compose.yaml" ]; then
 	want="api db default-analyzer frontend generate-secrets knowledge-restore mail migrate pgbouncer plugin-js-sbom
 plugin-license-finder plugin-php-sbom plugin-vuln-finder rabbitmq service-dispatcher service-downloader
