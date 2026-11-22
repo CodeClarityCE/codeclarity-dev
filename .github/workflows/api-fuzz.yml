@@ -60,20 +60,20 @@ jobs:
           sh .cloud/scripts/tests/real-stack/stack.sh ca "$RUNNER_TEMP/ca.crt"
       - name: Pull the pinned Schemathesis image
         run: docker pull "$(cat scripts/api-fuzz/schemathesis-image.txt)"
-      # The token provider fuzzes as a new analyze token; the mask keeps its secret out of the logs.
-      - name: Issue an Organization token
-        if: matrix.auth == 'token'
-        env:
-          CURL_CA: ${{ runner.temp }}/ca.crt
-        run: |
-          secret=$(bash scripts/api-fuzz/api-fuzz.sh issue-token)
-          echo "::add-mask::$secret"
-          echo "API_TOKEN=$secret" >>"$GITHUB_ENV"
+      # The token provider fuzzes as a new analyze token, issued in this step only; the mask keeps
+      # its secret out of the logs.
       - name: Fuzz the API
         env:
           AUTH: ${{ matrix.auth }}
           CURL_CA: ${{ runner.temp }}/ca.crt
-        run: bash scripts/api-fuzz/api-fuzz.sh run --auth "$AUTH" --out "$RUNNER_TEMP/api-fuzz"
+        run: |
+          set -euo pipefail
+          if [[ "$AUTH" == token ]]; then
+            API_TOKEN=$(bash scripts/api-fuzz/api-fuzz.sh issue-token)
+            echo "::add-mask::$API_TOKEN"
+            export API_TOKEN
+          fi
+          bash scripts/api-fuzz/api-fuzz.sh run --auth "$AUTH" --out "$RUNNER_TEMP/api-fuzz"
       - name: Stack logs
         if: failure()
         run: sh .cloud/scripts/tests/real-stack/stack.sh report
