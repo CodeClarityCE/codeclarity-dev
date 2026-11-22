@@ -2,9 +2,10 @@
 # the same-named branches; scripts/same-named-branches.sh) with the GitHub Actions layer cache,
 # brings it up with the knowledge dump fixture, the dev account and a mail catcher, then runs the
 # frontend's real-stack Playwright journeys (golden journeys 1 to 4 and 6), which mock nothing:
-# the journeys, then a knowledge update from fixture advisories, then the journeys tagged
-# @after-knowledge-update. Journey 5 runs in ci.yml's upgrade job. ci.yml calls this on pull
-# requests (so on every pointer bump) and pushes, as part of its `ci` gate; it also runs nightly.
+# the journeys, golden journey 7 (the CLI with an Organization token, cli-journey.sh), then a
+# knowledge update from fixture advisories, then the journeys tagged @after-knowledge-update.
+# Journey 5 runs in ci.yml's upgrade job. ci.yml calls this on pull requests (so on every pointer
+# bump) and pushes, as part of its `ci` gate; it also runs nightly.
 name: E2E (real stack)
 
 on:
@@ -66,6 +67,10 @@ jobs:
         run: |
           sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journeys" \
             --grep-invert "@after-knowledge-update|@upgrade"
+      # Golden journey 7: a pipeline analyses a project with the CLI and an Organization token.
+      - name: Run golden journey 7 (CLI)
+        if: ${{ !cancelled() && env.STACK_READY != '' }}
+        run: sh .cloud/scripts/tests/real-stack/cli-journey.sh "$RUNNER_TEMP/cli-journey"
       - name: Update the knowledge from the fixture advisories
         run: sh .cloud/scripts/tests/real-stack/stack.sh knowledge-update
       - name: Run the journeys after the knowledge update
@@ -94,5 +99,6 @@ jobs:
           name: e2e-real-stack
           path: |
             ${{ runner.temp }}/journeys
+            ${{ runner.temp }}/cli-journey
             ${{ runner.temp }}/after-knowledge-update
           if-no-files-found: warn
