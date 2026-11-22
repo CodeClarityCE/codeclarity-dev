@@ -135,10 +135,10 @@ recursive_checkout_jobs() {
 	done
 }
 
-# The PR workflows: ci.yml and the real-stack workflow it calls. knowledge-dump.yml runs only on main.
+# The PR workflows (ci.yml and the real-stack workflow it calls) and the nightly API fuzz. knowledge-dump.yml runs only on main.
 @test "every PR job with a recursive submodule checkout resolves the same-named branches next" {
 	cd "$BATS_TEST_DIRNAME/../.."
-	run recursive_checkout_jobs .github/workflows/ci.yml .github/workflows/e2e-real-stack.yml
+	run recursive_checkout_jobs .github/workflows/ci.yml .github/workflows/e2e-real-stack.yml .github/workflows/api-fuzz.yml
 
 	echo "$output"
 	[ "$(grep -c ' ok$' <<<"$output")" -ge 6 ]

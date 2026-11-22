@@ -1,0 +1,113 @@
+Schemathesis v4.33.1
+━━━━━━━━━━━━━━━━━━━━
+
+ ✅  Loaded specification from openapi.json (in 1.24s)
+
+     Base URL:         http://localhost:3000
+     Specification:    Open API 3.0.0
+     Operations:       105 selected / 190 total
+
+ ✅  API capabilities:
+
+     Supports NULL byte in headers:                            ✘
+     Accepts backslash and control characters in URL paths:    ✓
+
+ ⏭   Examples (in 0.10s)
+
+     ⏭  105 skipped
+
+ 🚫  Coverage (in 43.69s)
+
+     ✅  92 passed  ❌  12 failed  🚫   1 error
+
+ ❌  Fuzzing (in 31.65s)
+
+     ✅  95 passed  ❌  10 failed
+
+==================================== ERRORS ====================================
+__________________________ GET /knowledge/comparison ___________________________
+Network Error
+
+Read timed out after 10 seconds
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' http://localhost:3000/knowledge/comparison
+
+Need more help?
+    Join our Discord server: https://discord.gg/R9ASRAmHnA
+
+=================================== FAILURES ===================================
+______________________ GET /analyzer-templates/{language} ______________________
+1. Test Case ID: bzzb0j
+
+- ST101 Server error
+
+[500] Internal Server Error:
+
+    `{"status_code":500,"status":"failure","error_code":"InternalError","error_message":"We encountered a problem while processing your request."}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' http://localhost:3000/analyzer-templates/0
+
+    st replay bzzb0j
+
+___________________________________ GET /org ___________________________________
+1. Test Case ID: D5fmv8
+
+- ST101 Server error
+
+[500] Internal Server Error:
+
+    `{"status_code":500,"status":"failure","error_code":"InternalError","error_message":"We encountered a problem while processing your request."}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' 'http://localhost:3000/org?page=9223372036854775808&entries_per_page=0&search_key=%5BFiltered%5D&sort_key=%5BFiltered%5D&sort_direction='
+
+    st replay D5fmv8
+
+=================================== WARNINGS ===================================
+
+Authentication failed: 27 operations returned only 401/403 responses
+
+403 Forbidden (27 operations):
+  - GET /org/{org_id}/analyzers/{analyzer_id}
+=================================== SUMMARY ====================================
+
+API Operations:
+  Selected: 105/190
+  Tested: 105
+
+Test Phases:
+  ⏭  Examples
+  🚫 Coverage
+  ❌ Fuzzing
+  ⏭  Stateful (disabled)
+
+Failures:
+  ❌ ST101 Server error: 10
+  ❌ ST108 Response violates schema: 7
+
+For more information, run `st explain <code>` for ST101, ST108.
+
+Errors:
+  🚫 Network Error: 1
+
+Warnings:
+  ⚠️ Authentication failed: 27 operations returned only 401/403 responses
+  ⚠️ Base URL may be missing a path: 2 operations returned only 404 responses
+  ⚠️ Missing test data: 2 operations repeatedly returned 404 responses
+  ⚠️ Schema validation mismatch: 81 operations mostly rejected generated data
+
+Test cases:
+  2883 generated, 12 found 17 unique failures, 1 errored
+
+Reports:
+  - JUnit: rep1/junit-20261122T141549Z.xml
+  - NDJSON: rep1/ndjson-20261122T141549Z.ndjson
+
+Seed: 141460142896343815928945743138313291723
+
+================== 17 failures, 1 error, 4 warnings in 75.81s ==================
