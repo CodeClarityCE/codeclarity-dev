@@ -1,7 +1,8 @@
 #!/bin/sh
 # Tests the production CI image build: every default CodeClarity image in the Compose file is built
 # from its submodule, profile-only and third-party images are not, and an image no submodule builds,
-# a failed build or a version mismatch fails. Uses a stand-in docker and a made-up checkout.
+# a failed build or a version mismatch fails, COMPOSE_OVERRIDE narrows the images, and BUILD_CACHE=gha
+# builds through buildx with one GitHub Actions cache scope per image. Uses a stand-in docker and a made-up checkout.
 # Usage: sh .cloud/scripts/tests/build-images.test.sh
 here=$(cd "$(dirname "$0")" && pwd)
 script="$here/fresh-install/build-images.sh"
@@ -54,9 +55,10 @@ config() {
 EOF
 }
 
+# Runs the script with the environment assignments given, if any.
 run() {
 	: >"$STUB_DOCKER_LOG"
-	sh "$script" >"$work/out" 2>&1
+	env "$@" sh "$script" >"$work/out" 2>&1
 }
 
 config ""
@@ -104,6 +106,25 @@ result=ok
 run && result=bad
 grep -q 'runs version v1.2.2, but backend/services/packageFollower/config.json says v1.2.3' "$work/out" || result=bad
 check "a built Go image whose config.json version differs from the submodule's fails" $result
+
+echo "codeclarityce/service-package-follower v1.2.3" >"$STUB_IMAGE_VERSIONS"
+: >"$work/override.yaml"
+result=ok
+run COMPOSE_OVERRIDE="$work/override.yaml" || result=bad
+grep -qx "compose --project-directory $DEPLOYMENT_DIR -f $DEPLOYMENT_DIR/docker-compose.yaml -f $work/override.yaml config --format json" "$STUB_DOCKER_LOG" || result=bad
+check "COMPOSE_OVERRIDE is merged over the deployment file when listing the images" $result
+
+result=ok
+run BUILD_CACHE=gha || result=bad
+grep -qx "buildx build --load --cache-from type=gha,scope=codeclarityce/api --cache-to type=gha,mode=min,scope=codeclarityce/api -q -t codeclarityce/api -f $SOURCE_DIR/api/.cloud/docker/Dockerfile $SOURCE_DIR/api" "$STUB_DOCKER_LOG" || result=bad
+grep -qx "buildx build --load --cache-from type=gha,scope=codeclarityce/service-package-follower --cache-to type=gha,mode=min,scope=codeclarityce/service-package-follower -q --target plugin --build-arg KIND=services --build-arg PLUGINNAME=packageFollower -t codeclarityce/service-package-follower -f $SOURCE_DIR/backend/services/packageFollower/.cloud/docker/Dockerfile $SOURCE_DIR/backend" "$STUB_DOCKER_LOG" || result=bad
+grep -q '^build ' "$STUB_DOCKER_LOG" && result=bad
+check "BUILD_CACHE=gha builds with buildx, loading each image and caching it in its own scope" $result
+
+result=ok
+run BUILD_CACHE=s3 && result=bad
+grep -q 'BUILD_CACHE must be empty or gha' "$work/out" || result=bad
+check "an unknown BUILD_CACHE fails" $result
 
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]

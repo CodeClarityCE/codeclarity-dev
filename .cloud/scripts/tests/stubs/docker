@@ -5,7 +5,7 @@
 # "compose ... exec [-T] db" commands here. "buildx imagetools inspect <ref>" prints the digest
 # STUB_IMAGE_DIGESTS (a file of "<ref> <digest>" lines) gives the ref, and fails for any other ref.
 # Calls into service-package-follower also log NVD_API_KEY from docker's environment to STUB_ENV_LOG.
-# "compose ... config --format json" prints STUB_COMPOSE_CONFIG (a file) when set; "build" succeeds
+# "compose ... config --format json" prints STUB_COMPOSE_CONFIG (a file) when set; "build" and "buildx build" succeed
 # unless an argument equals STUB_BUILD_FAIL; "run --rm --entrypoint cat <image> config.json" prints
 # the version STUB_IMAGE_VERSIONS (a file of "<image> <version>" lines) gives the image.
 echo "$*" >>"${STUB_DOCKER_LOG:-/dev/null}"
@@ -13,7 +13,7 @@ case " $* " in
 *" config --format json "*)
 	if [ -n "${STUB_COMPOSE_CONFIG:-}" ]; then cat "$STUB_COMPOSE_CONFIG"; exit 0; fi
 	;;
-" build "*)
+" build "* | " buildx build "*)
 	for arg in "$@"; do [ "$arg" != "${STUB_BUILD_FAIL:-}" ] || { echo "stub build failed" >&2; exit 1; }; done
 	exit 0
 	;;

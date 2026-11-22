@@ -16,7 +16,6 @@ NAME="Fresh Install"
 CREATE_USER_PASSWORD="fresh-install-$(date +%s)"
 export CREATE_USER_PASSWORD
 ANALYZER="Default Analyzer"
-JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 DEPLOYMENT_REPO=CodeClarityCE/deployment
 UPGRADE_FROM=${UPGRADE_FROM:-}
 work=$(mktemp -d)
@@ -39,69 +38,14 @@ compose() {
 
 # shellcheck source=lib.sh
 . "$root/.cloud/scripts/tests/fresh-install/lib.sh"
-
-# Prints "<service> <state> <exit code> <health>" for every container, one per line.
-states() {
-	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.ExitCode) \(.Health // "")"'
-}
-
-# Prints what keeps the stack from being settled: a job not exited 0, or a service not
-# running and healthy (when it has a healthcheck). Prints nothing when it is settled.
-unsettled() {
-	states | while read -r service state code health; do
-		case " $JOBS " in
-		*" $service "*)
-			if [ "$state" != exited ] || [ "$code" != 0 ]; then echo "$service $state $code"; fi
-			;;
-		*)
-			if [ "$state" != running ] || { [ -n "$health" ] && [ "$health" != healthy ]; }; then
-				echo "$service $state $health"
-			fi
-			;;
-		esac
-	done
-}
-
-restarts() {
-	compose ps -aq | xargs docker inspect -f '{{.Name}} {{.RestartCount}}' | sort
-}
-
-# Waits for every job to succeed and every service to run, then checks nothing restarts
-# for 30 seconds. Fails early if a job failed.
-wait_settled() {
-	deadline=$(($(date +%s) + WAIT_SECONDS))
-	while :; do
-		left=$(unsettled)
-		[ -z "$left" ] && break
-		if echo "$left" | grep -Eq "^($(echo "$JOBS" | tr ' ' '|')) exited [1-9]"; then
-			echo "$left" >&2
-			return 1
-		fi
-		[ "$(date +%s)" -lt "$deadline" ] || {
-			echo "$left" >&2
-			return 1
-		}
-		sleep 5
-	done
-	restarts >"$work/restarts.before"
-	sleep 30
-	restarts >"$work/restarts.after"
-	[ -z "$(unsettled)" ] && cmp -s "$work/restarts.before" "$work/restarts.after"
-}
+JOBS=$PRODUCTION_JOBS
+# A settled stack must then run 30 seconds without a restart.
+SETTLE_SECONDS=30
 
 # Checksums of every generated secret and service view.
 secrets_snapshot() {
 	compose run --rm --no-deps -T --entrypoint sh generate-secrets -c \
 		'cd /secrets && find . -type f ! -name "*.tmp" | LC_ALL=C sort | xargs sha256sum'
-}
-
-# Caddy's internal root certificate, which a DOMAIN=localhost instance serves from.
-fetch_ca() {
-	deadline=$(($(date +%s) + 120))
-	until compose exec -T frontend cat /data/caddy/pki/authorities/local/root.crt >"$work/ca.crt" 2>/dev/null && [ -s "$work/ca.crt" ]; do
-		[ "$(date +%s)" -lt "$deadline" ] || return 1
-		sleep 2
-	done
 }
 
 # Waits until $URL serves a certificate that verifies against the CA file $1.

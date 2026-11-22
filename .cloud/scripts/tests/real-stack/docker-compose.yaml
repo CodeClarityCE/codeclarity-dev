@@ -1,0 +1,10 @@
+# The trimmed stack of the `e2e (real stack)` CI job, merged over the deployment Compose file by
+# stack.sh. It turns off the services the journey never uses, so only the setup jobs and the
+# services one Default Analyzer run needs start. The dev stack's file list never names it.
+services:
+  service-scheduler:
+    profiles: [not-in-real-stack]
+  service-notifier:
+    profiles: [not-in-real-stack]
+  service-knowledge:
+    profiles: [not-in-real-stack]

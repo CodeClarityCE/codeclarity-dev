@@ -8,8 +8,14 @@
 #   WORK            a scratch directory
 #   ANALYSIS_SERVICES   the services whose logs explain a failed analysis
 #   ANALYSIS_WAIT_SECONDS (default 1200), ANALYSIS_POLL_SECONDS (default 10)
+#   JOBS, WAIT_SECONDS   the one-shot setup jobs and how long wait_settled waits for them
+#   SETTLE_SECONDS  how long wait_settled then checks that nothing restarts (default 0)
 
 passed=0 failed=0
+
+# The deployment Compose file's one-shot setup jobs.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+PRODUCTION_JOBS="version-check generate-secrets knowledge-restore migrate default-analyzer vulnerability-instance-backfill"
 
 check() {
 	if [ "$2" = ok ]; then
@@ -43,6 +49,65 @@ report_unsettled() {
 				;;
 			esac
 		done
+}
+
+# Prints "<service> <state> <exit code> <health>" for every container, one per line.
+container_states() {
+	compose ps -a --format json | jq -rs 'flatten | .[] | "\(.Service) \(.State) \(.ExitCode) \(.Health // "")"'
+}
+
+# Prints what keeps the stack from being settled: a job not exited 0, or a service not
+# running and healthy (when it has a healthcheck). Prints nothing when it is settled.
+unsettled() {
+	container_states | while read -r service state code health; do
+		case " $JOBS " in
+		*" $service "*)
+			if [ "$state" != exited ] || [ "$code" != 0 ]; then echo "$service $state $code"; fi
+			;;
+		*)
+			if [ "$state" != running ] || { [ -n "$health" ] && [ "$health" != healthy ]; }; then
+				echo "$service $state $health"
+			fi
+			;;
+		esac
+	done
+}
+
+restarts() {
+	compose ps -aq | xargs docker inspect -f '{{.Name}} {{.RestartCount}}' | sort
+}
+
+# Waits for every job to succeed and every service to run, then checks nothing restarts
+# for SETTLE_SECONDS. Fails early if a job failed.
+wait_settled() {
+	deadline=$(($(date +%s) + WAIT_SECONDS))
+	while :; do
+		left=$(unsettled)
+		[ -z "$left" ] && break
+		if echo "$left" | grep -Eq "^($(echo "$JOBS" | tr ' ' '|')) exited [1-9]"; then
+			echo "$left" >&2
+			return 1
+		fi
+		[ "$(date +%s)" -lt "$deadline" ] || {
+			echo "$left" >&2
+			return 1
+		}
+		sleep 5
+	done
+	[ "${SETTLE_SECONDS:-0}" -gt 0 ] || return 0
+	restarts >"$WORK/restarts.before"
+	sleep "$SETTLE_SECONDS"
+	restarts >"$WORK/restarts.after"
+	[ -z "$(unsettled)" ] && cmp -s "$WORK/restarts.before" "$WORK/restarts.after"
+}
+
+# Copies Caddy's internal root certificate, which a DOMAIN=localhost instance serves, to $CURL_CA.
+fetch_ca() {
+	deadline=$(($(date +%s) + 120))
+	until compose exec -T frontend cat /data/caddy/pki/authorities/local/root.crt >"$CURL_CA" 2>/dev/null && [ -s "$CURL_CA" ]; do
+		[ "$(date +%s)" -lt "$deadline" ] || return 1
+		sleep 2
+	done
 }
 
 # Runs one SQL statement on database $1 as postgres, printing bare rows.
