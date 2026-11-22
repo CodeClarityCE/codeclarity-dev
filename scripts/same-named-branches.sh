@@ -9,10 +9,15 @@ set -euo pipefail
 branch=${1:-}
 summary=()
 
-# Prints the submodule paths of repo <dir>, relative to it.
+# Prints the submodule paths of repo <dir>, relative to it, one per line.
 submodule_paths() {
 	[ -f "$1/.gitmodules" ] || return 0
 	git -C "$1" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | cut -d' ' -f2-
+}
+
+# True when <path> is a submodule (mode 160000) in the HEAD tree of repo <dir>.
+is_gitlink() {
+	[ "$(git -C "$1" ls-tree HEAD -- "$2" | cut -d' ' -f1)" = 160000 ]
 }
 
 # True when <dir>'s origin has branch <name>.
@@ -31,6 +36,11 @@ resolve() {
 	local dir=$1 prefix=$2 path sub source
 	while IFS= read -r path <&3; do
 		sub="$dir/$path"
+		# A .gitmodules entry whose submodule was removed from the tree has nothing to check out.
+		if ! is_gitlink "$dir" "$path"; then
+			echo "Skipping $prefix$path: in .gitmodules but not a submodule in the tree."
+			continue
+		fi
 		# A submodule the resolved parent adds is not cloned yet.
 		[ -e "$sub/.git" ] || git -C "$dir" submodule update -q --init --depth 1 -- "$path"
 		if has_branch "$sub" "$branch"; then
