@@ -2,7 +2,7 @@
 
 The accuracy benchmark (see `GLOSSARY.md`) analyses fixed inputs on the running dev stack and compares every vulnerability instance the API shows with an adjudicated verdict. It prints precision, recall, the wrong and missed instances grouped by cause, the knowledge dump and the input commits.
 
-It runs on demand only, never in CI.
+Its report runs on demand only, never in CI. The results gate (`scripts/results-gate`) reuses its `run` in CI to compare findings with expected results, not with verdicts.
 
 ## Running it
 

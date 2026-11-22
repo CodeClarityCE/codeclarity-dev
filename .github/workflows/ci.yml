@@ -1,6 +1,6 @@
 # CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts (bats for scripts/), and the
-# fresh-install tests (dev and production), the production upgrade test and the real-stack e2e journey, on the
-# runner's empty Docker daemon.
+# fresh-install tests (dev and production), the production upgrade test, the real-stack e2e journey and the
+# results gate, on the runner's empty Docker daemon.
 name: CI
 
 on:
@@ -104,6 +104,13 @@ jobs:
   e2e-real-stack:
     name: e2e (real stack)
     uses: $/.github/workflows/e2e-real-stack.yml
+    permissions:
+      contents: read
+
+  # The findings of the results gate's fixtures on the pinned knowledge dump, against expected results (ADR 0021).
+  results-gate:
+    name: results gate
+    uses: $/.github/workflows/results-gate.yml
     permissions:
       contents: read
 
@@ -250,6 +257,7 @@ jobs:
       - script-tests
       - fresh-install-dev
       - e2e-real-stack
+      - results-gate
       - fresh-install-production
       - upgrade-production
       - reference-machine-baseline
