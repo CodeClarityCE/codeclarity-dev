@@ -8,6 +8,9 @@ enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionType fron
 enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionClassType frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionClassType
 enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionSeverity frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionSeverity
 
+# Organization tokens
+enum api/src/base_modules/organizations/tokens/organization-token.types.ts#OrganizationTokenScope frontend/src/codeclarity_components/organizations/tokens/organization_token.entity.ts#OrganizationTokenScope
+
 # Error report context keys
 list api/src/base_modules/logs/logs.controller.ts#ALLOWED_FIELDS frontend/src/utils/logger.ts#ALLOWED_FIELDS
 
