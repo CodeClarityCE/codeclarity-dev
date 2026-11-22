@@ -8,6 +8,8 @@ The `upgrade (production)` job in `.github/workflows/ci.yml` runs `.cloud/script
 4. upgrades to the images built from the submodule pointers, runs the fresh-install checks and the analysis journey again, and fails unless the API shows the seeded project, analysis and ticket exactly as before (`check_seeded_data`), after the upgrade and after the second `up -d`.
 5. once every check passed, writes the operator's login to `UPGRADE_JOURNEY_ENV` and leaves the stack up; the job's next step runs the frontend's `@upgrade` journey (`e2e/real-stack/upgrade.journey.mts`, golden journey 5), which logs in in the browser and fails unless the seeded project's results (SBOM and licences) and the seeded ticket are still shown. A failure keeps its Playwright trace as the `upgrade-journey` artifact.
 
+The first beta's previous release is the last alpha (`v0.0.32-alpha`), whose databases the beta baselines take over without changing them (`.claude/rules/database-migrations.md`). The fixture knowledge dump the job restores holds the last alpha's knowledge and config schema and migrations table, so both releases accept it.
+
 `sh .cloud/scripts/tests/upgrade-seed.test.sh` tests the seeding and the comparison against a stand-in API, including a deleted ticket, emptied fields and dropped analysis results.
 
 ## Showing that a destructive migration fails the job
