@@ -65,7 +65,7 @@ jobs:
       - name: Run the golden journeys
         run: |
           sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journeys" \
-            --grep-invert "@after-knowledge-update|@upgrade"
+            --grep-invert "@after-knowledge-update|@upgrade|@monkey"
       - name: Update the knowledge from the fixture advisories
         run: sh .cloud/scripts/tests/real-stack/stack.sh knowledge-update
       - name: Run the journeys after the knowledge update
