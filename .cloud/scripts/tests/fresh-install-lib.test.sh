@@ -21,19 +21,21 @@ functions() {
 	sed -n 's/^\([a-z_][a-z0-9_]*\)() *{.*/\1/p' "$1" | sort -u
 }
 
-functions "$lib" >"${TMPDIR:-/tmp}/lib-functions.$$"
-for script in $(grep -rl 'fresh-install/lib.sh' "$root/.cloud/scripts" --include='*.sh'); do
+work=$(mktemp -d)
+functions "$lib" >"$work/lib-functions"
+grep -rl 'fresh-install/lib.sh' "$root/.cloud/scripts" --include='*.sh' >"$work/scripts"
+while read -r script; do
 	[ "$script" = "$lib" ] && continue
 	case "$script" in *.test.sh) continue ;; esac
-	shared=$(functions "$script" | comm -12 "${TMPDIR:-/tmp}/lib-functions.$$" -)
+	shared=$(functions "$script" | comm -12 "$work/lib-functions" -)
 	name=${script#"$root"/}
 	if [ -z "$shared" ]; then
 		check "$name defines no function lib.sh defines" ok
 	else
 		check "$name defines no function lib.sh defines (both define: $(echo "$shared" | tr '\n' ' '))" bad
 	fi
-done
-rm -f "${TMPDIR:-/tmp}/lib-functions.$$"
+done <"$work/scripts"
+rm -rf "$work"
 
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]
