@@ -9,7 +9,7 @@ Set these for the repo under test:
 ```bash
 REPO=api                      # GitHub repo name, such as api or plugin-sbom-javascript
 IMAGE=codeclarityce/api       # package.json name, or config.json image_name
-TAG=v0.0.52-alpha             # the version the release PR bumps to
+TAG=v0.0.53-beta              # the version the release PR bumps to
 DOCKER_TAG=${TAG#v}           # Docker tags drop the leading v
 ```
 
@@ -83,6 +83,21 @@ DOCKER_TAG=${TAG#v}           # Docker tags drop the leading v
 
 - [ ] Fast-forward `develop` onto `main`.
 - [ ] `scripts/release-all.sh --dry-run` now lists the repo with releaser `actions`.
+
+## Switching every repo to beta
+
+Every repo moves from `-alpha` to `-beta` in one coordinated run of `scripts/release-all.sh`. With `--suffix beta` it releases each repo whose latest tag is not yet `-beta`, even with nothing new, and writes the new version (such as `v0.0.53-beta` after `v0.0.52-alpha`) to each version file. The patch number moves too, so a beta always sorts after every earlier alpha, including in plugin replicas still running the old version ordering.
+
+- [ ] Every releasing repo has `CI_RELEASE` on: `scripts/ci-status.sh`.
+- [ ] Check the plan. Every repo should go to `-beta`, with reason `new suffix` for the unchanged ones:
+
+  ```bash
+  scripts/release-all.sh --dry-run --suffix beta
+  ```
+
+- [ ] Run it: `scripts/release-all.sh --suffix beta`. If it stops, run the same command again; repos already on `-beta` are skipped.
+- [ ] Later runs need no flag: `scripts/release-all.sh` keeps each repo's latest suffix.
+- [ ] Each beta release is a prerelease, as the alpha ones were.
 
 ## Rolling back
 
