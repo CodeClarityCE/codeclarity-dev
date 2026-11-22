@@ -199,6 +199,8 @@ The dev Compose file runs it as the `knowledge-restore` job, pinned to one tag; 
 and caches the image, so dev needs no separate download step. To ship a newer dump, publish its image and
 change that tag.
 
+A pinned dump must have been built at or after the last alpha (deployment `v0.0.32-alpha`): the beta knowledge and config baselines refuse a database an older alpha migrated, so `migrate` fails on an older dump (ADR 0018, `.claude/rules/database-migrations.md`). The 2026-11-16 dump is too old; 2026-11-21 and later are not.
+
 The **Knowledge dump** workflow (`.github/workflows/knowledge-dump.yml`) builds and publishes it, so a published dump never
 comes from a developer's machine. It runs every Monday and when dispatched by hand, only on `main` with `CI_RELEASE` set
 to `true`, and every job runs in the `release` environment, which only `main` can use. It has no pull request trigger, so

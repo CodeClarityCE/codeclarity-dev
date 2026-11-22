@@ -1,7 +1,8 @@
 #!/bin/sh
-# Builds a small knowledge dump image for the fresh-install and real-stack tests: the 2025
-# knowledge and config schemas from the API's migration test fixtures plus one marker CWE row
-# and one npm advisory, dumped with a format 1 manifest into the knowledge dump image's Dockerfile.
+# Builds a small knowledge dump image for the fresh-install, upgrade and real-stack tests: the last
+# alpha's knowledge and config schemas (the API's beta baselines) with that alpha's migrations
+# table, so both the last alpha and beta take it over, plus one marker CWE row and one npm
+# advisory, dumped with a format 1 manifest into the knowledge dump image's Dockerfile.
 # Usage: sh knowledge-dump-fixture.sh <image tag>   (needs docker; run from anywhere)
 # The marker row is CWE-99999, named "Fresh install fixture". The advisory is OSV's
 # GHSA-w9mr-4mfr-499f (CVE-2017-20162, CWE-1333): ms before 2.0.0, so the real-stack journey's
@@ -10,7 +11,8 @@ set -eu
 
 tag=${1:?usage: knowledge-dump-fixture.sh <image tag>}
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
-fixtures="$root/api/test/migrations/fixtures"
+migrations="$root/api/src/migrations"
+fixtures="$root/api/test/migrations/fixtures/last-alpha"
 dockerfile="$root/.cloud/docker/knowledge-dump/Dockerfile"
 postgres=$(sed -n 's/^FROM //p' "$dockerfile")
 name="cc-knowledge-fixture-$$"
@@ -34,7 +36,7 @@ psql() {
 
 for db in knowledge config; do
 	psql -d postgres -c "CREATE DATABASE $db"
-	psql -d "$db" <"$fixtures/$db-dump-2025-05-27.sql"
+	cat "$migrations/$db"/*BetaBaseline.sql "$fixtures/$db.migrations.sql" | psql -d "$db"
 done
 psql -d knowledge -c "INSERT INTO cwe (cwe_id, name) VALUES ('CWE-99999', 'Fresh install fixture')"
 psql -d knowledge <<'SQL'
