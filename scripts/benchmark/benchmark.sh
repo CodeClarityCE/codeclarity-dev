@@ -1,7 +1,7 @@
 #!/bin/sh
 # Accuracy benchmark: analyses each pinned input on the running dev stack, records the API's
 # answers, and compares every vulnerability instance shown with the committed ground truth.
-# See scripts/benchmark/README.md. Never run it in CI.
+# See scripts/benchmark/README.md. Its report never runs in CI; the results gate reuses its run.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -112,16 +112,17 @@ archive_input() {
 	rm -rf "$staging"
 }
 
-# Saves every page of analysis $3's list (project $2, org $1) for workspace $5 as
-# $4/<prefix><page>.json, the prefix naming the workspace (see pages_prefix).
+# Saves every page of analysis $3's list $6 (vulnerabilities by default, or sbom or licenses; project $2,
+# org $1) for workspace $5 as $4/<prefix><page>.json, the prefix naming the workspace (see pages_prefix).
 fetch_pages() {
 	mkdir -p "$4"
 	n=0
 	filters=
+	list=${6:-vulnerabilities}
 	prefix=$(pages_prefix "$5")
-	[ -z "${ACTIVE_FILTERS:-}" ] || filters="&active_filters=$ACTIVE_FILTERS"
+	[ -z "${ACTIVE_FILTERS:-}" ] || [ "$list" != vulnerabilities ] || filters="&active_filters=$ACTIVE_FILTERS"
 	while :; do
-		get "/org/$1/projects/$2/analysis/$3/vulnerabilities?workspace=$5&entries_per_page=100&page=$n$filters" >"$4/$prefix$n.json" ||
+		get "/org/$1/projects/$2/analysis/$3/$list?workspace=$5&entries_per_page=100&page=$n$filters" >"$4/$prefix$n.json" ||
 			return 1
 		total=$(jq -er '.total_pages' "$4/$prefix$n.json") || return 1
 		n=$((n + 1))
@@ -184,6 +185,11 @@ run_input() {
 	for ws in $(workspace_list "$workspaces"); do
 		fetch_pages "$5" "$project" "$analysis" "$out/$1.pages" "$ws" ||
 			die "$1: could not read the vulnerability list of workspace $ws"
+		# The results gate compares these too.
+		fetch_pages "$5" "$project" "$analysis" "$out/$1.sbom" "$ws" sbom ||
+			die "$1: could not read the SBOM of workspace $ws"
+		fetch_pages "$5" "$project" "$analysis" "$out/$1.licences" "$ws" licenses ||
+			die "$1: could not read the licence list of workspace $ws"
 	done
 	fetch_none_details "$5" "$project" "$analysis" "$out/$1" "$workspaces"
 	get "/org/$5/projects/$project/analysis/$analysis/vulnerabilities/knowledge-snapshot" >"$out/$1.knowledge.json" ||
@@ -210,7 +216,7 @@ cmd_run() {
 		shift
 	done
 	for n in $names; do
-		inputs | cut -f1 | grep -qx "$n" || {
+		inputs | cut -f1 | grep -x "$n" >/dev/null || {
 			echo "benchmark: unknown input: $n" >&2
 			usage
 		}

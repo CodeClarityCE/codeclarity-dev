@@ -1,0 +1,109 @@
+# Nightly monkey runs: builds the trimmed real stack at the submodule pointers, runs the golden
+# journeys so the stack has data, then seeded random-interaction runs on the golden-journey pages
+# (scripts/monkey/README.md), failing on an uncaught error, an error report or a 5xx. A failed
+# run opens or comments on the monkey's ci-failure issue, with the seed and traces; a green one closes it.
+name: Monkey
+
+on:
+  schedule:
+    - cron: "47 5 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: Seed to replay (empty for a new one)
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  monkey:
+    name: monkey
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      KNOWLEDGE_DUMP_IMAGE: codeclarity-ci/knowledge-dump:fixture
+      COMPOSE_OVERRIDE: ${{ github.workspace }}/.cloud/scripts/tests/real-stack/docker-compose.yaml
+      BUILD_CACHE: gha
+      BUILD_JOBS: "6"
+      E2E_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
+      - name: Build the fixture knowledge dump image
+        run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
+      # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.
+      - name: Create a buildx builder
+        run: docker buildx create --use --driver docker-container --name monkey
+      # Only actions can read the runtime's cache URL and token; this hands them to the next steps.
+      - name: Expose the Actions runtime to buildx
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const [name, value] of Object.entries(process.env)) {
+              if (name.startsWith("ACTIONS_") && value) core.exportVariable(name, value);
+            }
+      - name: Build the trimmed stack's images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
+      - name: Bring up the trimmed stack
+        run: sh .cloud/scripts/tests/real-stack/stack.sh up
+      # Gives the monkey projects, results, a ticket and an organisation; the e2e (real stack)
+      # job reports a failing journey, so the monkey still runs on what exists.
+      - name: Run the golden journeys for data
+        run: |
+          sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journeys" \
+            --grep-invert "@after-knowledge-update|@upgrade|@monkey" ||
+            echo "::warning::A golden journey failed; the monkey runs on the data that exists."
+      - name: Run the monkey
+        env:
+          MONKEY_SEED: ${{ inputs.seed }}
+        run: bash scripts/monkey/monkey.sh run https://localhost "$RUNNER_TEMP/monkey"
+      - name: Stack logs
+        if: failure()
+        run: sh .cloud/scripts/tests/real-stack/stack.sh report
+      - name: Keep the run
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: monkey
+          path: ${{ runner.temp }}/monkey
+          if-no-files-found: warn
+
+  # Kept apart from the monkey job, so only this job, which runs no stack, can write issues.
+  report:
+    name: report
+    needs: [monkey]
+    # Only runs of the default branch report; a dispatch from another branch keeps its result to itself.
+    if: ${{ !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/monkey
+      # A run whose stack never came up has no artifact; the report then says the monkey did not run.
+      - name: Download the run
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: monkey
+          path: ${{ runner.temp }}/monkey
+      - name: Open, update or close the ci-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: mkdir -p "$RUNNER_TEMP/monkey" && bash scripts/monkey/monkey.sh report "$RUNNER_TEMP/monkey"

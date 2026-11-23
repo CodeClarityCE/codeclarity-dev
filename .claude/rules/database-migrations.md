@@ -22,12 +22,16 @@ Migrations run one way, in the one-shot `migrate` Compose job: `src/scripts/migr
 - `make migrate` / `make migrate-<db>` run the same job (through the broker in the devcontainer). Nothing runs on the host.
 - Dev does not use `synchronize` unless `DB_FORCE_SYNC=true`.
 
-## Bootstrapping from empty
+## Beta baselines
 
-The baselines `CreateCodeclarityBaseline1754640000000`, `CreateKnowledgeBaseline1754600000000` and `CreateConfigBaseline1754600000000` sort before every other migration of their database. On an empty database they create the tables of the 2025-05-27 dumps (codeclarity: `user`, `organization`, `analyzer`, `project`, `analysis` and the rest of the app tables; knowledge: `cwe`, `js_version`, `licenses`, `nvd`, `osv`, `package`; `config` plus its one row with null watermarks), and the later migrations build the rest from there. When any of those tables exists they do nothing, and reverting them does nothing, so restored and upgraded databases are unaffected. Run knowledge before config, as the migrate job does: the source sync backfill then finds no config row and starts every watermark at null.
+At beta 1 every alpha migration of each database was squashed into one baseline holding the schema of a fresh last alpha install (deployment `v0.0.32-alpha`, API `v0.0.57-alpha`; ADR 0018): `CreateCodeclarityBetaBaseline1796200000000`, `CreateKnowledgeBetaBaseline1796200000000`, `CreatePluginsBetaBaseline1796200000000` and `CreateConfigBetaBaseline1796200000000`. Each runs the `.sql` file next to it (`nest build` copies it into `dist/`) through `src/migrations/beta-baseline.ts`. Migrations written after that release (organization tokens, the js-patching removal) stay ordinary migrations on top.
 
-- New base tables still go in a new migration, not in a baseline.
-- `api/test/migrations/knowledge-baseline.e2e-spec.ts` and `codeclarity-baseline.e2e-spec.ts` check that an empty build matches the old dump restored and migrated (fixtures in `api/test/migrations/fixtures/`).
+- On an empty database the baseline builds that schema, with the knowledge source sync rows and the one config row a fresh install gets.
+- On a database the last alpha migrated (its last migration is recorded) it changes nothing and deletes the squashed migrations' rows, so the migrations table matches a fresh install. A restored knowledge dump built at or after the last alpha counts as that.
+- On any other database with tables (an older alpha, or a knowledge dump built before the last alpha) it throws, and the migrate job fails without changing that database. Reverting a baseline throws.
+- Never edit a baseline: a schema change goes in a new migration.
+- `api/test/migrations/beta-baseline.e2e-spec.ts` compares a fresh install from each baseline with `api/test/migrations/fixtures/last-alpha/<db>.schema.json` (recorded from the last alpha's migrations by `snapshot-last-alpha.ts`) and covers the takeover and the refusal. `<db>.migrations.sql` is the last alpha's migrations table, which `.cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh` also uses.
+- The knowledge service's completeness gate expects the knowledge and config migrations listed in `backend/services/knowledge/src/validation/migrations.go`; keep it equal to `api/src/migrations`.
 
 ## Migration Workflow
 

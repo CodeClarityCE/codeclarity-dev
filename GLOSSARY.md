@@ -22,9 +22,17 @@ _Avoid_: Minimum requirements, low-end hardware, small server
 A part of an instance that is off unless the operator turns it on, such as CodeQL or monitoring.
 _Avoid_: Add-on, extra, plugin (a plugin is one kind of component, optional or not)
 
+**Preview feature**:
+A feature outside the stability promise of a release: its behaviour and the data it keeps may change between releases. Being a preview feature says nothing about whether it is on by default.
+_Avoid_: Experimental feature (an experiment is a domain concept), beta feature, labs
+
 **Audit log**:
 An organization's record of who did what in it, such as creating a project or starting an analysis, written by the server when the action happens.
 _Avoid_: Activity log, user logs, event log
+
+**Organization token**:
+A secret an organization's admin issues so a pipeline can act in that organization without a user's password; it has a scope and an expiry, can be revoked, and outlives the member who issued it.
+_Avoid_: API key, personal access token (it belongs to no person), integration token (that is a credential CodeClarity holds for GitHub, GitLab or ClickUp)
 
 **Error report**:
 A failure the web app sends to the server for operators to diagnose; it is not shown to users and is not part of the audit log.
@@ -179,6 +187,10 @@ _Avoid_: Match uncertain, possibly incorrect
 **Accuracy benchmark**:
 A fixed set of projects pinned to commits and to one knowledge dump, with an adjudicated verdict for every (canonical vulnerability, package, version), used to measure precision and recall.
 _Avoid_: Ground truth (that is its verdicts), test suite
+
+**Results gate**:
+The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
+_Avoid_: Snapshot test, accuracy benchmark (that judges results against verdicts)
 
 **Winning source**:
 The knowledge source whose data is displayed for a vulnerability instance when several source matches exist.

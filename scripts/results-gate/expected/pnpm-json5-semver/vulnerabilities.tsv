@@ -1,0 +1,3 @@
+workspace	vulnerability	package	version
+.	CVE-2022-25883	semver	7.5.1
+.	CVE-2022-46175	json5	2.2.1

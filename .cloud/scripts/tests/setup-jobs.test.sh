@@ -54,8 +54,8 @@ waits() {
 	' "$1" | sort -u
 }
 
-# listed <script> [indent]: the JOBS list assigned in a script, sorted, one per line.
-listed() { sed -n 's/^[[:space:]]*JOBS="\(.*\)"$/\1/p' "$1" | head -1 | tr ' ' '\n' | sort -u; }
+# listed <script>: the JOBS (or PRODUCTION_JOBS) list assigned in a script, sorted, one per line.
+listed() { sed -n 's/^[[:space:]]*\(PRODUCTION_\)\{0,1\}JOBS="\(.*\)"$/\2/p' "$1" | head -1 | tr ' ' '\n' | sort -u; }
 
 # stack <name> <graph> <jobs list name> <jobs list file>...: checks one stack.
 stack() {
@@ -86,7 +86,7 @@ check "dev: the instance backfill runs after the migrations" \
 
 # The production stack.
 graph "$deployment/docker-compose.yaml" >"$work/prod"
-stack production "$work/prod" "$root/.cloud/scripts/tests/fresh-install/production.sh" "$root/.cloud/scripts/measure/reference-baseline.sh"
+stack production "$work/prod" "$root/.cloud/scripts/tests/fresh-install/lib.sh" "$root/.cloud/scripts/measure/reference-baseline.sh"
 check "production: the instance backfill runs after the migrations" \
 	"$(grep -qx 'dep vulnerability-instance-backfill migrate service_completed_successfully' "$work/prod" && echo ok || echo bad)"
 

@@ -1,0 +1,125 @@
+# Nightly API fuzzing: builds the trimmed real stack at the submodule pointers, then runs Schemathesis
+# against the instance's OpenAPI description once per auth provider, failing on a 5xx or a response
+# that breaks the schema (scripts/api-fuzz/README.md). A failed nightly run opens or comments on the
+# provider's ci-failure issue, with the requests to replay; a green one closes it.
+name: API fuzz
+
+on:
+  schedule:
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  fuzz:
+    name: api fuzz (${{ matrix.auth }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Auth providers of scripts/api-fuzz/api-fuzz.sh: the dev account's JWT and an Organization token.
+        auth: [dev-account, token]
+    env:
+      KNOWLEDGE_DUMP_IMAGE: codeclarity-ci/knowledge-dump:fixture
+      COMPOSE_OVERRIDE: ${{ github.workspace }}/.cloud/scripts/tests/real-stack/docker-compose.yaml
+      BUILD_CACHE: gha
+      BUILD_JOBS: "6"
+      API_URL: https://localhost/api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
+      - name: Build the fixture knowledge dump image
+        run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
+      # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.
+      - name: Create a buildx builder
+        run: docker buildx create --use --driver docker-container --name api-fuzz
+      # Only actions can read the runtime's cache URL and token; this hands them to the next steps.
+      - name: Expose the Actions runtime to buildx
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const [name, value] of Object.entries(process.env)) {
+              if (name.startsWith("ACTIONS_") && value) core.exportVariable(name, value);
+            }
+      - name: Build the trimmed stack's images from the submodules
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
+      - name: Bring up the trimmed stack
+        run: |
+          sh .cloud/scripts/tests/real-stack/stack.sh up
+          sh .cloud/scripts/tests/real-stack/stack.sh ca "$RUNNER_TEMP/ca.crt"
+      - name: Pull the pinned Schemathesis image
+        run: docker pull "$(cat scripts/api-fuzz/schemathesis-image.txt)"
+      # The token provider fuzzes as a new analyze token, issued in this step only; the mask keeps
+      # its secret out of the logs.
+      - name: Fuzz the API
+        env:
+          AUTH: ${{ matrix.auth }}
+          CURL_CA: ${{ runner.temp }}/ca.crt
+        run: |
+          set -euo pipefail
+          if [[ "$AUTH" == token ]]; then
+            API_TOKEN=$(bash scripts/api-fuzz/api-fuzz.sh issue-token)
+            echo "::add-mask::$API_TOKEN"
+            export API_TOKEN
+          fi
+          bash scripts/api-fuzz/api-fuzz.sh run --auth "$AUTH" --out "$RUNNER_TEMP/api-fuzz"
+      - name: Stack logs
+        if: failure()
+        run: sh .cloud/scripts/tests/real-stack/stack.sh report
+      # The provider name goes in even when the run never started, so the report names the issue.
+      - name: Record the provider
+        if: always()
+        env:
+          AUTH: ${{ matrix.auth }}
+        run: mkdir -p "$RUNNER_TEMP/api-fuzz" && echo "$AUTH" >"$RUNNER_TEMP/api-fuzz/auth"
+      - name: Keep the run
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-fuzz-${{ matrix.auth }}
+          path: ${{ runner.temp }}/api-fuzz
+          if-no-files-found: warn
+
+  # Kept apart from the fuzz job, so only this job, which runs no stack, can write issues.
+  report:
+    name: report (${{ matrix.auth }})
+    needs: [fuzz]
+    # Only runs of the default branch report; a dispatch from another branch keeps its result to itself.
+    if: ${{ !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same list as the fuzz job's.
+        auth: [dev-account, token]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/api-fuzz
+      - name: Download the run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-fuzz-${{ matrix.auth }}
+          path: ${{ runner.temp }}/api-fuzz
+      - name: Open, update or close the ci-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/api-fuzz/api-fuzz.sh report "$RUNNER_TEMP/api-fuzz"

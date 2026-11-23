@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in CodeClarity does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Self-hosted instances send us nothing, so the support bundle is how we see your instance.
+        Wrong results (a missed or wrong vulnerability, license or dependency) are bugs too.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the project ...
+        2. Run the Default Analyzer on ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: support-bundle
+    attributes:
+      label: Support bundle
+      description: |
+        In the directory that holds `docker-compose.yaml`, run `sh support-bundle.sh` (from the deployment release) or `make support-bundle` (in a clone of the deployment repository). It prints the path of a `codeclarity-support-<time>.tar.gz` archive with versions, configuration with secrets redacted, recent error logs and error reports. Look it over, then drag it here.
+        See [Reporting Issues](https://github.com/CodeClarityCE/deployment#-reporting-issues). If you cannot attach one, say why and give the release you run.
+    validations:
+      required: true
+  - type: textarea
+    id: browser
+    attributes:
+      label: Browser
+      description: For a problem in the web app, the browser and its version.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Screenshots, or anything else that helps.

@@ -5,7 +5,8 @@
 #   1. bump CodeClarityCE go.mod requirements to the tags released upstream in
 #      this run (or, for backend / codeclarity-dev, the submodule pointers);
 #   2. bump the version file CI checks (config.json, or package.json for
-#      api / frontend) to the next vX.Y.(N+1)-alpha;
+#      api / frontend) to the next vX.Y.(N+1), keeping its suffix (such as
+#      -beta) unless --suffix names a new one;
 #   3. open a develop -> main PR with gh, wait for its CI check, merge it;
 #   4. wait for the main build to push the image and create the tag + GitHub
 #      release (or create the release here, see below);
@@ -18,6 +19,10 @@
 #   actions  the caller uses a releasing workflow (go-library, go-image,
 #            node-image) or has its own release job (deployment), and the
 #            repo variable CI_RELEASE is true;
+#   workflow the repo has a .github/workflows/release.yml, which this script
+#            dispatches on main with the tag and waits for (the umbrella's
+#            runs the CLI on the released code and attaches CodeClarity's
+#            SBOM; a failed run stops this script and leaves no tag);
 #   script   the caller has no release jobs, so this script creates the
 #            release itself.
 # A releasing caller with CI_RELEASE off stops the run, since no image would ship.
@@ -30,6 +35,11 @@
 #   scripts/release-all.sh                      # release everything
 #   scripts/release-all.sh --only backend/utilities/types
 #   scripts/release-all.sh --yes                # don't ask before each release
+#   scripts/release-all.sh --suffix beta        # switch every repo to -beta
+#
+# --suffix releases every repo whose latest tag lacks the suffix, changed or
+# not, so the switch lands once across every version file and tag. Later runs
+# keep the latest tag's suffix, so the flag is needed only for the switch.
 #
 # Before each repo with changes, it shows the new commits and dependency bumps
 # and asks y (release) / n (keep current tag) / q (quit).
@@ -39,7 +49,8 @@
 # resumes with the same version: every step is skipped once it is done.
 #
 # Env: CI_CHECK_PATTERN (regex of PR checks that must pass, default "^ci$"),
-#      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each).
+#      CI_TIMEOUT_SECONDS, TAG_TIMEOUT_SECONDS (default 3600 each),
+#      RELEASE_WORKFLOW_TIMEOUT_SECONDS (default 9000: the SBOM job builds and starts a stack).
 
 set -euo pipefail
 
@@ -48,6 +59,7 @@ STATE_FILE="$ROOT/scripts/.release-state"
 CI_CHECK_PATTERN="${CI_CHECK_PATTERN:-^ci\$}"
 CI_TIMEOUT_SECONDS="${CI_TIMEOUT_SECONDS:-3600}"
 TAG_TIMEOUT_SECONDS="${TAG_TIMEOUT_SECONDS:-3600}"
+RELEASE_WORKFLOW_TIMEOUT_SECONDS="${RELEASE_WORKFLOW_TIMEOUT_SECONDS:-9000}"
 POLL_SECONDS=30
 
 # Resolve our own modules straight from GitHub (no proxy.golang.org lag on
@@ -58,6 +70,7 @@ export GONOPROXY="github.com/CodeClarityCE/*"
 DRY_RUN=0
 ASSUME_YES=0
 ONLY=""
+SUFFIX=""
 parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -67,8 +80,16 @@ parse_args() {
 			ONLY="${2:?--only needs a repo path}"
 			shift
 			;;
+		--suffix)
+			SUFFIX="${2:?--suffix needs a name, such as beta}"
+			[[ "$SUFFIX" =~ ^[a-z]+$ ]] || {
+				echo "--suffix takes lowercase letters only, such as beta" >&2
+				exit 2
+			}
+			shift
+			;;
 		-h | --help)
-			sed -n '2,42p' "$0"
+			sed -n '2,53p' "$0"
 			exit 0
 			;;
 		*)
@@ -135,19 +156,33 @@ actions_can_release() {
 		grep -qE "CodeClarityCE/\.github/.+/(go-library|go-image|node-image)\.yml@|vars\.CI_RELEASE == 'true'" "$(actions_caller "$1")"
 }
 
-# Actions releases once the repo variable CI_RELEASE is true (looked up once per repo).
+# True when the repo variable CI_RELEASE is true (looked up once per repo).
 declare -A CI_RELEASE_OF
-actions_releases() {
-	actions_can_release "$1" || return 1
+ci_release_on() {
 	if [[ -z "${CI_RELEASE_OF[$1]:-}" ]]; then
 		CI_RELEASE_OF[$1]="$(gh_in "$1" variable get CI_RELEASE 2>/dev/null || echo unset)"
 	fi
 	[[ "${CI_RELEASE_OF[$1]}" == true ]]
 }
 
-# Who creates the tag + GitHub release: actions or script.
+# Actions releases once the repo variable CI_RELEASE is true.
+actions_releases() {
+	actions_can_release "$1" && ci_release_on "$1"
+}
+
+# The repo's own release workflow, dispatched on main with the new tag (the umbrella's attaches the SBOM).
+# A release.yml without workflow_dispatch (backend's runs on cli-v* tags) is not one.
+has_release_workflow() {
+	grep -qs 'workflow_dispatch' "$ROOT/$1/.github/workflows/release.yml"
+}
+
+# Who creates the tag + GitHub release: workflow, actions or script.
 releaser() {
-	if actions_releases "$1"; then
+	if has_release_workflow "$1"; then
+		ci_release_on "$1" ||
+			die "$1 has a release workflow but CI_RELEASE is not true (see docs/ci-release-test.md)"
+		echo workflow
+	elif actions_releases "$1"; then
 		echo actions
 	elif actions_can_release "$1"; then
 		die "$1 has a releasing caller but CI_RELEASE is not true (see docs/ci-release-test.md)"
@@ -186,9 +221,13 @@ latest_tag() {
 	in_repo "$1" tag --merged origin/main --list 'v*' --sort=-v:refname | head -1
 }
 
+# Next patch version; keeps the suffix unless a new one is given (beta for -beta).
 bump() {
+	local suffix
 	[[ "$1" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]] || die "cannot bump version '$1'"
-	echo "v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))${BASH_REMATCH[4]}"
+	suffix="${BASH_REMATCH[4]}"
+	[[ -n "${2:-}" ]] && suffix="-$2"
+	echo "v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))$suffix"
 }
 
 # Version as written in the repo's version file (package.json has no "v").
@@ -207,20 +246,26 @@ version_gt() {
 	[[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
 }
 
+# Succeeds when the version lacks the --suffix being switched to.
+needs_suffix() {
+	[[ -n "$SUFFIX" && "$1" != *"-$SUFFIX" ]]
+}
+
 # Next version: one past the latest tag, unless main holds a merged release
-# that never got its tag. Then reuse it, or go one past it if develop moved on.
+# that never got its tag. Then reuse it, or go one past it if develop moved on
+# or it lacks the new --suffix.
 next_tag() {
 	local key="$1" cur="$2" mainv
 	mainv="$(main_version "$key")"
 	if [[ -n "$mainv" ]] && version_gt "$mainv" "$cur"; then
-		if in_repo "$key" merge-base --is-ancestor HEAD origin/main; then
+		if in_repo "$key" merge-base --is-ancestor HEAD origin/main && ! needs_suffix "$mainv"; then
 			echo "$mainv"
 		else
-			bump "$mainv"
+			bump "$mainv" "$SUFFIX"
 		fi
 		return
 	fi
-	bump "$cur"
+	bump "$cur" "$SUFFIX"
 }
 
 file_version() {
@@ -387,11 +432,30 @@ merge_pr() {
 	wait_until "$CI_TIMEOUT_SECONDS" "$key PR #$pr to merge" pr_merged "$key" "$pr"
 }
 
+# Succeeds once the tag exists; dies when the release workflow run for it, started since $3, failed.
+release_workflow_done() {
+	local key="$1" tag="$2" since="$3" run
+	tag_on_remote "$key" "$tag" && return
+	run="$(gh_in "$key" run list --workflow release.yml --branch main --event workflow_dispatch --limit 20 \
+		--json displayTitle,status,conclusion,createdAt,url |
+		jq -c --arg title "Release $tag" --arg since "$since" \
+			'[.[] | select(.displayTitle == $title and .createdAt >= $since)] | sort_by(.createdAt) | last // empty')"
+	[[ -z "$run" || "$(jq -r .status <<<"$run")" != completed ]] && return 1
+	[[ "$(jq -r .conclusion <<<"$run")" == success ]] && return 1
+	die "$key: the Release workflow for $tag ended with $(jq -r .conclusion <<<"$run"), so nothing was released: $(jq -r .url <<<"$run")"
+}
+
 publish_tag() {
-	local key="$1" tag="$2" prerelease=false by
+	local key="$1" tag="$2" prerelease=false by since
 	tag_on_remote "$key" "$tag" && return
 	by="$(releaser "$key")" || exit 1
 	case "$by" in
+	workflow)
+		since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		gh_in "$key" workflow run release.yml --ref main -f "version=$tag"
+		log "$key" "dispatched the Release workflow for $tag"
+		wait_until "$RELEASE_WORKFLOW_TIMEOUT_SECONDS" "the Release workflow to release $key $tag" release_workflow_done "$key" "$tag" "$since"
+		;;
 	actions)
 		log "$key" "waiting for the Actions main run (if it failed or never ran, re-run it)"
 		wait_until "$TAG_TIMEOUT_SECONDS" "Actions to release $key $tag" tag_on_remote "$key" "$tag"
@@ -459,9 +523,9 @@ release() {
 		mapfile -t changes < <(moved_submodules "$key" | sed 's/$/ (submodule moved)/')
 	fi
 
-	# Nothing on develop beyond the latest tag. Also covers a run that died after
-	# the tag but before develop was fast-forwarded: no second version.
-	if in_repo "$key" merge-base --is-ancestor HEAD "$cur" && [[ ${#changes[@]} -eq 0 ]]; then
+	# Nothing on develop beyond the latest tag and no new suffix. Also covers a run
+	# that died after the tag but before develop was fast-forwarded: no second version.
+	if in_repo "$key" merge-base --is-ancestor HEAD "$cur" && [[ ${#changes[@]} -eq 0 ]] && ! needs_suffix "$cur"; then
 		log "$key" "nothing new since $cur"
 		finish_develop "$key"
 		record "$key" "$cur"
@@ -514,6 +578,9 @@ plan() {
 	elif ((ahead > 0 || ${#bumps[@]} > 0)); then
 		tag="$(next_tag "$key" "$cur")"
 		reason="$ahead commits"
+	elif needs_suffix "$cur"; then
+		tag="$(next_tag "$key" "$cur")"
+		reason="new suffix"
 	else
 		tag="$cur"
 		reason="unchanged"

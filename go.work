@@ -4,7 +4,6 @@ toolchain go1.27.4
 
 use (
 	backend/plugins/codeql
-	backend/plugins/js-patching
 	backend/plugins/js-sbom
 	backend/plugins/license-finder
 	backend/plugins/php-sbom

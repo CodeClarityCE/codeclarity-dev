@@ -1,0 +1,105 @@
+# The real-stack e2e job: builds the images of a trimmed stack at the submodule pointers (on a PR,
+# the same-named branches; scripts/same-named-branches.sh) with the GitHub Actions layer cache,
+# brings it up with the knowledge dump fixture, the dev account and a mail catcher, then runs the
+# frontend's real-stack Playwright journeys (golden journeys 1 to 4 and 6), which mock nothing:
+# the journeys, golden journey 7 (the CLI with an Organization token, cli-journey.sh), then a
+# knowledge update from fixture advisories, then the journeys tagged @after-knowledge-update.
+# Journey 5 runs in ci.yml's upgrade job. ci.yml calls this on pull requests (so on every pointer
+# bump) and pushes, as part of its `ci` gate; it also runs nightly.
+name: E2E (real stack)
+
+on:
+  workflow_call:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions: {}
+
+jobs:
+  e2e:
+    name: e2e (real stack)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      KNOWLEDGE_DUMP_IMAGE: codeclarity-ci/knowledge-dump:fixture
+      COMPOSE_OVERRIDE: ${{ github.workspace }}/.cloud/scripts/tests/real-stack/docker-compose.yaml
+      BUILD_CACHE: gha
+      BUILD_JOBS: "6"
+      # Keeps reruns of the journeys on one stack apart.
+      E2E_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Start the clock
+        run: echo "JOB_START=$(date +%s)" >>"$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
+      - name: Build the fixture knowledge dump image
+        run: sh .cloud/scripts/tests/fresh-install/knowledge-dump-fixture.sh "$KNOWLEDGE_DUMP_IMAGE"
+      # The gha cache backend of buildx needs a docker-container builder and the Actions runtime token.
+      - name: Create a buildx builder
+        run: docker buildx create --use --driver docker-container --name real-stack
+      # Only actions can read the runtime's cache URL and token; this hands them to the next steps.
+      - name: Expose the Actions runtime to buildx
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const [name, value] of Object.entries(process.env)) {
+              if (name.startsWith("ACTIONS_") && value) core.exportVariable(name, value);
+            }
+      - name: Build the trimmed stack's images from the submodules
+        # The profile adds service-knowledge, which only the knowledge update runs.
+        env:
+          COMPOSE_PROFILES: knowledge-update
+        run: sh .cloud/scripts/tests/fresh-install/build-images.sh
+      - name: Bring up the trimmed stack
+        run: |
+          sh .cloud/scripts/tests/real-stack/stack.sh up
+          echo "STACK_READY=$(date +%s)" >>"$GITHUB_ENV"
+      - name: Run the golden journeys
+        run: |
+          sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/journeys" \
+            --grep-invert "@after-knowledge-update|@upgrade|@monkey"
+      # Golden journey 7: a pipeline analyses a project with the CLI and an Organization token,
+      # writes JSON and SARIF, fails on a severity and re-analyses the project by id.
+      - name: Run golden journey 7 (CLI)
+        if: ${{ !cancelled() && env.STACK_READY != '' }}
+        run: sh .cloud/scripts/tests/real-stack/cli-journey.sh "$RUNNER_TEMP/cli-journey"
+      - name: Update the knowledge from the fixture advisories
+        run: sh .cloud/scripts/tests/real-stack/stack.sh knowledge-update
+      - name: Run the journeys after the knowledge update
+        run: |
+          sh frontend/.cloud/scripts/e2e-real-stack.sh https://localhost "$RUNNER_TEMP/after-knowledge-update" \
+            --grep @after-knowledge-update
+      - name: Timings
+        if: always()
+        run: |
+          now=$(date +%s)
+          {
+            echo "### e2e (real stack) timings"
+            if [ -n "${STACK_READY:-}" ]; then
+              echo "- stack ready: $((STACK_READY - JOB_START)) s after the job started"
+              echo "- journeys: $((now - STACK_READY)) s"
+            fi
+            echo "- job so far: $((now - JOB_START)) s"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Stack logs
+        if: failure()
+        run: sh .cloud/scripts/tests/real-stack/stack.sh report
+      - name: Keep the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-real-stack
+          path: |
+            ${{ runner.temp }}/journeys
+            ${{ runner.temp }}/cli-journey
+            ${{ runner.temp }}/after-knowledge-update
+          if-no-files-found: warn
