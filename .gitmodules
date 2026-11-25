@@ -10,3 +10,6 @@
 [submodule "deployment"]
 	path = deployment
 	url = https://github.com/CodeClarityCE/deployment.git
+[submodule "mcp"]
+	path = mcp
+	url = https://github.com/scadra/service-mcp.git
