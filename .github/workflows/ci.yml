@@ -210,10 +210,11 @@ jobs:
             echo "::error::root-lockfile.sh check passed a lockfile with a stale $dep specifier"
             exit 1
           fi
-          grep -qF -- 'importers["api"]' "$RUNNER_TEMP/stale.txt" && grep -qF -- "$dep (lockfile: 0.0.1" "$RUNNER_TEMP/stale.txt" || {
-            echo "::error::root-lockfile.sh check failed without naming $dep"
+          if ! grep -qF -- 'importers["api"]' "$RUNNER_TEMP/stale.txt" ||
+            ! grep -qF -- "$dep (lockfile: 0.0.1" "$RUNNER_TEMP/stale.txt"; then
+            echo "::error::root-lockfile.sh check failed without naming the api importer and $dep"
             exit 1
-          }
+          fi
 
   # The deployment Compose file, up -d twice on an empty daemon, then create-user and log in
   # through Caddy and run an analysis. The CodeClarity images are built from the submodules.
