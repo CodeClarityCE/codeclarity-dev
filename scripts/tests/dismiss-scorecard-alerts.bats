@@ -238,6 +238,8 @@ dismiss() {
 
 @test "alerts that cannot be listed stop the run before any dismissal" {
 	repo_alert api 4 FuzzingID
+	# The stand-in gh refuses the CodeQL listing.
+	# shellcheck disable=SC2016 # the $ signs belong to the stub code, not this shell
 	sed -i 's|^gh_stub() {|gh_stub() {\n\t[[ "$3" == *tool_name=CodeQL* ]] \&\& { echo "HTTP 403" >\&2; return 1; }|' "$GH_STUB_RULES"
 
 	run dismiss
