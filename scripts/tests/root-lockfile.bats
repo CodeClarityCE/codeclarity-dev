@@ -50,11 +50,12 @@ lockfile() {
 
 @test "it runs in the pinned Node image" {
 	run lockfile check
+	[ "$status" -eq 0 ]
 	grep -qE -- " node:[0-9.]+-alpine@sha256:[0-9a-f]{64} sh -euc" "$DOCKER_LOG"
 }
 
 @test "a stale lockfile fails the check, keeps pnpm's list of mismatches and says how to fix it" {
-	DOCKER_OUT=$'* in importers["api"]:\n  - amqplib (lockfile: 2.3.1, manifest: 2.4.0)\nERR_PNPM_OUTDATED_LOCKFILE' DOCKER_STATUS=1 run lockfile check
+	DOCKER_OUT=$'Error: ERR_PNPM_OUTDATED_LOCKFILE\n* in importers["api"]:\n  - amqplib (lockfile: 2.3.1, manifest: 2.4.0)' DOCKER_STATUS=1 run lockfile check
 	[ "$status" -ne 0 ]
 	[[ "$output" == *'in importers["api"]'*"amqplib (lockfile: 2.3.1, manifest: 2.4.0)"* ]]
 	[[ "$output" == *"Run scripts/root-lockfile.sh update and commit pnpm-lock.yaml"* ]]
@@ -62,7 +63,7 @@ lockfile() {
 }
 
 @test "in GitHub Actions a stale lockfile also annotates pnpm-lock.yaml" {
-	GITHUB_ACTIONS=true DOCKER_STATUS=1 run lockfile check
+	GITHUB_ACTIONS=true DOCKER_OUT='ERR_PNPM_OUTDATED_LOCKFILE' DOCKER_STATUS=1 run lockfile check
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"::error file=pnpm-lock.yaml::"* ]]
 }
@@ -71,6 +72,13 @@ lockfile() {
 	DOCKER_OUT='amqplib@2.4.0 does not meet the minimumReleaseAge constraint' DOCKER_STATUS=1 run lockfile update
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"pnpm refused a version published less than minimumReleaseAge"* ]]
+	[[ "$output" != *"out of date"* ]]
+}
+
+@test "a check that fails before pnpm compares, such as a failed pull, is not called a stale lockfile" {
+	DOCKER_OUT='Error response from daemon: pull access denied' DOCKER_STATUS=125 run lockfile check
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"failed before pnpm could compare it"* ]]
 	[[ "$output" != *"out of date"* ]]
 }
 

@@ -333,6 +333,8 @@ preflight() {
 	if [[ $DRY_RUN -eq 0 ]]; then
 		command -v gh >/dev/null || die "gh is not installed"
 		command -v jq >/dev/null || die "jq is not installed"
+		# The umbrella step regenerates the root lockfile in Docker; fail before any repo is released.
+		[[ -n "$ONLY" && "$ONLY" != . ]] || command -v docker >/dev/null || die "docker is not installed"
 		gh auth status >/dev/null 2>&1 || die "gh is not authenticated (run: gh auth login)"
 		[[ $ASSUME_YES -eq 1 ]] || { : </dev/tty; } 2>/dev/null || die "no terminal to ask on; use --yes"
 	fi

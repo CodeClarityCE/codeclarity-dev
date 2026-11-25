@@ -77,11 +77,12 @@ main() {
 	if grep -q minimumReleaseAge "$out"; then
 		die "pnpm refused a version published less than minimumReleaseAge (pnpm-workspace.yaml) ago. Wait until it is old enough, then run scripts/root-lockfile.sh update again."
 	fi
-	if [[ "$mode" == check ]]; then
+	if [[ "$mode" == check ]] && grep -qE 'ERR_PNPM_(OUTDATED_LOCKFILE|LOCKFILE_CONFIG_MISMATCH)' "$out"; then
 		[[ "${GITHUB_ACTIONS:-}" == true ]] &&
 			echo "::error file=pnpm-lock.yaml::The root pnpm-lock.yaml is out of date with the workspace package.json files. Run scripts/root-lockfile.sh update and commit pnpm-lock.yaml."
 		die "the root pnpm-lock.yaml is out of date with the workspace package.json files (pnpm names the importer and specifiers above). Run scripts/root-lockfile.sh update and commit pnpm-lock.yaml."
 	fi
+	[[ "$mode" == check ]] && die "the root lockfile check failed before pnpm could compare it (see above)"
 	die "pnpm could not regenerate the root pnpm-lock.yaml (see above)"
 }
 

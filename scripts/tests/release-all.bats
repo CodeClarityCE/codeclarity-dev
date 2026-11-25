@@ -7,6 +7,11 @@
 setup() {
 	load helpers
 	setup_fake_root
+	# A docker on PATH for preflight; any real call fails, since only root-lockfile.sh uses it.
+	mkdir -p "$BATS_TEST_TMPDIR/bin"
+	printf '#!/usr/bin/env bash\necho "docker stub: unexpected call: $*" >&2\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/docker"
+	chmod +x "$BATS_TEST_TMPDIR/bin/docker"
+	PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 # Runs one release-all.sh function after parsing the given flags, e.g. rel_with "--suffix beta" bump.
@@ -400,6 +405,16 @@ last_commit_files() {
 }
 
 # --- whole run ----------------------------------------------------------------------------
+
+@test "a run without docker stops in preflight before any repo" {
+	rm "$BATS_TEST_TMPDIR/bin/docker"
+	PATH="$(tr ':' '\n' <<<"$PATH" | while read -r d; do [[ -x "$d/docker" ]] || printf '%s:' "$d"; done)"
+	cd "$ROOT_DIR"
+	run bash scripts/release-all.sh --yes
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"docker is not installed"* ]]
+	[ ! -s "$GH_STUB_LOG" ] || ! grep -q ' pr ' "$GH_STUB_LOG"
+}
 
 @test "a releasing caller with CI_RELEASE off stops the whole run before any PR" {
 	local key

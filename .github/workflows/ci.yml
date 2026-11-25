@@ -210,7 +210,7 @@ jobs:
             echo "::error::root-lockfile.sh check passed a lockfile with a stale $dep specifier"
             exit 1
           fi
-          grep -qF -- "$dep" "$RUNNER_TEMP/stale.txt" || {
+          grep -qF -- 'importers["api"]' "$RUNNER_TEMP/stale.txt" && grep -qF -- "$dep (lockfile: 0.0.1" "$RUNNER_TEMP/stale.txt" || {
             echo "::error::root-lockfile.sh check failed without naming $dep"
             exit 1
           }
