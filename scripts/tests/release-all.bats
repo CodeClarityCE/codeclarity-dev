@@ -9,7 +9,11 @@ setup() {
 	setup_fake_root
 	# A docker on PATH for preflight; any real call fails, since only root-lockfile.sh uses it.
 	mkdir -p "$BATS_TEST_TMPDIR/bin"
-	printf '#!/usr/bin/env bash\necho "docker stub: unexpected call: $*" >&2\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/docker"
+	cat >"$BATS_TEST_TMPDIR/bin/docker" <<'DOCKER'
+#!/usr/bin/env bash
+echo "docker stub: unexpected call: $*" >&2
+exit 1
+DOCKER
 	chmod +x "$BATS_TEST_TMPDIR/bin/docker"
 	PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
