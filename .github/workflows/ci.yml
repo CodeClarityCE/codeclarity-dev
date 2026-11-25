@@ -1,6 +1,6 @@
-# CI: workflow lint from the central repo, shellcheck, Prettier and tests of the shell scripts (bats for scripts/), and the
-# fresh-install tests (dev and production), the production upgrade test, the real-stack e2e journey and the
-# results gate, on the runner's empty Docker daemon.
+# CI: workflow lint from the central repo, shellcheck, Prettier, the root lockfile check and tests of the shell
+# scripts (bats for scripts/), and the fresh-install tests (dev and production), the production upgrade test, the
+# real-stack e2e journey and the results gate, on the runner's empty Docker daemon.
 name: CI
 
 on:
@@ -167,6 +167,54 @@ jobs:
       - name: Check the frontend copies against the API
         run: node scripts/type-sync/check.mjs
 
+  # Fails when the root pnpm-lock.yaml is not what pnpm writes for the api and frontend checkouts
+  # (the same-named branches on a PR, ADR 0020). Fix it with scripts/root-lockfile.sh update.
+  root-lockfile:
+    name: root lockfile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      # On a PR, the PR's branch in each submodule that has it and develop in the others (ADR 0020).
+      - name: Check out the same-named branches in the submodules
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: bash scripts/same-named-branches.sh "$BRANCH"
+      - name: Check the root lockfile
+        run: |
+          bash scripts/root-lockfile.sh check
+          git diff --exit-code -- pnpm-lock.yaml
+      # A copy whose api importer has an older specifier for one dependency must fail and name it.
+      - name: Test that a stale lockfile fails
+        run: |
+          set -euo pipefail
+          stale="$RUNNER_TEMP/stale"
+          mkdir -p "$stale/scripts" "$stale/api" "$stale/frontend"
+          cp package.json pnpm-workspace.yaml .npmrc "$stale/"
+          cp scripts/root-lockfile.sh "$stale/scripts/"
+          cp api/package.json "$stale/api/"
+          cp frontend/package.json "$stale/frontend/"
+          dep=$(awk '/^  api:$/ { a = 1; next } /^  [^ ]/ { a = 0 } a && /^      [^ ]/ { n = $1 } a && /^        specifier:/ { print n; exit }' pnpm-lock.yaml | tr -d "':")
+          awk '/^  [^ ]/ { a = ($0 == "  api:") } a && !d && /^        specifier:/ { sub(/specifier: .*/, "specifier: 0.0.1"); d = 1 } { print }' \
+            pnpm-lock.yaml >"$stale/pnpm-lock.yaml"
+          status=0
+          bash "$stale/scripts/root-lockfile.sh" check >"$RUNNER_TEMP/stale.txt" 2>&1 || status=$?
+          # Indented so the expected errors do not become annotations of this run.
+          sed 's/^/  /' "$RUNNER_TEMP/stale.txt"
+          if [[ "$status" == 0 ]]; then
+            echo "::error::root-lockfile.sh check passed a lockfile with a stale $dep specifier"
+            exit 1
+          fi
+          grep -qF -- "$dep" "$RUNNER_TEMP/stale.txt" || {
+            echo "::error::root-lockfile.sh check failed without naming $dep"
+            exit 1
+          }
+
   # The deployment Compose file, up -d twice on an empty daemon, then create-user and log in
   # through Caddy and run an analysis. The CodeClarity images are built from the submodules.
   fresh-install-production:
@@ -304,6 +352,7 @@ jobs:
       - prettier
       - shell-tests
       - type-sync
+      - root-lockfile
       - script-tests
       - fresh-install-dev
       - e2e-real-stack

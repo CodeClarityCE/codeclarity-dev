@@ -3,7 +3,8 @@
 #
 # For each repo:
 #   1. bump CodeClarityCE go.mod requirements to the tags released upstream in
-#      this run (or, for backend / codeclarity-dev, the submodule pointers);
+#      this run (or, for backend / codeclarity-dev, the submodule pointers; a moved
+#      api or frontend pointer also regenerates the root pnpm-lock.yaml in Docker);
 #   2. bump the version file CI checks (config.json, or package.json for
 #      api / frontend) to the next vX.Y.(N+1), keeping its suffix (such as
 #      -beta) unless --suffix names a new one;
@@ -89,7 +90,7 @@ parse_args() {
 			shift
 			;;
 		-h | --help)
-			sed -n '2,53p' "$0"
+			sed -n '2,54p' "$0"
 			exit 0
 			;;
 		*)
@@ -380,6 +381,12 @@ bump_submodules() {
 	while read -r sub; do
 		in_repo "$key" add -- "$sub"
 	done < <(submodule_paths "$key")
+	# The root workspace resolves api and frontend, so a moved pointer needs a new root lockfile.
+	if [[ "$key" == . && -f "$ROOT/pnpm-lock.yaml" ]] && ! in_repo . diff --cached --quiet -- api frontend; then
+		log . "regenerate the root pnpm-lock.yaml"
+		bash "$ROOT/scripts/root-lockfile.sh" update || die ".: could not regenerate the root pnpm-lock.yaml"
+		in_repo . add -- pnpm-lock.yaml
+	fi
 	if ! in_repo "$key" diff --cached --quiet; then
 		log "$key" "commit submodule pointers"
 		in_repo "$key" commit -q -m "Update submodules"

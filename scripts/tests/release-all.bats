@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests release-all.sh: version comparison, next-tag choice, releaser choice, the Go build that
-# writes no binary, version file, and that a releasing caller with CI_RELEASE off stops the whole
-# run before any PR.
+# writes no binary, version file, the root lockfile regenerated with a moved api or frontend
+# pointer, and that a releasing caller with CI_RELEASE off stops the whole run before any PR.
 # Run from the repo root: bats scripts/tests
 
 setup() {
@@ -336,6 +336,67 @@ go_repo() {
 	run rel version_file .
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
+}
+
+# --- root lockfile ------------------------------------------------------------------------
+
+# The umbrella with its four submodules and a tracked pnpm-lock.yaml, and a stand-in
+# root-lockfile.sh that logs its mode and rewrites pnpm-lock.yaml (or fails with FAIL_LOCKFILE).
+umbrella_with_lockfile() {
+	local key
+	for key in . backend api frontend deployment; do
+		init_repo "$key"
+	done
+	write_file . pnpm-lock.yaml 'old'
+	git -C "$ROOT_DIR" add pnpm-lock.yaml backend api frontend deployment
+	git -C "$ROOT_DIR" commit -q -m "Track the submodules"
+	export LOCKFILE_LOG="$BATS_TEST_TMPDIR/root-lockfile.log"
+	cat >"$ROOT_DIR/scripts/root-lockfile.sh" <<'STUB'
+echo "$*" >>"$LOCKFILE_LOG"
+[[ -z "${FAIL_LOCKFILE:-}" ]] || exit 1
+echo regenerated >"$(dirname "$0")/../pnpm-lock.yaml"
+STUB
+}
+
+# The files the umbrella's last commit changed, space separated.
+last_commit_files() {
+	git -C "$ROOT_DIR" show --name-only --format= HEAD | sort | tr '\n' ' ' | sed 's/ $//'
+}
+
+@test "bump_submodules regenerates the root lockfile and commits it with a moved api pointer" {
+	umbrella_with_lockfile
+	commit_file api package.json '{ "name": "api" }'
+	run rel bump_submodules .
+	[ "$status" -eq 0 ]
+	[ "$(cat "$LOCKFILE_LOG")" = update ]
+	[ "$(git -C "$ROOT_DIR" log -1 --format=%s)" = "Update submodules" ]
+	[ "$(last_commit_files)" = "api pnpm-lock.yaml" ]
+}
+
+@test "bump_submodules regenerates the root lockfile for a moved frontend pointer too" {
+	umbrella_with_lockfile
+	commit_file frontend package.json '{ "name": "frontend" }'
+	run rel bump_submodules .
+	[ "$status" -eq 0 ]
+	[ "$(last_commit_files)" = "frontend pnpm-lock.yaml" ]
+}
+
+@test "bump_submodules leaves the root lockfile alone when only other pointers moved" {
+	umbrella_with_lockfile
+	commit_file deployment config.json '{ "version": "v0.1.0-alpha" }'
+	run rel bump_submodules .
+	[ "$status" -eq 0 ]
+	[ ! -e "$LOCKFILE_LOG" ]
+	[ "$(last_commit_files)" = deployment ]
+}
+
+@test "bump_submodules stops before committing when the root lockfile cannot be regenerated" {
+	umbrella_with_lockfile
+	commit_file api package.json '{ "name": "api" }'
+	FAIL_LOCKFILE=1 run rel bump_submodules .
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"could not regenerate the root pnpm-lock.yaml"* ]]
+	[ "$(git -C "$ROOT_DIR" log -1 --format=%s)" = "Track the submodules" ]
 }
 
 # --- whole run ----------------------------------------------------------------------------
