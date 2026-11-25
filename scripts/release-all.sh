@@ -350,6 +350,11 @@ sync_develop() {
 	in_repo "$1" pull -q --ff-only origin develop
 }
 
+# Tidies go.mod and compiles every package; -o /dev/null so no binary lands in the repo.
+tidy_build() {
+	(cd "$ROOT/$1" && go mod tidy && go build -o /dev/null ./...) || die "$1: tidy/build failed"
+}
+
 bump_go_deps() {
 	local key="$1" attempt
 	local -a bumps
@@ -363,7 +368,7 @@ bump_go_deps() {
 		log "$key" "go get failed, retrying in 20s (sumdb may not know the new tag yet)"
 		sleep 20
 	done
-	(cd "$ROOT/$key" && go mod tidy && go build ./...) || die "$key: tidy/build failed"
+	tidy_build "$key"
 
 	if ! in_repo "$key" diff --quiet -- go.mod go.sum; then
 		in_repo "$key" commit -q -m "Update go dependencies" -- go.mod go.sum
