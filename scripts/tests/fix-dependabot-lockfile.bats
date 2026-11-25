@@ -87,7 +87,7 @@ remote_tip() {
 	run bash "$SCRIPT" api 212
 	[ "$status" -eq 0 ]
 	grep -qxF "install --lockfile-only --ignore-scripts staged=yes" "$PNPM_LOG"
-	! grep -q "staged=no" "$PNPM_LOG"
+	run ! grep -q "staged=no" "$PNPM_LOG"
 }
 
 @test "dry run pushes nothing" {
