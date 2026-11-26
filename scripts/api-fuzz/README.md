@@ -12,7 +12,7 @@ Nightly Schemathesis run against a real instance's OpenAPI description (`/api/ap
 
 `--auth NAME` calls the function `auth_<name>` (dashes become underscores) in `api-fuzz.sh`, which prints the header sent on every request.
 
-- `dev-account`: logs in through `POST /auth/authenticate` (`LOGIN_EMAIL` and `LOGIN_PASSWORD`, default the dev account).
+- `dev-account`: logs in through `POST /auth/authenticate` (`LOGIN_EMAIL` and `LOGIN_PASSWORD`, default the dev account). Its access token lasts 15 minutes, so the run stops after at most 780 seconds, whatever `MAX_TIME` says.
 - `token`: sends `API_TOKEN` as a bearer token, for an Organization token. `api-fuzz.sh issue-token` prints the secret of a new `analyze` token, valid for a day, in the dev account's personal organization; the workflow exports it as `API_TOKEN`. Routes that do not allow tokens answer 403, which is the intended answer.
 
 To add a provider, write its function, then add its name to the `auth` matrix of both jobs in the workflow.
