@@ -218,7 +218,7 @@ if [[ -f "$STATE_FILE" ]]; then
 	done <"$STATE_FILE"
 fi
 
-# No "| head": under pipefail, git killed by SIGPIPE after head exits would end the run silently.
+# The newest v* tag on main; git stops at one, since piping to head can kill git under pipefail.
 latest_tag() {
 	in_repo "$1" for-each-ref --count=1 --merged origin/main --sort=-v:refname --format='%(refname:strip=2)' 'refs/tags/v*'
 }
