@@ -2,11 +2,11 @@
 // Fails when a frontend copy of an API enum, allow-list or object's keys misses values
 // the API defines, or a shared file's copy differs. Reads source text only: nothing is built.
 // Usage: node scripts/type-sync/check.mjs [checkout root, default: this repo]
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const KINDS = new Set(["enum", "list", "keys", "file"]);
+const KINDS = new Set(["enum", "list", "keys", "codes", "file"]);
 
 /** Parses pairs.txt: one "kind api-file#symbol frontend-file#symbol" per line; a file pair has no symbols. */
 export function parsePairs(text) {
@@ -21,7 +21,7 @@ export function parsePairs(text) {
     }
     const [kind, api, frontend] = fields;
     if (!KINDS.has(kind))
-      throw new Error(`${where}: kind must be enum, list, keys or file`);
+      throw new Error(`${where}: kind must be enum, list, keys, codes or file`);
     const parse = kind === "file" ? (file) => ({ file, symbol: file }) : target;
     pairs.push({
       kind,
@@ -118,12 +118,65 @@ export function readKeys(source, symbol) {
   return keys;
 }
 
-const readers = { enum: readEnum, list: readList, keys: readKeys };
+/** The string values of an object literal assigned to `symbol`, or null. */
+export function readValues(source, symbol) {
+  const text = stripComments(source);
+  const found = new RegExp(`\\b${symbol}\\b[^=]*=\\s*\\{`).exec(text);
+  if (!found) return null;
+  const inner = body(text, found.index + found[0].length - 1);
+  if (inner === null) return null;
+  return [
+    ...inner.matchAll(/["']?[\w$]+["']?\s*:\s*(["'])((?:\\.|(?!\1).)*)\1/g),
+  ].map((m) => m[2]);
+}
+
+/** Every `static symbol = "..."` in the .ts files under a directory, as [file, value] pairs. */
+function readStatics(root, dir, symbol) {
+  const pattern = new RegExp(
+    `\\bstatic\\s+${symbol}\\s*=\\s*(["'])((?:\\\\.|(?!\\1).)*)\\1`,
+    "g",
+  );
+  const found = [];
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(root, rel), { withFileTypes: true })) {
+      const path = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(path);
+      // Specs declare fake errors the API never sends.
+      else if (
+        /\.ts$/.test(entry.name) &&
+        !/\.(spec|test)\.ts$/.test(entry.name)
+      ) {
+        const text = stripComments(readFileSync(join(root, path), "utf8"));
+        for (const m of text.matchAll(pattern)) found.push([path, m[2]]);
+      }
+    }
+  };
+  walk(dir);
+  return found;
+}
+
+const readers = {
+  enum: readEnum,
+  list: readList,
+  keys: readKeys,
+  codes: readValues,
+};
 
 const show = (value) =>
   typeof value === "string" ? `"${value}"` : String(value);
 
-function read(root, ref, kind) {
+function read(root, ref, kind, side) {
+  if (kind === "codes" && side === "api") {
+    let value;
+    try {
+      value = readStatics(root, ref.file, ref.symbol);
+    } catch {
+      return { error: `cannot read ${ref.file}` };
+    }
+    return value.length === 0
+      ? { error: `no static ${ref.symbol} in ${ref.file}` }
+      : { value };
+  }
   let source;
   try {
     source = readFileSync(join(root, ref.file), "utf8");
@@ -142,8 +195,8 @@ export function checkPairs(root, pairs) {
   const problems = [];
   for (const { kind, api, frontend } of pairs) {
     const label = `${kind} ${api.symbol}`;
-    const a = read(root, api, kind);
-    const f = read(root, frontend, kind);
+    const a = read(root, api, kind, "api");
+    const f = read(root, frontend, kind, "frontend");
     for (const r of [a, f]) if (r.error) problems.push(`${label}: ${r.error}`);
     if (a.error || f.error) continue;
 
@@ -163,6 +216,15 @@ export function checkPairs(root, pairs) {
         } else if (f.value.get(name) !== value) {
           problems.push(
             `${label}: ${api.file} has ${name} = ${show(value)}, ${fe} has ${name} = ${show(f.value.get(name))}`,
+          );
+        }
+      }
+    } else if (kind === "codes") {
+      // Every code an API class declares must be a value of the frontend object.
+      for (const [file, code] of a.value) {
+        if (!f.value.includes(code)) {
+          problems.push(
+            `${label}: ${file} has "${code}", ${frontend.file}#${frontend.symbol} lacks it`,
           );
         }
       }

@@ -48,8 +48,21 @@ export const APIErrors = {
   EntityInUse: "EntityInUse",
   InvitationExpired: "InvitationExpired",
   InternalError: "InternalError",
+  PluginFailed: "PluginResultFailed",
 } as const;
 `;
+
+const API_CODES = `
+export class NotAuthorized extends APIError {
+  static errorCode = "NotAuthorized";
+  static errorMessage = errorMessages[NotAuthorized.errorCode]!;
+}
+export class PluginFailed extends APIError {
+  static errorCode = 'PluginResultFailed';
+}
+`;
+// A spec's own error class is not a code the API sends.
+const API_CODES_SPEC = `class FakeError extends APIError {\n  static errorCode = "FakeError";\n}\n`;
 
 const PAIRS = `
 # kind  api file#symbol  frontend file#symbol
@@ -58,6 +71,7 @@ enum  api/types.ts#ActionSeverity  frontend/AuditLog.ts#ActionSeverity
 list  api/logs.ts#ALLOWED_FIELDS  frontend/logger.ts#ALLOWED_FIELDS
 file  api/cases.json  backend/vuln-finder/cases.json
 keys  api/errors.ts#errorMessages  frontend/ApiErrors.ts#APIErrors
+codes  api#errorCode  frontend/ApiErrors.ts#APIErrors
 `;
 
 const CASES = `[{ "name": "a case", "hidden": null }]\n`;
@@ -74,6 +88,8 @@ function checkout(files = {}) {
     "backend/vuln-finder/cases.json": CASES,
     "api/errors.ts": API_KEYS,
     "frontend/ApiErrors.ts": FRONTEND_KEYS,
+    "api/plugins/plugins.errors.ts": API_CODES,
+    "api/plugins/plugins.errors.spec.ts": API_CODES_SPEC,
     ...files,
   };
   for (const [path, text] of Object.entries(all)) {
@@ -150,6 +166,33 @@ test("an extra key in the frontend object is allowed", () => {
   assert.deepEqual(check({ "api/errors.ts": api }), []);
 });
 
+test("a static errorCode the frontend object lacks as a value is named", () => {
+  const frontend = FRONTEND_KEYS.replace(
+    'PluginFailed: "PluginResultFailed"',
+    'PluginFailed: "PluginFailed"',
+  );
+  assert.deepEqual(check({ "frontend/ApiErrors.ts": frontend }), [
+    'codes errorCode: api/plugins/plugins.errors.ts has "PluginResultFailed", frontend/ApiErrors.ts#APIErrors lacks it',
+  ]);
+});
+
+test("a static errorCode in a nested API file is collected", () => {
+  const nested = `export class AccountNotActivated extends APIError {\n  static errorCode = "AccountNotActivated";\n}\n`;
+  assert.deepEqual(check({ "api/auth/deep/auth.errors.ts": nested }), [
+    'codes errorCode: api/auth/deep/auth.errors.ts has "AccountNotActivated", frontend/ApiErrors.ts#APIErrors lacks it',
+  ]);
+});
+
+test("a codes pair with no static errorCode under the API path fails", () => {
+  const root = checkout();
+  const pairs = parsePairs(
+    "codes backend#errorCode frontend/ApiErrors.ts#APIErrors",
+  );
+  assert.deepEqual(checkPairs(root, pairs), [
+    "codes errorCode: no static errorCode in backend",
+  ]);
+});
+
 test("a symbol that cannot be found fails with a clear message", () => {
   const renamed = FRONTEND_ENUM.replace(
     "enum ActionType",
@@ -174,7 +217,7 @@ test("a malformed pair line is refused", () => {
   assert.throws(() => parsePairs("enum api/types.ts#ActionType"), /line 1/);
   assert.throws(
     () => parsePairs("set api/a.ts#A frontend/b.ts#B"),
-    /kind must be enum, list, keys or file/,
+    /kind must be enum, list, keys, codes or file/,
   );
 });
 
