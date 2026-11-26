@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
-# Tests release-all.sh: version comparison, next-tag choice, releaser choice and version file,
-# and that a releasing caller with CI_RELEASE off stops the whole run before any PR.
+# Tests release-all.sh: version comparison, next-tag choice, releaser choice, the Go build that
+# writes no binary, version file, and that a releasing caller with CI_RELEASE off stops the whole
+# run before any PR.
 # Run from the repo root: bats scripts/tests
 
 setup() {
@@ -266,6 +267,51 @@ RULES
 	[ -z "$(git -C "$ROOT_DIR" ls-remote --tags origin refs/tags/v0.1.1-alpha)" ]
 	run grep -q 'release create' "$GH_STUB_LOG"
 	[ "$status" -eq 1 ]
+}
+
+# --- go build ---------------------------------------------------------------------------
+
+# A stand-in go on PATH: logs each call; "go build" without -o writes a binary named after the
+# directory, as for a main package; FAKE_GO_FAIL=build makes the build fail.
+fake_go() {
+	mkdir -p "$BATS_TEST_TMPDIR/bin"
+	cat >"$BATS_TEST_TMPDIR/bin/go" <<'GO'
+#!/usr/bin/env bash
+echo "go $*" >>"$FAKE_GO_LOG"
+if [[ "$1" == build ]]; then
+	[[ "${FAKE_GO_FAIL:-}" == build ]] && exit 1
+	[[ "$2" == -o ]] || : >"$(basename "$PWD")"
+fi
+exit 0
+GO
+	chmod +x "$BATS_TEST_TMPDIR/bin/go"
+	export FAKE_GO_LOG="$BATS_TEST_TMPDIR/go.log"
+	PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+# The Go repo with its go.mod committed, as in the fake tree.
+go_repo() {
+	init_repo backend/utilities/types
+	git -C "$ROOT_DIR/backend/utilities/types" add go.mod
+	git -C "$ROOT_DIR/backend/utilities/types" commit -q -m "Add go.mod"
+}
+
+@test "tidy_build compiles every package and leaves no binary in the repo" {
+	fake_go
+	go_repo
+	run rel tidy_build backend/utilities/types
+	[ "$status" -eq 0 ]
+	grep -qx 'go mod tidy' "$FAKE_GO_LOG"
+	grep -qx 'go build -o /dev/null ./...' "$FAKE_GO_LOG"
+	[ -z "$(git -C "$ROOT_DIR/backend/utilities/types" status --porcelain)" ]
+}
+
+@test "tidy_build stops the release when the build fails" {
+	fake_go
+	go_repo
+	FAKE_GO_FAIL=build run rel tidy_build backend/utilities/types
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"backend/utilities/types: tidy/build failed"* ]]
 }
 
 # --- version file -------------------------------------------------------------------------
