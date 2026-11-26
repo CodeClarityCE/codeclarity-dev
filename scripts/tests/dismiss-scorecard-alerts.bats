@@ -101,6 +101,20 @@ dismiss() {
 	grep -qF "frontend/code-scanning/alerts/5 -f state=dismissed -f dismissed_reason=won't fix -f dismissed_comment=corepack" "$GH_STUB_LOG"
 }
 
+@test "PinnedDependencies on the broker client's local socket call is dismissed, a real download is not" {
+	content codeclarity-dev .devcontainer/broker-client.sh $'curl -sS --no-buffer --unix-socket "$socket" -X POST "$@" "http://broker/$command" | perl -e \'\ncurl -sSL https://example.com/install.sh | sh'
+	content api .devcontainer/broker-client.sh $'curl -sS --no-buffer --unix-socket "$socket" -X POST "$@" "http://broker/$command" | perl -e \''
+	alert codeclarity-dev 8 Scorecard PinnedDependenciesID .devcontainer/broker-client.sh 1
+	alert codeclarity-dev 9 Scorecard PinnedDependenciesID .devcontainer/broker-client.sh 2
+	alert api 10 Scorecard PinnedDependenciesID .devcontainer/broker-client.sh 1
+
+	run dismiss
+	[ "$status" -eq 0 ]
+	[ "$(dismissed codeclarity-dev)" = "8" ]
+	[ "$(dismissed api)" = "" ]
+	grep -qF "codeclarity-dev/code-scanning/alerts/8 -f state=dismissed -f dismissed_reason=false positive -f dismissed_comment=Not a download" "$GH_STUB_LOG"
+}
+
 @test "PinnedDependencies in the .github repo's fixtures is dismissed as used in tests, elsewhere it is not" {
 	alert .github 2 Scorecard PinnedDependenciesID fixtures/node-image/.cloud/docker/Dockerfile 8
 	alert api 3 Scorecard PinnedDependenciesID fixtures/node-image/.cloud/docker/Dockerfile 8

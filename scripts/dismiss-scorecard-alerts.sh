@@ -6,11 +6,12 @@ set -euo pipefail
 
 ORG="${SCORECARD_ALERTS_ORG:-CodeClarityCE}"
 
-# The reason map: the single record of these decisions (#260, #290, #369). Each key names a
+# The reason map: the single record of these decisions (#260, #290, #369, #391). Each key names a
 # match in classify below; the value is "<dismissed reason>|<comment>" (comment under 280 chars).
 declare -A DECISION=(
 	[own-workflow]="won't fix|ADR 0009: our own reusable workflows in CodeClarityCE/.github move on the v1 tag by design; third-party actions stay pinned by SHA."
 	[corepack]="won't fix|corepack is installed at an exact version inside a digest-pinned image; a lockfile just for corepack is upkeep for no gain."
+	[broker-socket]="false positive|Not a download: curl posts to the devcontainer broker's local unix socket, and perl only filters the reply, so nothing fetched is run."
 	[fixture]="used in tests|Test fixture in the .github repo's fixtures/, which exercises the central workflows and is never built or released."
 	[x-crypto]="won't fix|GO-2026-5932 is in indirect golang.org/x/crypto and no code imports x/crypto/openpgp. Bump when x/crypto tags a fix."
 	[branch-protection]="won't fix|Single active maintainer: stricter branch protection adds nothing with no second reviewer. Revisit when a second maintainer joins."
@@ -77,6 +78,8 @@ classify() {
 			echo own-workflow
 		elif [[ "$(basename "$path")" == Dockerfile* && "$text" =~ npm[[:space:]]+(install|i)[[:space:]]+(-g|--global)[[:space:]]+corepack@[0-9]+\.[0-9]+\.[0-9]+([[:space:]]|$) ]]; then
 			echo corepack
+		elif [[ "$repo" == codeclarity-dev && "$path" == .devcontainer/broker-client.sh && "$text" =~ ^curl[[:space:]].*--unix-socket[[:space:]] ]]; then
+			echo broker-socket
 		fi
 		;;
 	VulnerabilitiesID) [[ "$ids" == GO-2026-5932 ]] && echo x-crypto ;;
