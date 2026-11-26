@@ -2,6 +2,7 @@
 # One pair per line: kind, the API's file#symbol, the frontend copy's file#symbol.
 # enum: every API member must be in the frontend copy with the same value; extra frontend members are fine.
 # list: both lists must hold exactly the same entries.
+# keys: every top-level key of the API object literal must be a key of the frontend's; extra frontend keys are fine.
 
 # Organization audit log
 enum api/src/base_modules/organizations/log/orgAuditLog.types.ts#ActionType frontend/src/codeclarity_components/organizations/audit_logs/AuditLog.ts#ActionType
@@ -50,3 +51,6 @@ file api/src/codeclarity_modules/results/vulnerabilities/utils/instance-status.c
 
 # Remediations
 enum api/src/codeclarity_modules/remediations/remediation.types.ts#RemediationKind frontend/src/codeclarity_components/vulnerabilities/organization_vulnerability.entity.ts#RemediationKind
+
+# API error codes: the errorMessages keys are the codes the API sends as error_code.
+keys api/src/types/error.types.ts#errorMessages frontend/src/utils/api/ApiErrors.ts#APIErrors

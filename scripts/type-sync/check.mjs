@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Fails when a frontend copy of an API enum or allow-list misses values the API
-// defines, or a shared file's copy differs. Reads source text only: nothing is built.
+// Fails when a frontend copy of an API enum, allow-list or object's keys misses values
+// the API defines, or a shared file's copy differs. Reads source text only: nothing is built.
 // Usage: node scripts/type-sync/check.mjs [checkout root, default: this repo]
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const KINDS = new Set(["enum", "list", "file"]);
+const KINDS = new Set(["enum", "list", "keys", "file"]);
 
 /** Parses pairs.txt: one "kind api-file#symbol frontend-file#symbol" per line; a file pair has no symbols. */
 export function parsePairs(text) {
@@ -21,7 +21,7 @@ export function parsePairs(text) {
     }
     const [kind, api, frontend] = fields;
     if (!KINDS.has(kind))
-      throw new Error(`${where}: kind must be enum, list or file`);
+      throw new Error(`${where}: kind must be enum, list, keys or file`);
     const parse = kind === "file" ? (file) => ({ file, symbol: file }) : target;
     pairs.push({
       kind,
@@ -98,6 +98,28 @@ export function readList(source, symbol) {
   return [...inner.matchAll(/(["'])((?:\\.|(?!\1).)*)\1/g)].map((m) => m[2]);
 }
 
+/** The top-level keys of an object literal assigned to `symbol`, or null. */
+export function readKeys(source, symbol) {
+  const text = stripComments(source);
+  const found = new RegExp(`\\b${symbol}\\b[^=]*=\\s*\\{`).exec(text);
+  if (!found) return null;
+  const inner = body(text, found.index + found[0].length - 1);
+  if (inner === null) return null;
+  // Blank out string values so their commas and colons are not mistaken for entries.
+  const flat = inner.replace(
+    /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)(\s*:)?/g,
+    (literal, _, colon) => (colon ? literal : '""'),
+  );
+  const keys = [];
+  for (const part of flat.split(",")) {
+    const [, key] = /^\s*["']?([\w$]+)["']?\s*:/.exec(part) ?? [];
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+const readers = { enum: readEnum, list: readList, keys: readKeys };
+
 const show = (value) =>
   typeof value === "string" ? `"${value}"` : String(value);
 
@@ -109,10 +131,7 @@ function read(root, ref, kind) {
     return { error: `cannot read ${ref.file}` };
   }
   if (kind === "file") return { value: source };
-  const value =
-    kind === "enum"
-      ? readEnum(source, ref.symbol)
-      : readList(source, ref.symbol);
+  const value = readers[kind](source, ref.symbol);
   return value === null
     ? { error: `no ${kind} ${ref.symbol} in ${ref.file}` }
     : { value };
@@ -144,6 +163,15 @@ export function checkPairs(root, pairs) {
         } else if (f.value.get(name) !== value) {
           problems.push(
             `${label}: ${api.file} has ${name} = ${show(value)}, ${fe} has ${name} = ${show(f.value.get(name))}`,
+          );
+        }
+      }
+    } else if (kind === "keys") {
+      // Every API key must be a key of the frontend object; extras are fine.
+      for (const key of a.value) {
+        if (!f.value.includes(key)) {
+          problems.push(
+            `${label}: ${api.file} has ${key}, ${frontend.file}#${frontend.symbol} lacks it`,
           );
         }
       }
