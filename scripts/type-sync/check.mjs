@@ -133,7 +133,7 @@ export function readValues(source, symbol) {
 /** Every `static symbol = "..."` in the .ts files under a directory, as [file, value] pairs. */
 function readStatics(root, dir, symbol) {
   const pattern = new RegExp(
-    `\\bstatic\\s+${symbol}\\s*=\\s*(["'])((?:\\\\.|(?!\\1).)*)\\1`,
+    `\\bstatic\\s+(?:(?:readonly|override)\\s+)*${symbol}\\s*(?::\\s*string\\s*)?=\\s*(["'])((?:\\\\.|(?!\\1).)*)\\1`,
     "g",
   );
   const found = [];
@@ -144,7 +144,7 @@ function readStatics(root, dir, symbol) {
       // Specs declare fake errors the API never sends.
       else if (
         /\.ts$/.test(entry.name) &&
-        !/\.(spec|test)\.ts$/.test(entry.name)
+        !/[.-](spec|test)\.ts$|\.d\.ts$/.test(entry.name)
       ) {
         const text = stripComments(readFileSync(join(root, path), "utf8"));
         for (const m of text.matchAll(pattern)) found.push([path, m[2]]);

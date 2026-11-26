@@ -58,7 +58,7 @@ export class NotAuthorized extends APIError {
   static errorMessage = errorMessages[NotAuthorized.errorCode]!;
 }
 export class PluginFailed extends APIError {
-  static errorCode = 'PluginResultFailed';
+  static readonly errorCode: string = 'PluginResultFailed';
 }
 `;
 // A spec's own error class is not a code the API sends.
