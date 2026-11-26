@@ -29,8 +29,8 @@ workspace_packages() {
 run_pnpm() {
 	local mode="$1" mount=/repo flags=""
 	[[ "$mode" == check ]] && mount=/repo:ro flags=--frozen-lockfile
-	# npm ci installs the toolchain's corepack from scripts/corepack, checking its sha512; corepack then
-	# checks pnpm against packageManager's sha512.
+	# npm ci installs the toolchain's corepack (keep in sync with the Dockerfiles) from scripts/corepack,
+	# checking its sha512; corepack then checks pnpm against packageManager's sha512.
 	# shellcheck disable=SC2016 # expanded by the container's sh
 	docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:$mount" -w /repo \
 		-e HOME=/tmp -e COREPACK_HOME=/tmp/corepack-home -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 -e CI=true \
