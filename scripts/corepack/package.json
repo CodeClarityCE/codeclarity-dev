@@ -1,7 +1,0 @@
-{
-  "name": "corepack-pin",
-  "private": true,
-  "dependencies": {
-    "corepack": "0.36.0"
-  }
-}

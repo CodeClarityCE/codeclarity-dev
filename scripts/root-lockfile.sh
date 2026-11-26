@@ -8,6 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Keep in sync with NODE_IMAGE in .github/workflows/ci.yml and the api and frontend toolchain target.
 NODE_IMAGE="${NODE_IMAGE:-node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80}"
+# The toolchain target's corepack (keep in sync with the Dockerfiles), for npm ci, which checks its sha512.
+COREPACK_PACKAGE='{"private":true,"dependencies":{"corepack":"0.36.0"}}'
+COREPACK_LOCK='{"lockfileVersion":3,"requires":true,"packages":{"":{"dependencies":{"corepack":"0.36.0"}},"node_modules/corepack":{"version":"0.36.0","resolved":"https://registry.npmjs.org/corepack/-/corepack-0.36.0.tgz","integrity":"sha512-SiiJsBhZqdBiPHTEl6OT3sASrRrKIcYTQMsVGXx6EE/gM8WFMwYjeIX8Tt8RiU4Iv2J6LbT8KpGfCOsBpRWB/w==","bin":{"corepack":"dist/corepack.js","pnpm":"dist/pnpm.js","pnpx":"dist/pnpx.js","yarn":"dist/yarn.js","yarnpkg":"dist/yarnpkg.js"}}}}'
 
 usage() {
 	sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'
@@ -29,15 +32,16 @@ workspace_packages() {
 run_pnpm() {
 	local mode="$1" mount=/repo flags=""
 	[[ "$mode" == check ]] && mount=/repo:ro flags=--frozen-lockfile
-	# npm ci installs the toolchain's corepack (keep in sync with the Dockerfiles) from scripts/corepack,
-	# checking its sha512; corepack then checks pnpm against packageManager's sha512.
+	# corepack checks pnpm against packageManager's sha512.
 	# shellcheck disable=SC2016 # expanded by the container's sh
 	docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:$mount" -w /repo \
 		-e HOME=/tmp -e COREPACK_HOME=/tmp/corepack-home -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 -e CI=true \
 		-e MODE="$mode" -e FLAGS="$flags" -e PACKAGES="$(workspace_packages)" \
+		-e COREPACK_PACKAGE="$COREPACK_PACKAGE" -e COREPACK_LOCK="$COREPACK_LOCK" \
 		"$NODE_IMAGE" sh -euc '
 			mkdir /tmp/corepack
-			cp scripts/corepack/package.json scripts/corepack/package-lock.json /tmp/corepack/
+			printf "%s\n" "$COREPACK_PACKAGE" >/tmp/corepack/package.json
+			printf "%s\n" "$COREPACK_LOCK" >/tmp/corepack/package-lock.json
 			npm ci --prefix /tmp/corepack --ignore-scripts --no-audit --no-fund --silent >/dev/null
 			dir=/repo
 			if [ "$MODE" = check ]; then
