@@ -34,12 +34,30 @@ export enum ActionSeverity {
 `;
 const API_LIST = `const ALLOWED_FIELDS = [\n  "route",\n  "stack",\n] as const;\n`;
 
+const API_KEYS = `
+export const errorMessages: Record<string, string> = {
+  NotAuthorized: "You are not authorized, sorry: really.",
+  "EntityInUse": 'Still used, by: others.',
+  // A comment.
+  InvitationExpired: "Invitation expired.",
+};
+`;
+const FRONTEND_KEYS = `
+export const APIErrors = {
+  NotAuthorized: "NotAuthorized",
+  EntityInUse: "EntityInUse",
+  InvitationExpired: "InvitationExpired",
+  InternalError: "InternalError",
+} as const;
+`;
+
 const PAIRS = `
 # kind  api file#symbol  frontend file#symbol
 enum  api/types.ts#ActionType  frontend/AuditLog.ts#ActionType
 enum  api/types.ts#ActionSeverity  frontend/AuditLog.ts#ActionSeverity
 list  api/logs.ts#ALLOWED_FIELDS  frontend/logger.ts#ALLOWED_FIELDS
 file  api/cases.json  backend/vuln-finder/cases.json
+keys  api/errors.ts#errorMessages  frontend/ApiErrors.ts#APIErrors
 `;
 
 const CASES = `[{ "name": "a case", "hidden": null }]\n`;
@@ -54,6 +72,8 @@ function checkout(files = {}) {
     "frontend/logger.ts": API_LIST,
     "api/cases.json": CASES,
     "backend/vuln-finder/cases.json": CASES,
+    "api/errors.ts": API_KEYS,
+    "frontend/ApiErrors.ts": FRONTEND_KEYS,
     ...files,
   };
   for (const [path, text] of Object.entries(all)) {
@@ -112,6 +132,24 @@ test("a shared file whose copy differs is named", () => {
   ]);
 });
 
+test("a key added only to the API object is named", () => {
+  const api = API_KEYS.replace(
+    'InvitationExpired: "Invitation expired.",',
+    'InvitationExpired: "Invitation expired.",\n  NotAMember: "Not a member.",',
+  );
+  assert.deepEqual(check({ "api/errors.ts": api }), [
+    "keys errorMessages: api/errors.ts has NotAMember, frontend/ApiErrors.ts#APIErrors lacks it",
+  ]);
+});
+
+test("an extra key in the frontend object is allowed", () => {
+  const api = API_KEYS.replace(
+    '  InvitationExpired: "Invitation expired.",\n',
+    "",
+  );
+  assert.deepEqual(check({ "api/errors.ts": api }), []);
+});
+
 test("a symbol that cannot be found fails with a clear message", () => {
   const renamed = FRONTEND_ENUM.replace(
     "enum ActionType",
@@ -136,7 +174,7 @@ test("a malformed pair line is refused", () => {
   assert.throws(() => parsePairs("enum api/types.ts#ActionType"), /line 1/);
   assert.throws(
     () => parsePairs("set api/a.ts#A frontend/b.ts#B"),
-    /kind must be enum, list or file/,
+    /kind must be enum, list, keys or file/,
   );
 });
 
