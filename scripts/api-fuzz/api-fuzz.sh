@@ -9,6 +9,8 @@ API_URL=${API_URL:-https://localhost/api}
 MAX_TIME=${MAX_TIME:-1200}
 SCHEMATHESIS_IMAGE=${SCHEMATHESIS_IMAGE:-$(cat "$here/schemathesis-image.txt")}
 CHECKS=not_a_server_error,response_schema_conformance
+# The dev account's access token lasts 15 minutes; Schemathesis may first wait 60s for the schema.
+DEV_ACCOUNT_MAX_TIME=780
 
 usage() {
 	cat >&2 <<'EOF'
@@ -111,6 +113,9 @@ cmd_run() {
 		exit 2
 	fi
 	header=$("auth_${auth//-/_}") || exit 1
+	if [[ "$auth" == dev-account ]] && ((MAX_TIME > DEV_ACCOUNT_MAX_TIME)); then
+		MAX_TIME=$DEV_ACCOUNT_MAX_TIME
+	fi
 
 	mkdir -p "$out"
 	out=$(cd "$out" && pwd)

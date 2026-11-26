@@ -60,6 +60,22 @@ docker_arg() {
 	cmp -s "$LOG_FIXTURE" "$OUT/schemathesis.log"
 }
 
+@test "run as the dev account stops before its 15-minute access token expires" {
+	run bash "$FUZZ" run --auth dev-account --out "$OUT"
+	[ "$status" -eq 0 ]
+	[ "$(docker_arg --max-time)" = 780 ]
+}
+
+@test "run as the dev account keeps a shorter MAX_TIME" {
+	MAX_TIME=300 run bash "$FUZZ" run --auth dev-account --out "$OUT"
+	[ "$(docker_arg --max-time)" = 300 ]
+}
+
+@test "run with an Organization token keeps the full MAX_TIME" {
+	API_TOKEN=org-token run bash "$FUZZ" run --auth token --out "$OUT"
+	[ "$(docker_arg --max-time)" = 1200 ]
+}
+
 @test "the Schemathesis image is pinned by version and digest" {
 	run cat "$BATS_TEST_DIRNAME/../api-fuzz/schemathesis-image.txt"
 	[[ "$output" =~ ^schemathesis/schemathesis:[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$ ]]
