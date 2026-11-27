@@ -7,7 +7,7 @@ Its inputs are pinned: the fixtures, the knowledge dump, and the registry data t
 Two guards make a live fetch fail the gate loudly:
 
 - In CI the package follower is on an internal Docker network only (`docker-compose.yaml` here, merged over the trimmed stack with `STACK_OVERRIDE`), with just pgbouncer and RabbitMQ beside it, so it cannot reach any registry. A step checks that before the analyses (`stack.sh offline service-follower`).
-- After the analyses, `run` checks every package of the run's SBOM in the knowledge database: one with no recorded row, or whose row the follower rewrote after the load, fails the gate and is named in the log. This also works on the dev stack, where the follower has network access.
+- After the analyses, `run` checks every package of the run's SBOM in the knowledge database: one with no recorded row, or whose row the follower rewrote after the load, fails the gate and is named in the log. This also catches a live fetch on the dev stack, where the follower has network access, for every package in the SBOM.
 
 The inputs cover every lockfile the analyzers read: npm (`npm-gcve-name-collision`), yarn v1 (`yarn-lodash-minimist`), pnpm (`pnpm-json5-semver`) and Composer (`composer-smarty-php-jwt`).
 

@@ -403,6 +403,17 @@ logged_at() {
 	[ "$(grep -c '/analyses$' "$CURL_STUB_LOG")" = 0 ]
 }
 
+@test "run refuses a recorded registry file that is not valid JSON" {
+	fake_stack
+	fake_db
+	sbom_a
+	echo '{"name": ' >"$RESULTS_GATE_DIR/registry/javascript/b.json"
+	run sh "$GATE" run --out "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"is not valid JSON"* ]]
+	[ "$(grep -c '/analyses$' "$CURL_STUB_LOG")" = 0 ]
+}
+
 @test "record with a recorded run writes the stack's rows of its packages, one file each" {
 	fake_stack
 	fake_db

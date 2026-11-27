@@ -28,7 +28,7 @@ jobs:
       # Restoring the full knowledge dump takes longer than the fixture's.
       WAIT_SECONDS: "2400"
       API_URL: https://localhost/api
-      # The follower gets no outbound network, and the gate loads its recorded registry rows (#402).
+      # The follower gets no outbound network, and the gate loads its recorded registry rows.
       STACK_OVERRIDE: ${{ github.workspace }}/scripts/results-gate/docker-compose.yaml
       RESULTS_GATE_PSQL: sh .cloud/scripts/tests/real-stack/stack.sh psql knowledge
     steps:

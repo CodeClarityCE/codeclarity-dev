@@ -173,6 +173,10 @@ record_run() {
 # shellcheck disable=SC2016 # a literal SQL dollar quote
 tag='$gate_registry$'
 
+# A jq function naming the follower's language of SBOM ecosystem $eco.
+# shellcheck disable=SC2016 # jq code
+language='def language($eco): {npm: "javascript", packagist: "php"}[$eco] // error("no follower language for ecosystem \($eco)");'
+
 # Runs the SQL on stdin in the stack's knowledge database, printing one line per row.
 knowledge_sql() {
 	# shellcheck disable=SC2086 # a command and its arguments
@@ -194,12 +198,16 @@ registry_files() {
 # Prints the packages the analyses of recorded run $1 sent the follower, as a JSON array of
 # {language, name}: each SBOM entry, with its ecosystem named as the follower's language.
 run_packages() {
+	pages=''
 	for name in $(inputs); do
+		listed sbom "$name" "$1"
 		for ws in $(workspaces "$name" "$1"); do
-			cat "$1/$name.sbom/$(pages_prefix "$ws")"[0-9]*.json
+			pages="$pages $1/$name.sbom/$(pages_prefix "$ws")"
 		done
-	done | jq -s -c '[.[].data[] | {name, language: ({npm: "javascript", packagist: "php"}[.ecosystem]
-		// error("no follower language for ecosystem \(.ecosystem)"))}] | unique'
+	done
+	# shellcheck disable=SC2046,SC2086 # one word per page prefix, then the glob
+	set -- $(for p in $pages; do printf '%s\n' "$p"[0-9]*.json; done)
+	jq -s -c "$language"'[.[].data[] | {name, language: language(.ecosystem)}] | unique' "$@"
 }
 
 # Loads the recorded registry rows into the stack's knowledge database in place of the stack's rows
@@ -207,13 +215,15 @@ run_packages() {
 load_registry() {
 	files=$(registry_files)
 	[ -n "$files" ] || die "no recorded registry rows in $gate/registry; record them with gate.sh record"
-	docs=$(echo "$files" | while IFS= read -r f; do jq -c . "$f"; done | jq -s -c .)
+	# shellcheck disable=SC2086 # one word per file; package names have no spaces
+	docs=$(jq -s -c . $files) || die "a file in $gate/registry is not valid JSON"
+	docs=$(quoted "$docs")
 	loaded=$(
 		knowledge_sql <<EOF
 -- load the recorded registry rows (scripts/results-gate/registry), dated now
 BEGIN;
 CREATE TEMP TABLE gate_registry ON COMMIT DROP AS
-	SELECT value AS doc FROM jsonb_array_elements($(quoted "$docs")::jsonb);
+	SELECT value AS doc FROM jsonb_array_elements($docs::jsonb);
 DELETE FROM package p USING gate_registry r WHERE p.name = r.doc->>'name' AND p.language = r.doc->>'language';
 WITH loaded AS (
 	INSERT INTO package (name, language, description, homepage, latest_version, "time", keywords, source, license, licenses, extra)
@@ -233,17 +243,19 @@ EOF
 	case "$loaded" in
 	'' | *[!0-9.]*) die "loading the recorded registry rows printed '$loaded', not the time they were loaded" ;;
 	esac
-	echo "results gate: loaded the recorded registry rows of $(printf '%s\n' "$docs" | jq length) package(s)"
+	echo "results gate: loaded the recorded registry rows of $(echo "$files" | wc -l | tr -d ' ') package(s)"
 }
 
 # Fails, naming each one, when a package the analyses of run $1 sent the follower has no recorded
-# row, or has a row the follower rewrote after load_registry, so it came from a live registry.
-untouched() {
+# row, or has a row the follower rewrote after load_registry ($loaded), so it came from a live registry.
+fail_on_live_fetches() {
+	packages=$(run_packages "$1") || die "could not list the packages of the run in $1"
+	packages=$(quoted "$packages")
 	fetched=$(
 		knowledge_sql <<EOF
 -- fetched: the run's packages whose rows are not the recorded ones loaded at $loaded
 SELECT k.language || ' ' || k.name || CASE WHEN p.id IS NULL THEN ' (not recorded)' ELSE ' (fetched from the registry)' END
-FROM jsonb_to_recordset($(quoted "$(run_packages "$1")")::jsonb) AS k(language text, name text)
+FROM jsonb_to_recordset($packages::jsonb) AS k(language text, name text)
 LEFT JOIN package p ON p.name = k.name AND p.language = k.language
 WHERE p.id IS NULL OR extract(epoch FROM p."time") <> $loaded
 ORDER BY 1;
@@ -256,21 +268,25 @@ EOF
 
 # Prints the JSON array of {language, name} of the recorded packages and the expected SBOM entries.
 known_packages() {
+	files=$(registry_files)
 	{
-		registry_files | while IFS= read -r f; do jq -c '{name, language}' "$f"; done
+		# shellcheck disable=SC2086 # one word per file; package names have no spaces
+		[ -z "$files" ] || jq -c '{name, language}' $files
 		for name in $(inputs); do
 			[ -f "$gate/expected/$name/sbom.tsv" ] || continue
-			tail -n +2 "$gate/expected/$name/sbom.tsv" | cut -f2,3 | jq -R -c 'split("\t") |
-				{name: .[1], language: ({npm: "javascript", packagist: "php"}[.[0]] // .[0])}'
+			tail -n +2 "$gate/expected/$name/sbom.tsv" | cut -f2,3 |
+				jq -R -c "$language"'split("\t") | {name: .[1], language: language(.[0])}'
 		done
 	} | jq -s -c 'unique'
 }
 
 # Deletes the stack's rows of the recorded and expected packages, so the follower fetches them anew.
 clear_registry() {
+	packages=$(known_packages) || die "could not list the gate's packages"
+	packages=$(quoted "$packages")
 	knowledge_sql >/dev/null <<EOF || die "could not clear the packages' rows in the knowledge database"
 -- clear the rows of the gate's packages, so the follower fetches them from the registries
-DELETE FROM package p USING jsonb_to_recordset($(quoted "$(known_packages)")::jsonb) AS k(language text, name text)
+DELETE FROM package p USING jsonb_to_recordset($packages::jsonb) AS k(language text, name text)
 WHERE p.name = k.name AND p.language = k.language;
 EOF
 }
@@ -278,8 +294,9 @@ EOF
 # Rewrites registry/ from the stack's rows of the packages the analyses of recorded run $1 sent the follower.
 export_registry() {
 	recorded "$1"
-	packages=$(run_packages "$1")
+	packages=$(run_packages "$1") || die "could not list the packages of the run in $1"
 	[ "$packages" != '[]' ] || die "the run in $1 lists no SBOM entries"
+	want=$(quoted "$packages")
 	rows=$(
 		knowledge_sql <<EOF
 -- export the stack's rows of the run's packages, with their versions
@@ -289,13 +306,13 @@ SELECT jsonb_build_object('name', p.name, 'language', p.language, 'description',
 	'versions', COALESCE((SELECT jsonb_agg(jsonb_build_object('version', v.version, 'dependencies', v.dependencies,
 		'dev_dependencies', v.dev_dependencies, 'extra', v.extra) ORDER BY v.version COLLATE "C")
 		FROM version v WHERE v.package_id = p.id), '[]'::jsonb))::text
-FROM package p JOIN jsonb_to_recordset($(quoted "$packages")::jsonb) AS k(language text, name text)
+FROM package p JOIN jsonb_to_recordset($want::jsonb) AS k(language text, name text)
 	ON p.name = k.name AND p.language = k.language
 ORDER BY p.language, p.name;
 EOF
 	) || die "could not read the packages' rows from the knowledge database"
-	missing=$(printf '%s\n' "$rows" | jq -s -c --argjson want "$packages" '$want - [.[] | {name, language}] |
-		.[] | "\(.language) \(.name): no row in the knowledge database"' -r)
+	missing=$(printf '%s\n' "$rows" | jq -s -r --argjson want "$packages" '$want - [.[] | {name, language}] |
+		.[] | "\(.language) \(.name): no row in the knowledge database"')
 	[ -z "$missing" ] || die "the follower did not fetch every package of the run:
 $missing"
 	staging=$(mktemp -d)
@@ -304,18 +321,21 @@ $missing"
 		case "$file" in *..*) die "unexpected package name in $file" ;; esac
 		mkdir -p "$(dirname "$file")"
 		printf '%s\n' "$row" | jq -S . >"$file"
-	done
+	done || {
+		rm -rf "$staging"
+		exit 1
+	}
 	chmod 755 "$staging"
 	rm -rf "$gate/registry"
 	mv "$staging" "$gate/registry"
 	echo "results gate: recorded the registry rows of $(printf '%s\n' "$packages" | jq length) package(s) in registry/"
 }
 
-# Analyses the gate's inputs into $out on the recorded registry rows, and fails if any other came in.
-hermetic_run() {
+# Analyses the gate's inputs into $out on the recorded registry rows, and fails if the follower fetched any.
+recorded_registry_run() {
 	load_registry
 	record_run
-	untouched "$out"
+	fail_on_live_fetches "$out"
 }
 
 cmd_run() {
@@ -332,7 +352,7 @@ cmd_run() {
 		shift
 	done
 	[ -n "$out" ] || out=$(mktemp -d "${TMPDIR:-/tmp}/codeclarity-results-gate.XXXXXX")
-	hermetic_run
+	recorded_registry_run
 	cmd_check "$out"
 }
 
@@ -343,7 +363,7 @@ cmd_update() {
 		return
 	fi
 	out=$(mktemp -d "${TMPDIR:-/tmp}/codeclarity-results-gate.XXXXXX")
-	hermetic_run
+	recorded_registry_run
 	write_expected "$out"
 }
 
