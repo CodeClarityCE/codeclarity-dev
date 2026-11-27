@@ -19,7 +19,8 @@ onto a small server-side connection set, so replica count no longer drives `max_
   metadata licence and outdated results come from) and may update only an analysis's `status` and `config`.
   The init script creates the roles; the migrate job applies `cc_follower`'s table grants on every run,
   creates the role on an install that predates it (from `PG_FOLLOWER_PASSWORD`, sent as a SCRAM secret),
-  and fails rather than skip them. pgbouncer needs no change per role: prod looks each one up with
+  and fails rather than skip them. The password only applies when the role is created: changing
+  `cc_follower_password` later also needs an `ALTER ROLE cc_follower PASSWORD` by hand. pgbouncer needs no change per role: prod looks each one up with
   `auth_query`, dev through its `postgres` `auth_user`.
 - **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300 (two roles,
   `postgres` and `cc_follower`: 160). Prod caps
