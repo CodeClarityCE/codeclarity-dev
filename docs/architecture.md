@@ -33,7 +33,8 @@ reading the code for the first time; the agent docs in [`docs/agents/`](agents/)
   - `downloader` clones the project's repository at the requested ref, when the analysis needs the source.
   - `knowledge` keeps the knowledge database current from its **knowledge sources** (NVD, GCVE, OSV, KEV and others).
   - `packageFollower` fetches package metadata from registries such as npm and Packagist for the packages an SBOM
-    names.
+    names. The plugins that depend on an SBOM wait for this **package import**
+    ([ADR 0023](adr/0023-sbom-dependents-wait-for-the-package-import.md)).
   - `scheduler` starts scheduled analyses; `notifier` sends notifications.
 - **Plugins** (`backend/plugins/`, Go): each one does one stage of an analysis, such as building the SBOM of an npm
   or PHP project, finding vulnerabilities, finding licences, or running CodeQL. An **analyzer** is an ordered set of

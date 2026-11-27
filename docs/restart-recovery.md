@@ -21,3 +21,14 @@ them. Recovery is therefore DB-driven, not queue-durable:
 - A `started` step whose plugin queue (`dispatcher_<plugin>`) has had no consumer for
   `STALLED_PLUGIN_GRACE` (seconds, default 180) fails its analysis with a reason naming
   the plugin (`stalled_plugin.go`). Startup recovery skips this check.
+- **Package import wait**: plugins that depend on an SBOM (license-finder, vuln-finder)
+  start only once the package follower has recorded that SBOM's package import in the
+  analysis config (`package_imports_done`, per language; ADR 0023). An analysis waiting
+  on it, either `updating_db` or with a finished SBOM and no record, is recovered like a
+  lost dispatch: the startup pass, or the interval pass once the wait exceeds
+  `REAPER_STEP_TIMEOUT` (measured from `package_follower_started_on`, else the last step
+  activity), re-sends the import to `sbom_packageFollower` from the stored SBOM. An SBOM
+  with no packages, or one that is missing or unreadable, is recorded as imported at once.
+  If `sbom_packageFollower` has had no consumer for `STALLED_PLUGIN_GRACE`, the waiting
+  analysis fails with a reason naming the package follower. `RECOVERY_MAX_AGE` still
+  retires any wait that never ends.
