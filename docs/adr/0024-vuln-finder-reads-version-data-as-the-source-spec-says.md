@@ -11,5 +11,6 @@ When a record's version data is short or odd, the vulnerability finder reads it 
 
 - A GIT range is skipped: its events are commit hashes, which say nothing about package versions.
 - A closing event that cannot be read (like `fixed: "unknown"`) is not "never closed", so it stays no package data.
-- A GCVE default is not applied when an `unaffected` entry cannot be read or an entry has `unknown` status, since the matcher cannot tell which versions the default covers. Versions listed `unaffected` under the default are version excluded.
+- Versions listed `unaffected` under a GCVE default are version excluded, and versions listed `unknown` are no package data; the default covers the rest. The default is not applied when an `unaffected` or `unknown` entry cannot be read, since the matcher cannot tell which versions it covers.
+- An OSV range with a `limit` event is never read as every version, since the limit caps it.
 - The UI shows the affected versions of an all-versions match as "all versions" but has no badge for it on the finding itself; that is a follow-up.
