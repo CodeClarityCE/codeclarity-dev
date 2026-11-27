@@ -34,6 +34,10 @@ _Avoid_: Activity log, user logs, event log
 A secret an organization's admin issues so a pipeline can act in that organization without a user's password; it has a scope and an expiry, can be revoked, and outlives the member who issued it.
 _Avoid_: API key, personal access token (it belongs to no person), integration token (that is a credential CodeClarity holds for GitHub, GitLab or ClickUp)
 
+**Sign-in**:
+One password login of a user and the tokens it hands out: a 15-minute access token, and a refresh token that works once and is replaced on every refresh. All the refresh tokens of one sign-in form its family, which lasts 7 days from the login. Presenting a spent refresh token again ends the whole sign-in, so the web app lets only one tab refresh at a time (an exclusive Web Lock) and the other tabs take the tokens it saved. Signing out ends one sign-in, and the user's other tabs follow it. Changing the password ends all of the user's sign-ins and starts a fresh one for the caller; a password reset ends them all.
+_Avoid_: Session (except for the web app's local state), login (the act, not what it creates)
+
 **Error report**:
 A failure the web app sends to the server for operators to diagnose; it is not shown to users and is not part of the audit log.
 _Avoid_: Frontend log, client log

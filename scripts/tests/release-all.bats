@@ -81,6 +81,18 @@ released_go_repo() {
 	tag_main backend/utilities/types v0.1.0-alpha
 }
 
+@test "latest_tag survives a tag list longer than one pipe write, under pipefail" {
+	released_go_repo
+	# Enough tags that git is still writing when a reader of the first line exits.
+	local main i
+	main="$(git -C "$ROOT_DIR/backend/utilities/types" rev-parse origin/main)"
+	for i in $(seq 1 600); do echo "create refs/tags/v0.0.$i-alpha $main"; done |
+		git -C "$ROOT_DIR/backend/utilities/types" update-ref --stdin
+	run rel latest_tag backend/utilities/types
+	[ "$status" -eq 0 ]
+	[ "$output" = v0.1.0-alpha ]
+}
+
 @test "next_tag bumps the latest tag when main holds no newer version" {
 	released_go_repo
 	commit_file backend/utilities/types main.go 'package types'
@@ -501,5 +513,6 @@ RULES
 	# The switch happens once: the next run without the flag keeps beta and has nothing to do.
 	rm scripts/.release-state
 	run bash scripts/release-all.sh --dry-run
+	[ "$status" -eq 0 ]
 	[[ "$output" == *"$(printf '%-32s' api) v0.1.1-beta     -> v0.1.1-beta     unchanged"* ]]
 }

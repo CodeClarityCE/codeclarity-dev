@@ -218,8 +218,9 @@ if [[ -f "$STATE_FILE" ]]; then
 	done <"$STATE_FILE"
 fi
 
+# The newest v* tag on main; git stops at one, since piping to head can kill git under pipefail.
 latest_tag() {
-	in_repo "$1" tag --merged origin/main --list 'v*' --sort=-v:refname | head -1
+	in_repo "$1" for-each-ref --count=1 --merged origin/main --sort=-v:refname --format='%(refname:strip=2)' 'refs/tags/v*'
 }
 
 # Next patch version; keeps the suffix unless a new one is given (beta for -beta).
@@ -505,7 +506,7 @@ confirm() {
 	[[ $ASSUME_YES -eq 1 ]] && return 0
 	{
 		printf '\n\033[1m%s: %s -> %s\033[0m\n' "$key" "$cur" "$tag"
-		in_repo "$key" log --oneline --no-decorate "$cur..HEAD" | head -20 | sed 's/^/  /'
+		in_repo "$key" log -20 --oneline --no-decorate "$cur..HEAD" | sed 's/^/  /'
 		[[ $# -gt 0 ]] && printf '  + %s\n' "$@"
 	} >&2
 	while :; do
