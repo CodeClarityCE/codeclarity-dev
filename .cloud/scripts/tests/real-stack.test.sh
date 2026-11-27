@@ -125,7 +125,7 @@ if docker compose version >/dev/null 2>&1 && [ -f "$root/deployment/docker-compo
 	result=ok
 	config=$(docker compose --project-directory "$root/deployment" -f "$root/deployment/docker-compose.yaml" \
 		-f "$root/$override" -f "$root/scripts/results-gate/docker-compose.yaml" config --format json) || result=bad
-	echo "$config" | jq -e '(.services["service-follower"].networks | keys) == ["registry-offline"] and
+	printf '%s\n' "$config" | jq -e '(.services["service-follower"].networks | keys) == ["registry-offline"] and
 		.networks["registry-offline"].internal == true and
 		(.services.pgbouncer.networks | has("registry-offline")) and (.services.rabbitmq.networks | has("registry-offline"))' \
 		>/dev/null || result=bad
