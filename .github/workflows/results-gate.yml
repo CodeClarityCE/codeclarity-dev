@@ -1,7 +1,8 @@
 # The results gate (ADR 0021): builds the trimmed real stack at the submodule pointers (on a PR, the
 # same-named branches; scripts/same-named-branches.sh), restores the
 # knowledge dump the accuracy benchmark is pinned to, analyses the gate's fixtures with the Default
-# Analyzer and compares the findings the API shows with scripts/results-gate/expected/. ci.yml calls
+# Analyzer on the recorded registry rows, with the package follower cut off from the registries, and
+# compares the findings the API shows with scripts/results-gate/expected/. ci.yml calls
 # it on pull requests (submodule pointer bumps among them) and pushes to main and develop, as part
 # of its `ci` gate; it also runs nightly on its own.
 name: Results gate
@@ -27,6 +28,9 @@ jobs:
       # Restoring the full knowledge dump takes longer than the fixture's.
       WAIT_SECONDS: "2400"
       API_URL: https://localhost/api
+      # The follower gets no outbound network, and the gate loads its recorded registry rows.
+      STACK_OVERRIDE: ${{ github.workspace }}/scripts/results-gate/docker-compose.yaml
+      RESULTS_GATE_PSQL: sh .cloud/scripts/tests/real-stack/stack.sh psql knowledge
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,6 +60,8 @@ jobs:
         run: |
           sh .cloud/scripts/tests/real-stack/stack.sh up
           sh .cloud/scripts/tests/real-stack/stack.sh ca "$RUNNER_TEMP/ca.crt"
+      - name: Check the package follower cannot reach a registry
+        run: sh .cloud/scripts/tests/real-stack/stack.sh offline service-follower
       - name: Compare the findings with the expected results
         env:
           CURL_CA: ${{ runner.temp }}/ca.crt

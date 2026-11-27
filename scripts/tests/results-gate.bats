@@ -260,6 +260,7 @@ RULES
 
 @test "run analyses only the gate's inputs and fails on a finding that appeared" {
 	fake_stack
+	fake_db
 	expected app <<'EOF2'
 .	CVE-1	a	1.0.0
 EOF2
@@ -279,6 +280,7 @@ EOF2
 
 @test "update with no recorded run analyses the inputs and writes their findings" {
 	fake_stack
+	fake_db
 	page 0 1 "$(row CVE-2 b@2.0.0)" >"$BATS_TEST_TMPDIR/pages/0.json"
 	run sh "$GATE" update
 	[ "$status" -eq 0 ]
@@ -299,6 +301,19 @@ EOF2
 	done
 }
 
+@test "the committed registry rows cover every package of the expected SBOM entries" {
+	# Versions can be missing: the follower skips prereleases such as 1.0.0-next.29.
+	local dir="$BATS_TEST_DIRNAME/../results-gate" eco name lang file
+	while IFS=$'\t' read -r _ eco name _; do
+		case "$eco" in npm) lang=javascript ;; packagist) lang=php ;; *) lang=$eco ;; esac
+		file="$dir/registry/$lang/$name.json"
+		jq -e --arg n "$name" --arg l "$lang" '.name == $n and .language == $l' "$file" >/dev/null || {
+			echo "no recorded row for $lang $name in $file"
+			return 1
+		}
+	done < <(tail -q -n +2 "$dir"/expected/*/sbom.tsv)
+}
+
 @test "the committed gate inputs cover every lockfile the analyzers read" {
 	local dir="$BATS_TEST_DIRNAME/../results-gate" fixtures="$BATS_TEST_DIRNAME/../benchmark/fixtures" lock name found
 	for lock in package-lock.json yarn.lock pnpm-lock.yaml composer.lock; do
@@ -311,4 +326,142 @@ EOF2
 			return 1
 		}
 	done
+}
+
+# A stand-in for the stack's knowledge database (RESULTS_GATE_PSQL): logs each query's first line
+# to the curl log, so the order of queries and API calls shows, and answers from the test's files.
+fake_db() {
+	export RESULTS_GATE_PSQL="$BATS_TEST_TMPDIR/psql"
+	cat >"$RESULTS_GATE_PSQL" <<'STUB'
+#!/usr/bin/env bash
+sql=$(cat)
+echo "SQL ${sql%%$'\n'*}" >>"$CURL_STUB_LOG"
+echo "$sql" >>"$BATS_TEST_TMPDIR/sql.log"
+case "$sql" in
+"-- load"*) echo 1795780000.123456 ;;
+"-- fetched"*) cat "$BATS_TEST_TMPDIR/fetched" 2>/dev/null || : ;;
+"-- export"*) cat "$BATS_TEST_TMPDIR/rows" ;;
+"-- clear"*) ;;
+*)
+	echo "unexpected query: $sql" >&2
+	exit 1
+	;;
+esac
+STUB
+	chmod +x "$RESULTS_GATE_PSQL"
+	mkdir -p "$RESULTS_GATE_DIR/registry/javascript"
+	echo '{"name": "a", "language": "javascript", "versions": [{"version": "1.0.0"}]}' >"$RESULTS_GATE_DIR/registry/javascript/a.json"
+}
+
+# The stand-in API's SBOM list for input app: package a@1.0.0 from npm.
+sbom_a() {
+	page 0 0 >"$BATS_TEST_TMPDIR/pages/0.json"
+	mkdir -p "$BATS_TEST_TMPDIR/sbom"
+	page 0 1 "$(sbom_row a@1.0.0 npm)" >"$BATS_TEST_TMPDIR/sbom/0.json"
+	expected app sbom <<<'.	npm	a	1.0.0'
+}
+
+# Prints the line number of the first line of the curl log that matches $1.
+logged_at() {
+	grep -m1 -n -e "$1" "$CURL_STUB_LOG" | cut -d: -f1
+}
+
+@test "run loads the recorded registry rows before it analyses the inputs" {
+	fake_stack
+	fake_db
+	sbom_a
+	run sh "$GATE" run --out "$REC"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"loaded the recorded registry rows of 1 package"* ]]
+	[ "$(logged_at '^SQL -- load')" -lt "$(logged_at '^POST .*/analyses$')" ]
+	grep -q '"name":"a"' "$BATS_TEST_TMPDIR/sql.log"
+}
+
+@test "run fails, naming the package, when the follower fetched one from a live registry" {
+	fake_stack
+	fake_db
+	sbom_a
+	echo 'javascript a (fetched from the registry)' >"$BATS_TEST_TMPDIR/fetched"
+	run sh "$GATE" run --out "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"  javascript a (fetched from the registry)"* ]]
+	[[ "$output" == *"gate.sh record"* ]]
+	[[ "$output" != *"as expected"* ]]
+	# It asks about the packages of the run's SBOM, after the analyses.
+	grep -q '"name":"a","language":"javascript"' "$BATS_TEST_TMPDIR/sql.log"
+	[ "$(logged_at '^SQL -- fetched')" -gt "$(logged_at '^POST .*/analyses$')" ]
+}
+
+@test "run refuses to analyse anything without recorded registry rows" {
+	fake_stack
+	fake_db
+	sbom_a
+	rm -r "$RESULTS_GATE_DIR/registry"
+	run sh "$GATE" run --out "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"no recorded registry rows"*"gate.sh record"* ]]
+	[ "$(grep -c '/analyses$' "$CURL_STUB_LOG")" = 0 ]
+}
+
+@test "run refuses a recorded registry file that is not valid JSON" {
+	fake_stack
+	fake_db
+	sbom_a
+	echo '{"name": ' >"$RESULTS_GATE_DIR/registry/javascript/b.json"
+	run sh "$GATE" run --out "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"is not valid JSON"* ]]
+	[ "$(grep -c '/analyses$' "$CURL_STUB_LOG")" = 0 ]
+}
+
+@test "record with a recorded run writes the stack's rows of its packages, one file each" {
+	fake_stack
+	fake_db
+	expected app </dev/null
+	page 0 0 | record app
+	page 0 1 "$(sbom_row @s/b@2.0.0 npm)" "$(sbom_row v/c@1.0.0 packagist)" | record_list app sbom
+	cat >"$BATS_TEST_TMPDIR/rows" <<'EOF2'
+{"name": "@s/b", "language": "javascript", "versions": [{"version": "2.0.0"}], "license": "MIT"}
+{"name": "v/c", "language": "php", "versions": [], "license": "LGPL-3.0", "description": "one\ntwo"}
+EOF2
+	run sh "$GATE" record "$REC"
+	[ "$status" -eq 0 ]
+	# The old recording is gone; each file holds one package, its keys sorted.
+	[ ! -e "$RESULTS_GATE_DIR/registry/javascript/a.json" ]
+	[ "$(jq -c . "$RESULTS_GATE_DIR/registry/javascript/@s/b.json")" = \
+		'{"language":"javascript","license":"MIT","name":"@s/b","versions":[{"version":"2.0.0"}]}' ]
+	[ "$(jq -r .license "$RESULTS_GATE_DIR/registry/php/v/c.json")" = LGPL-3.0 ]
+	# A JSON escape comes through as it was.
+	[ "$(jq -c .description "$RESULTS_GATE_DIR/registry/php/v/c.json")" = '"one\ntwo"' ]
+	grep -q '"name":"v/c","language":"php"' "$BATS_TEST_TMPDIR/sql.log"
+	[[ "$output" == *"recorded the registry rows of 2 package(s)"* ]]
+}
+
+@test "record fails when the stack has no row for a package of the run" {
+	fake_stack
+	fake_db
+	expected app </dev/null
+	page 0 0 | record app
+	page 0 1 "$(sbom_row a@1.0.0 npm)" "$(sbom_row b@2.0.0 npm)" | record_list app sbom
+	echo '{"name": "a", "language": "javascript", "versions": []}' >"$BATS_TEST_TMPDIR/rows"
+	run sh "$GATE" record "$REC"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"javascript b: no row in the knowledge database"* ]]
+	# The recording is left as it was.
+	[ -f "$RESULTS_GATE_DIR/registry/javascript/a.json" ]
+}
+
+@test "record with no recorded run clears the packages' rows and analyses on live registries" {
+	fake_stack
+	fake_db
+	sbom_a
+	echo '{"name": "a", "language": "javascript", "versions": [{"version": "1.0.0"}]}' >"$BATS_TEST_TMPDIR/rows"
+	run sh "$GATE" record
+	[ "$status" -eq 0 ]
+	[ "$(logged_at '^SQL -- clear')" -lt "$(logged_at '^POST .*/analyses$')" ]
+	[ -z "$(logged_at '^SQL -- load')" ]
+	[ "$(logged_at '^SQL -- export')" -gt "$(logged_at '^POST .*/analyses$')" ]
+	[ -f "$RESULTS_GATE_DIR/registry/javascript/a.json" ]
+	# Then compares the run's findings, so a changed finding shows next to the new rows.
+	[[ "$output" == *"app sbom: 1 as expected"* ]]
 }
