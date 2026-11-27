@@ -52,6 +52,10 @@ _Avoid_: Scan (except informally), job
 A named, ordered set of plugin stages that an analysis executes.
 _Avoid_: Pipeline, workflow
 
+**Package import**:
+The package follower's fetch of the packages an SBOM lists (their versions and licences) from their registry into the knowledge database, during an analysis. A plugin that depends on an SBOM starts only once that SBOM's package import is recorded as done.
+_Avoid_: Updating the DB (`updating_db` only shows an import is running), package data (that is what a knowledge source holds about a vulnerability)
+
 **Submission**:
 Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
 _Avoid_: Dispatch (the dispatcher's own step), enqueue
