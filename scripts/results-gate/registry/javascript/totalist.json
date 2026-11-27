@@ -1,0 +1,273 @@
+{
+  "description": "A tiny (195B to 220B) utility to recursively list all (total) files in a directory",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "3.0.1"
+    },
+    "Maintainers": [
+      {
+        "email": "luke@lukeed.com",
+        "name": "lukeed"
+      }
+    ]
+  },
+  "homepage": "https://github.com/lukeed/totalist#readme",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "3.0.1",
+  "license": "MIT",
+  "licenses": null,
+  "name": "totalist",
+  "source": {
+    "Type": "git",
+    "Url": "git+https://github.com/lukeed/totalist.git"
+  },
+  "versions": [
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "0.4.0",
+        "esm": "3.2.25",
+        "premove": "1.0.0",
+        "tap-spec": "5.0.0",
+        "tape": "4.11.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-lS80dy0XsMCmCfMQ73DuXi59xf1tVg5reyYGQI8m+MwxmkTKsd1T+jmFgS4wjKoryXG2GoIi/1sB7bTKf6Z11A==",
+          "shasum": "ee2214c2135168083daf0d599538d3dd5b75f93d",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCOd1vOlwTG2z2KKuQFzuVvGLspZXCOez6ylkFQg/YtCAIgKlhJH00LBfYRsrubjrgkD8qPDOt5ixktgxmbjFpDoB0="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-0.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-10-22T00:33:00.036Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "0.4.0",
+        "esm": "3.2.25",
+        "premove": "1.0.0",
+        "tap-spec": "5.0.0",
+        "tape": "4.11.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-K+Axow2A+XxeORODPqpc3qQB1F3m0KzCaQgviWUjoNJTvM0yJ2ABVtkyaEdrE5fNPpZwD2EN1X/tGHQgL8araA==",
+          "shasum": "a8d5c222af3bb7cfc387c850261b4367e01cd74d",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIGuQcuzs9YaF3U2mld9pRcslXkL9T1tvdxPd2Lk3H3dJAiEA//wLighoYmebvcpPrSPu7WWbcMP2RC7cn5iirLt4J1k="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-1.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-10-22T04:20:34.416Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "0.4.0",
+        "esm": "3.2.25",
+        "premove": "1.0.0",
+        "tap-spec": "5.0.0",
+        "tape": "4.11.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-HuAt9bWDCdLkebrIQr+i63NgQSvjeD2VTNUIEBqof/4pG4Gb6omuBOMUX0vF371cbfImXQzmb4Ue/0c9MUWGew==",
+          "shasum": "c62ad01d773c1a0c721e18d385767c14712a82da",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIHWWaBikoqsDnOa6tVe/GRq/535pW+JfyFKG+b0JQ6T7AiBjwxYlXYodkn31OtmGZ/yFaWonihuDPkr3fd3nSuo1Vw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-1.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-10-24T03:28:02.566Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.1"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.0.1",
+        "esm": "3.2.25",
+        "premove": "1.0.0",
+        "uvu": "0.0.13"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-gduQwd1rOdDMGxFG1gEvhV88Oirdo2p+KjoYFU7k2g+i7n6AFFbDQ5kMPUsW0pNbfQsB/cwXvT1i4Bue0s9g5g==",
+          "shasum": "a4d65a3e546517701e3e5c37a47a70ac97fe56df",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIG2ZWM2CdbIP7tCuSn0TKuXCflRPu640ZrtDgILW+7iMAiEAjoqbIOte6x/GuJ+5GNFmmu2tbvj8zyZdQTRGCToaIL4="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-1.1.0.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-06-20T23:53:39.218Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.1.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.1.1",
+        "esm": "3.2.25",
+        "uvu": "0.3.3"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-+Y17F0YzxfACxTyjfhnJQEe7afPA0GSpYlFkl2VFMxYP7jshQf9gXV7cH47EfToBumFThfKBvfAcoUn6fdNeRQ==",
+          "shasum": "db6f1e19c0fa63e71339bbb8fba89653c18c7eec",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCDD+2G27gh/mUeuBpV4cGpnX2W+Jlx0kjcHQBFvD/YUQIgMo6rs9jvjra74jwYL/xOxtzCibdaOuR6KPR/beOyLz0="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-2.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-08-19T06:49:03.874Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.1.1",
+        "esm": "3.2.25",
+        "uvu": "0.3.3"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-eM+pCBxXO/njtF7vdFsHuqb+ElbxqtI4r5EAvk6grfAFyJ6IvWlSkfZ5T9ozC6xWw3Fj1fGoSmrl0gUs46JVIw==",
+          "shasum": "4ef9c58c5f095255cdc3ff2a0a55091c57a3a1bd",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIAKUoaOOpVdHcDVUzUW6f+1vNiis4X9BGq3RZCUZsh1/AiEA0nKHfxAUmJAFPxVHFR0lTvS6yu8euBDu+YM0qqxp/+8="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-3.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2022-01-17T20:09:58.038Z",
+        "license_expression": "MIT"
+      },
+      "version": "3.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.1.1",
+        "esm": "3.2.25",
+        "uvu": "0.3.3"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==",
+          "shasum": "ba3a3d600c915b1a97872348f79c127475f6acf8",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDRVjx04bW+LUDqF1YtQhz6MgsjxBQnJupjMaLtjFenqwIhAIelvgaydgOZ0P6Z7d7ozSAq77EtmDyIhBkRnAv++kCv"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/totalist/-/totalist-3.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">=6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2023-04-03T18:36:39.508Z",
+        "license_expression": "MIT"
+      },
+      "version": "3.0.1"
+    }
+  ]
+}

@@ -1,0 +1,1409 @@
+{
+  "description": "The optimized & lightweight middleware for serving requests to static assets",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "3.0.2",
+      "next": "1.0.0-next.9"
+    },
+    "Maintainers": [
+      {
+        "email": "luke@lukeed.com",
+        "name": "lukeed"
+      }
+    ]
+  },
+  "homepage": "https://github.com/lukeed/sirv#readme",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "3.0.2",
+  "license": "MIT",
+  "licenses": null,
+  "name": "sirv",
+  "source": {
+    "Type": "git",
+    "Url": "git+https://github.com/lukeed/sirv.git"
+  },
+  "versions": [
+    {
+      "dependencies": null,
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-zsb2TE5Ck1wdDVN35mxMS6GxvvaNRcMZricU9krwMH74qc6qvBepU0ZbB27aP+qFLGRZOk1I9n4M65y1f8vD5A==",
+          "shasum": "58eb23f8780b3d59e47b702332e93ca87aef51c0",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIEXqoRCRzAV79DPt1G56YQd7zB/NIc/oauqUR/QIvjgFAiAtXUmZu0kKITAI6fqy9XcJYNQ4xCvJlZ+ncyBs/CjJbA=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.0.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-04-10T15:23:50.032Z"
+      },
+      "version": "0.0.0"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-U9uTWpEfKL3nAGdx4gtmxI8fimW7E7AoLOeT6dpZRpoyqAJfzVH3a0KplOKu+XvXc0/2eDRG9gXvUT1uYPCknA==",
+          "shasum": "57c5e70289a8ab69c175359cb3bf08c7d7802409",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDgdyOsPoj1AzHO2i+lTV21iCMkA6HqFskVSmkFr0acKgIhAJAMY2P+jui6ziMtBXrjgsRbVKCXJ+9kFuTagoxRWNER"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-05-14T18:15:55.884Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-2tlfUmMN1U6mqiSuYgC1sNil3/m1ePslpL29Auqm6uPT3b97jsCH3Rd/ZCJ8H2XPyCR9ts+Qmrv/x/H9givMpQ==",
+          "shasum": "49ca11842ea5e0e3ecfa58a39a3473a131247788",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCumNHDoYRqM8vKRSwW7wFBrR3GQqTvXqqABKNUGgroMQIgImlWwGLr9z8k//QaWdVEYekvTfWPZry/EkvVWgHaCNU="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-05-15T22:20:39.022Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.1"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-qcXRafDA6JrLZBSXKohbSIJJwjdl/SuLQbH1DYadvifV9pp3g8578F/El0WQTGHYLpSMyDqI74uTh4GvPfUqOA==",
+          "shasum": "0f5e94dfca521d8234e92807de7405e05a21ceb4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDW6RjDF2Xr6Zw36RP3uIX1AuZr93kxqQoJ9zWyrKI/fgIhAILnuuA+XmwSyVTHWCxq9EaEc7lo4dnz5Qo05E22WJoq"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-05-19T14:43:04.25Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.2"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-w/+R2u1eRjT13QDNa05Yy44V30sw0gRy9/deOvnvPQCqusbRzZ4RiXOGrpyaI4rfbvxOqMj/k0nNxndUDfWWGg==",
+          "shasum": "70289349f3b6a15e32f568f3c0a43c5448686ce4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIC7cYI6FVTWBHpaTcanMTJ6ZqY559QOLx/Juam2bWE08AiEAvxnPqQnLyLpPfsbyYbtA7lRFNnI4kZpGXXvPsgBZ960="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.3.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-07-10T16:51:58.883Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.3"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-+0x9QLeF0AhAOIi7oqnRzK5wrzF2VpiyEttgVw56pyo5LBy45jV3gtB7xb0KwqwYTGt0gLVFQ/YfFQ9VQ84C0g==",
+          "shasum": "e98d8912691b6a7a5a99d2f43578646d2d98c9cf",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDzPWBXvERX/BbxM6dX3p25GSH5rpnPxidQgOwlfB4sfgIhALPYPVYvHlfxtb2ISPyxN+sC88PEcF4UyQfaISXv872r"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.4.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-07-21T05:24:05.706Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.4"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-gsbYtBx8H8f+NPNIAEEEDoBgej1jvri9owUVJ2c2ldXKPQ95TPR6DhMeiEcdhTmYtarQs+AlfAetu7V9vNG38g==",
+          "shasum": "a5560eeb93d8b645df067f83d97fcd0b2378351e",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCYC6mjFqR72ZNKcfCz+AQi6RThmlxQA1QsO2pyLRtH9gIhAMLPwEoDT/BIIHbJWf0TVbiiSElRQIBlRMs9PDRsthuV"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.1.5.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-07-25T17:40:06.872Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.5"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-lyHsfW2UoBRnXMHxDyHsYgd8oT1gZQZfcGyO9R30J90hObj4jUAfuxSxlcU7DpGTOOdxGDv7Vj14IYUM59KftQ==",
+          "shasum": "365a113fd28dda4b77b7f4499d5e7eb5cf206e1c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDzR+7Z569aCy4yd1Y9RlIJiuRuXuA2fSA7/yO/sqgvJgIgc5a7rXyvcXqm1E9TuBxP+c/4me4+zPb7IF8x0aXMHtQ="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.2.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-08-20T22:47:12.722Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.0"
+    },
+    {
+      "dependencies": {
+        "mime": "^2.3.1",
+        "parseurl": "^1.3.2",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-zdiJx9ezUhVrnIA2IhJP4Bhj1b6kl0BVg5cybfYYNqhTtxYKNQ0qXn9lhvLKSetU54hiuFu5nXNt1fhfNT7y4Q==",
+          "shasum": "7484b763a4d21bb887bbe3a20e4b77a0d1b63650",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCICAfT8fwPslSvvFsXNCVnQdeUxxPxWrp1flqqSO44SYOAiEAtC5bwcwUm41FSdMWYsfn/0rhXaAVaXq+6/62bR34wT0="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.2.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-08-30T03:39:13.962Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.1"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-X0UjfTc32MeK+rkhgdQK/blQ5ysC0CfLF9OH9d8x2RnpaD2D5BDLMeox79utmhxai4T+/VCahK5pDgAEnG/tNQ==",
+          "shasum": "334d86074c73008fda60129b2487ae94db1fbc7b",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIFtK3w9edlC/2H5YXietKN5eLCq9xhdCrvJBbBM0aUtvAiBxzx5dP+024U8drsp8Xa3vnIXuU9wgkMI5+6nO1MmVWA=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.2.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-09-24T21:37:12.619Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.2"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1",
+        "tiny-glob": "^0.2.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-0YaLzpD6dPiJZUqDEwDqk9NLGZDm/nNWvpg8Rym+3hdt5pWGRrlggjjt1KtF0+tZgGtyI4F5f5JZ9XTCp53Oqw==",
+          "shasum": "7db3f02ef424c3fdb74771b134cfc9bd155678d4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCXDxl3gOe1hWO+hfV9vOhwN/e6diJZvGv8jizQpOXengIgaAY4LJ2B0VLnHP13S5p26cZEQ/K0tfaO7mC+9SOL1Uk="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.2.4.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-07T22:32:33.859Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.4"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-q7F1VElkj/WPrXwWsdHK9gqi2rd94oaMQc3VtN8N1TNHrKxlsd7hGsPFiOIodRxre8eHCV1XK1iqC1BDaZ+IKA==",
+          "shasum": "da56a42e5f60b0822456cee7bf53e217305f4c3b",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIBR1qSvbFLcKy1fo+5plNjV6d+O3A627dqF0YlbnBVJpAiEAunUrK3JhW0y4nqwXC4R8c0zQQtcx8Il/Vxj4R/EyF4E="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.2.5.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-15T00:14:07.318Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.5"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-g+hRjKq9I0LLcnA+oenpdDpDgRt0NDb/DoqtX9WzGAfOBNYn9xlMA5RWcEds9/7yFVF1+UnPDdu7N6AngsvY2Q==",
+          "shasum": "67821c0a830f234792ad15723b4d39ed41cefecd",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCICPUZw1QGJMivv/i9MTLkVpDk9gbW34NCboXsHNg/PtmAiEArarBiuhc0JNOlOQCzS54+ZIpgWm9nijD4V9RekSJ8/o="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.3.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-15T06:36:56.649Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.3.0"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-03p4fuXPfhlNrDjUBw5bGF//4i0Rjwf7hVm8XhuKgeguHGQPr4pV+lgAJZKSP9BaJKn+QG9QvTxLX1wSYshccg==",
+          "shasum": "a346c5d9bb4b50f60cb73423041b9c1694532287",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIDp8DwePuFcg/Y2gV/lasr3dtctKpveETTASObuhEqfGAiEA/C9a6f6clxobHU30enjL4gdC2Ox3A/RTPtREX3gfC3s="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.3.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-15T20:47:04.613Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.3.1"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-k/dcRW7Ry2VgERDiLyyq3peGZEnqP2EcTcG5646QjoLwz7lnDA50i20m/3Rn7J4FLtimyoKQsG4E2BItctwjhg==",
+          "shasum": "531bafb86806135bac7ac053cb19efa42a0347e9",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDYlad/jUD/XHg3D7xuShb23YTsNwxxVRxfxhrHCgABlQIgdyg8kvpY3oawL9U61sbVV8RJgy4Afx2LyKD9r2d2Tes="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.4.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-23T20:58:50.937Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.0"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-wjZMiB3jA/SbW6zWpLOAU3LGzCDHaVJsdaQwH9sTYFWJI6IdWe5Op1KhI8js+PXuNPFjNzlJCt233/R3+o/1YA==",
+          "shasum": "e4e5c5024abfade7f43d2edfd5d1e6f5a2d5a893",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCiMkaQttra1ztmscFRZhlhL1pMb56Y4n3epy6EgcROIAIhAOrXum7jEZBszU2dWZkMKbacCkGaTQYM++Ys3klrmaLP"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.4.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-05-08T20:57:55.916Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.1"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-dQbZnsMaIiTQPZmbGmktz+c74zt/hyrJEB4tdp2Jj0RNv9J6B/OWR5RyrZEvIn9fyh9Zlg2OlE2XzKz6wMKGAw==",
+          "shasum": "842ed22f3aab58faee84eea66cf66066e123d6db",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCqqQBbG64ZQHzvjjC96lenEmtvLnXjcfiBWqYyNddLiwIhAICQe9t6pYCT8+iK0s08fGAITQEp+9YDEK+I5L8JKDj9"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.4.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-05-09T00:47:23.578Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.2"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^0.5.0",
+        "mime": "^2.3.1"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-rYpOXlNbpHiY4nVXxuDf4mXPvKz1reZGap/LkWp9TvcZ84qD/nPBjjH/6GZsgIjVMbOslnY8YYULAyP8jMn1GQ==",
+          "shasum": "185e44eb93d24009dd183b7494285c5180b81f22",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCoZmtt3hPrdVlFTXIP9UbnEEyoQsHYgeV0IesHXOQTFwIhAO6gRRsQr4XDNM9lC8DMxLtyCVl/8fmGy61aSYGcTudq"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-0.4.6.tgz"
+        },
+        "Engines": {
+          "node": ">= 6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-05-23T17:53:59.807Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.6"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-NYxkb52SaeZWHH4cKwmY5N+Qv/oAVZHOUNuV+N7ohuJrlEYyQ0NdnR9s6+Ki2UFfYE4hjThzDCG9oU/qSNRdYA==",
+          "shasum": "c55fb4dd47760c95608f5fef10760ddbfc3fe209",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDJIc7pulj9rAAKb+J4EqXaYr+RsN/bt2ujikRyUQ4q/gIhAJ2Wbi55KIay+fLYr8IrL5F0pF0FKP9qATnb2Vmro6Iv"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-06-10T21:07:27.372Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.0"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-5prQxJFybxXkI6fGffgiJgnbMmcdGWd2K5NH+yw4zF5GIZCb2PdCb9+1qr1Y+ntNJsIRvJ6hnR+NlI9vdrRL2Q==",
+          "shasum": "db8272c8940289c594e1371925b3a2da95872113",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDEUHdH9H1b6qrIyrSvjffzWamDbDurY1ejXrr13Wif1QIgCDlgB6f6kJ0pievNjLVPAhOHmgfqdS4m/6l33LUb6uQ="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-06-17T17:10:33.804Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.1"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-H5EZCoZaggEUQy8ocKsF7WAToGuZhjJlLvM3XOef46CbdIgbNeQ1p32N1PCuCjkVYwrAVOSMacN6CXXgIzuspg==",
+          "shasum": "3e591f5a9ae2520f50d5830f5fae38d97e7be194",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDzTSWCovAEFZ1dLkopgXfPjepYnnzWlmRpif1PmbIFrAIhAJC0cYdOruf4VKaoaXAFqzNJWFs67SDNEZNtipq0yLRS"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.10.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-12-07T19:16:37.294Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.10"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-SR36i3/LSWja7AJNRBz4fF/Xjpn7lQFI30tZ434dIy+bitLYSP+ZEenHg36i23V2SGEz+kqjksg0uOGZ5LPiqg==",
+          "shasum": "81c19a29202048507d6ec0d8ba8910fda52eb5a4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIHMfx80GUh+47t79lwifUOmbL/vhS//o/jhbX3i4+za1AiAxLirRz7EuuDYScJlC/GFL0rA8Y0IDg+ilPIBY7Fq8jw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.11.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-01-30T18:29:17.107Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.11"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.15",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-+jQoCxndz7L2tqQL4ZyzfDhky0W/4ZJip3XoOuxyQWnAwMxindLl3Xv1qT4x1YX/re0leShvTm8Uk0kQspGhBg==",
+          "shasum": "d816c882b35489b3c63290e2f455ae3eccd5f652",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIHqjoLKUyg9fP0DxQKiQqa26LIf8jkw5EuDA9BQo5flJAiEAq+2Bbx17XKhVnxX+D2hmWmLTuRnEIMDFFqyCnBvPNlU="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.12.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-05-24T23:01:33.584Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.12"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.15",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-J6AeSdfF0+QBqkuLb8IKv93bOn57U/YjVqlFLQITwgHZF27Asgbuu8Vyx4RM3TPUnTojCLh8C2krFe6xTfxRjA==",
+          "shasum": "66ceaa6cb5edce9b57d11ab58e8273c087c23531",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIC90tiCosz7CPHn6M5YgldVNqzE1FZV4erEV9lI71LLMAiAx4Qn56L+KL/fy7M2mBbrs2DVwnrpccXB4vXSOJPG1+w=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.13.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-08-13T22:30:15.954Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.13"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.17",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-czTFDFjK9lXj0u9mJ3OmJoXFztoilYS+NdRPcJoT182w44wSEkHSiO7A2517GLJ8wKM4GjCm2OXE66Dhngbzjg==",
+          "shasum": "b826343f573e12653c5b3c3080a3a2a6a06595cd",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIBO7mD6uVahTapAiQ/AIcEuWVRHSG6TOCPFBG/bzO25ZAiB9utsJc61/1IgLafo4HDCsBs4bmFAkqhScwxVwVHu2+Q=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.14.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-08-14T00:30:33.483Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.14"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.17",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-ZNdb7Typnmohn1JHByyo9EdudtXKkbUrJz+Z0/3GUNRst/uHodoUntn7BgDsfgIm5JAPyPX6Y7MPPnWnwqNLBg==",
+          "shasum": "0c2f732299925f013d3a2fb92785eabe2f18578c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDAvwCvloCrjAOWHD2UKjAN4kWGhPQAzqdwbtJXEr5BEwIhAN5i4RTiPmSypBL/7qXVJpFObLo4y3rSyiVGe/HcxILp"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.15.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-08-26T00:43:29.247Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.15"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.19",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-x56DISeIgSUGVJrQS3mwu+UvtnzHenKDFBQL+UlAswxwk9b2Cpc0KGVvftoIJZgweOOXbMZzyXFYgVElOuSI1Q==",
+          "shasum": "9caadfc46c264a38ad1c38c99259692fbf76ed10",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIFzrEGkdut8i95pYvtMkOfgTrkf9NYk7jmXASEieR/KjAiAtXo3lH4od1I4CUXQweoptv7wrXGt3guhiGueVr2iERA=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.16.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-08-26T03:28:44.62Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.16"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-qx9go5yraB7ekT7bCMqUHJ5jEaOC/GXBxUWv+jeWnb7WzHUFdcQPGWk7YmAwFBaQBrogpuSqd/azbC2lZRqqmw==",
+          "shasum": "86e2c63c612da5a1dace1c16c46f524aaa26ac45",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCICU/1iMpAwPmDefQ48JpV31hzQlMt+cPJN4esRin2LWIAiBkbnrapO2RKYZHrU/FgthaCDsu1RRPv+eM4t/2F9IfJg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.17.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-08-27T07:24:51.464Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.17"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-f2AOPogZmXgJ9Ma2M22ZEhc1dNtRIzcEkiflMFeVTRq+OViOZMvH1IPMVOwrKaxpSaHioBJiDR0SluRqGa7atA==",
+          "shasum": "105fab52fb656ce8a2bebbf36b11052005952899",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIGq6rvoq2s3+c42BBaT/EtxbowYxnDczLEYoApFd74aWAiBQDitMGsd3is8fz/kTevqiL5Mvj2PFbra9rh7oal0hjA=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.18.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-10-15T17:45:52.567Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.18"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mrmime": "^1.0.0",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-JuLThK3TnZG1TAKDwNIqNq6QA2afLOCcm+iE8D1Kj3GA40pSPsxQjjJl0J8X3tsR7T+CP1GavpzLwYkgVLWrZQ==",
+          "shasum": "1d73979b38c7fe91fcba49c85280daa9c2363b49",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCICQsG/1NLHyJpu+Tsv9gYvJ0Gxbnfm4njPMnmek5QUfgAiEA3VD2lrqAm7/zLjZ8DJn+pKRp89tEIxA6i1COu0KpaJ0="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.19.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-12-01T08:11:41.458Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.19"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-VBGinItX5MJXafH0FmVsc2G5INwmd9ygT05DVdEw2piBBKRNUBGy3Aq0SmpVzP121astWFE2XERNJOggrQcUww==",
+          "shasum": "12e31139ddd43eff13c122d5b679f337045e0b5b",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCAmB4o7MC8aOOZvPWW3S2N8IbF+xNDUAo4uqxWq507sAIhAKTlQKmQ1we01XoVf0zZh1OOHxo5WGmV9JI2LZarczsV"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.5.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-07-31T17:17:45.998Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.5"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-LRGu7Op4Xl9hhigOy2kcB53zAYTjNDdpooey49dIU0cMdpOv9ithVf7nstk3jvs8EhMiT/VORoyazZYGgw4vnA==",
+          "shasum": "178c13bffccc0dea715a0e50894cf3a6c74a715e",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIFysUPWqUU+PljM9XdGV5CLKpNyarS1hfm5qLHmY0Y5/AiEAoltCy16twk+uwg2YkkRM5t1qWfgz68nQ90A7z0mNqIM="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.6.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-08-12T21:20:57.397Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.6"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-QMT2OTD3CTr8de9VByPmvSEeyt6k8/Cxg0J2kQJ5HNhIWfhFg9ypcIWWzez9rPWnGj+WtJ7AZD/MdT/vdilV/A==",
+          "shasum": "ad8ca1f84430777a59162592626c2b8e9b9f1384",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDfJ8F9jIIfmk+JOi6U9HxdXayPSG57TL55+s+Yq6wEQQIhANamWcdjopPSwmLW6WlbjQ61O7JNDKsStOi8Q90cCYCi"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.7.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-10-16T17:09:26.645Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.7"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.9",
+        "mime": "^2.3.1",
+        "totalist": "^1.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-ISwUxLRiB89/+9IeHkm0YUk+8NoFtcoxc8/nSnP2FIDR7UG2fsDSPH/KO2Fx/iw0b/T+2yhnFRbC59Yy5MFVvA==",
+          "shasum": "6d4d09de0c0458534a47e8cd32fa3152733f6b8a",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDjzuZStniXY9aOTCsiozIHdFn1R35vXzQeSVgvbLaY7wIhAKZ12AD+FHMEbEWGmJj9b4TiElHRaavq/809sgKZN+TR"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-1.0.9.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2020-12-05T17:41:05.53Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.9"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mrmime": "^1.0.0",
+        "totalist": "^2.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-TT+4+zSM9LR8soWT5/4gOYHfB5a5XEOSV2LtmBRN5MUxi8kh7BSRGuoRYjeBaqhR4w+yx+k6t0OibDNgoLfF7w==",
+          "shasum": "e6d41213d3b192f2207f551ba5c03e1cc7e11e31",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIBSwG/sW2htboGzWE7iBNLYWaqY8C/xZP7KfOqv5yiGpAiEAl2/pcTG3S5jkJTCkepO011e65NxPr8gZC/eTD0mqa/E="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-2.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-12-29T20:18:03.745Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.0"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mrmime": "^1.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-4Qog6aE29nIjAOKe/wowFTxOdmbEZKb+3tsLljaBRzJwtqto0BChD2zzH0LhgCSXiI+V7X+Y45v14wBZQ1TK3w==",
+          "shasum": "128b9a628d77568139cff85703ad5497c46a4760",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQD48MiVUs2qvjQeKIxmzWFQ2DjJGvttc8JDPnLgZDFaDwIhAMYu5sZ3qOYx4PcjGMwjQzx6OkOQCTUQReU2KchyMgH5"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-2.0.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2022-01-17T21:07:28.691Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.2"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.20",
+        "mrmime": "^1.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-O9jm9BsID1P+0HOi81VpXPoDxYP374pkOLzACAoyUQ/3OUVndNpsz6wMnY2z+yOxzbllCKZrM+9QrWsv4THnyA==",
+          "shasum": "ca5868b87205a74bef62a469ed0296abceccd446",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCICarvNgds8nHhv9xteY+9iGTC9moTkSsUmTrlzVvz2czAiA2gZomdI7FxK9cEJ/kJmD3f+X9j6OdsmIJnh6SpHMkQg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-2.0.3.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2023-04-24T19:45:16.343Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.3"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.24",
+        "mrmime": "^2.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-94Bdh3cC2PKrbgSOUqTiGPWVZeSiXfKOVZNJniWoqrWrRkB1CJzBU3NEbiTsPcYy1lDsANA/THzS+9WBiy5nfQ==",
+          "shasum": "5dd9a725c578e34e449f332703eb2a74e46a29b0",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQC8skFypJBcybrpNaLGMougFAz9/0I+hVHyQ8/Wi8XvxwIhAJL0Hq/0MaqMVgcuiSP5EFg2vA07eyt4LTdNOYgw0DK5"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-2.0.4.tgz"
+        },
+        "Engines": {
+          "node": ">= 10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2023-12-20T16:10:35.506Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.4"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.24",
+        "mrmime": "^2.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-BPwJGUeDaDCHihkORDchNyyTvWFhcusy1XMmhEVTQTwGeybFbp8YEmB+njbPnth1FibULBSBVwCQni25XlCUDg==",
+          "shasum": "f8d90fc528f65dff04cb597a88609d4e8a4361ce",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDRei3ms+Sbxj4l+DxQW2hgYGYm+rKKIYQvccIIdViFKAIgKi7G8ouOrgF15vxlbyNqBNtc9MtjXLE5/Ahx+Q8CO3o="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-3.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=18"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2024-10-11T15:09:52.092Z",
+        "license_expression": "MIT"
+      },
+      "version": "3.0.0"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.24",
+        "mrmime": "^2.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-FoqMu0NCGBLCcAkS1qA+XJIQTR6/JHfQXl+uGteNCQ76T91DMUjPa9xfmeqMY3z80nLSg9yQmNjK0Px6RWsH/A==",
+          "shasum": "32a844794655b727f9e2867b777e0060fbe07bf3",
+          "signatures": [
+            {
+              "Keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "Sig": "MEUCIENv0oUjjPPoa+GUqZOb9r6V49XjH0ibIxCsjkEzSsfCAiEAn0znxycaJB0aScPJEuUB7jiyxC+O4Q4Bf1NyyUKQO2Q="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-3.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">=18"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2025-02-17T17:53:46.703Z",
+        "license_expression": "MIT"
+      },
+      "version": "3.0.1"
+    },
+    {
+      "dependencies": {
+        "@polka/url": "^1.0.0-next.24",
+        "mrmime": "^2.0.0",
+        "totalist": "^3.0.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g==",
+          "shasum": "f775fccf10e22a40832684848d636346f41cd970",
+          "signatures": [
+            {
+              "Keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "Sig": "MEUCIQDlOgo7371w0XVLf1pdVE08ClIKJ+wE7OAPI5jFIHkzJAIgYEqXDxb3ypuMPy6FxMq8wWssKUA+yTN9mr+NrXFv4NY="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/sirv/-/sirv-3.0.2.tgz"
+        },
+        "Engines": {
+          "node": ">=18"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2025-09-03T22:05:27.662Z",
+        "license_expression": "MIT"
+      },
+      "version": "3.0.2"
+    }
+  ]
+}

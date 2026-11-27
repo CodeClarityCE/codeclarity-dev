@@ -193,7 +193,7 @@ A fixed set of projects pinned to commits and to one knowledge dump, with an adj
 _Avoid_: Ground truth (that is its verdicts), test suite
 
 **Results gate**:
-The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
+The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and recorded registry rows, and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
 _Avoid_: Snapshot test, accuracy benchmark (that judges results against verdicts)
 
 **Winning source**:

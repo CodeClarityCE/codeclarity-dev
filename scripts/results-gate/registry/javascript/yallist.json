@@ -1,0 +1,544 @@
+{
+  "description": "Yet Another Linked List",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "5.0.0"
+    },
+    "Maintainers": [
+      {
+        "email": "i@izs.me",
+        "name": "isaacs"
+      }
+    ]
+  },
+  "homepage": "https://github.com/isaacs/yallist#readme",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "5.0.0",
+  "license": "BlueOak-1.0.0",
+  "licenses": null,
+  "name": "yallist",
+  "source": {
+    "Type": "git",
+    "Url": "git+https://github.com/isaacs/yallist.git"
+  },
+  "versions": [
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-KNi+WzRCAoXcBT3z+UFoYSubPzBDvm/Jh5GlLaaTdvo/NcJn/0DokB8Oci5xc6N5bVnZoWjS9hsfxJ5Wn35fXA==",
+          "shasum": "478c1272847a661519938e3a43b98d00faa12f8a",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCRDYHf9TOtha1ACYUtC0CLT2CeNvVyFB58icbW2SppUgIhAMHzGjvYvzK8S3b7H4OVqkZkOoQh7gWaVTPGZymPqvsb"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-1.0.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-12-18T08:02:25.789Z",
+        "license_expression": "ISC"
+      },
+      "version": "1.0.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-34n0AanmymrvNSUcdwQAQ1RmvRoPkSKHmXR70ln4+2L3JZaKQBXyhxXUY7bRIqPKqb5jgncxFRbdCtTJqCYWDg==",
+          "shasum": "daa8df3166c72bc78c3d307ea8195c1c14a1430c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIAr1D4CJQyK+gfuNAN3UHF1BHk6c7ZxmpnXkDCorUDBUAiEA9035dEzDkHpmMF8IHmB7tyHYOws1x5U6hCef5SrVV4o="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-1.0.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-12-18T09:29:58.326Z",
+        "license_expression": "ISC"
+      },
+      "version": "1.0.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-m81cHiLhQWWHr9ewXLJ+zvFnk41LRiDC2+raYPdYRW7ohwC1tWz6xmfdFOxz3AaXQrIjk1aFSsSygfn7V0nCXg==",
+          "shasum": "2805e1ba9e78bac506a19c4e028d7da6d031adef",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIC/oRG9jyuZnCke/gJy2TiHom6IJ/mfvrRDSnIK10T8mAiBRk2QvcedotPbSM26b5tc30Fwvxi9v2rALGSoSTWCFxg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-1.0.2.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-12-18T23:20:23.258Z",
+        "license_expression": "ISC"
+      },
+      "version": "1.0.2"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-2pmuDf+Bn8FjaPPavD52OKuG+8rsSYkgDTHNXI6+YwRIUGNz7//deuhhy/3ON1jKvc7KExp0dQ8iNlHc6DhKog==",
+          "shasum": "f1878f30e2955a6da83ac6f179782344cd6ea4fe",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCICO1sZkl5xCtUy30s4v7Pll42g0YXguu6oQitnx8oj9lAiEA+Skfkse9DYq/IJmuNjVMWhRb+WgHwp1v4Eb96tv3JrY="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-1.1.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-12-19T00:32:18.82Z",
+        "license_expression": "ISC"
+      },
+      "version": "1.1.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-l446SSVnGyIspyBekF2U4g2cUMLwBJLu3IvXvqDSwmJFWtAgQ9B8CtHArNluFgI7nPm5+EEbH12fwPIwSXPQyg==",
+          "shasum": "306c543835f09ee1a4cb23b7bce9ab341c91cdd4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDXyw1IJYcIEi0lBOPW+uRSkwhtma4RqrGUnLdTtYgHMwIhAM29+pFrDOKyk4Ghzz/+FvC+qA/8QlaBX6yXH+CBlEGr"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-2.0.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-12-19T19:55:29.661Z",
+        "license_expression": "ISC"
+      },
+      "version": "2.0.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "standard": "^5.4.1",
+        "tap": "^2.3.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-nvYoTNlZ+T0MBdHpdrJMyI1AY/s2NeSqukeXuwiaTPZjbkzsg2M9f0OmmPwyIr1DFu88Xd7jzUj2+SEotaEuog==",
+          "shasum": "6c11279640abd6ed0a86dd32ed56b03caa9df4f1",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDUwkhQe6Di3z+78ztRX6Nr2LnprmCB088SoTKxLuMvrwIhAMjYpv9QmSd34QF7H+IZ1O9phy6UpgDcBDbBgomeOWZV"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-2.0.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-11T20:09:18.123Z",
+        "license_expression": "ISC"
+      },
+      "version": "2.0.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-bw4zKj62wAeQuEpEdtr5a8EWAhVdmCqzogKTo/3ZtdPCeu1yKOM+/DzzSdcs4BqOcovXxff8W/CAaNzp5qSzXw==",
+          "shasum": "3a0f3b45f42cb60f822c92f69ade2bb88beb1ae0",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIGpqpbjIg4BLOmc3khatdAkheLMG+X3Z068fOrvV5JyXAiEA5uXR4anxdGjDT0jAdlap5EyN9aNb8B+KpFi0ewCP3V0="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-2.1.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-13T02:03:46.998Z",
+        "license_expression": "ISC"
+      },
+      "version": "2.1.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-wJXW2iOHgovkGFfG0dBkFufZ+QbrPRe4H7f2p4CSIOgmGB+32iuMV+5mjQUi+KOYEvukoQTxz+wYvraUdCNgfw==",
+          "shasum": "08309c7044b1761d5e1591dc12c67629271b6ac3",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIBCrW5PF20efeh01J5khErAd/4dCJJCIuxcRD8hwYabFAiEA1zaMlKFMUO7YGkBXBwSCu2MJB5hGeistgxByplE4vyE="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-2.1.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-13T16:55:34.896Z",
+        "license_expression": "ISC"
+      },
+      "version": "2.1.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-ncTzHV7NvsQZkYe1DW7cbDLm0YpzHmZF5r/iyP3ZnQtMiJ+pjzisCiMNI+Sj+xQF5pXhSHxSB3uDbsBTzY/c2A==",
+          "shasum": "1c11f9218f076089a47dd512f93c6699a6a81d52",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIC+TNJuIqGHzo8Bvfepcs0WQiDozvoOqZnQRPZlvhcbvAiEAv+4EA2UZc8xlaE//S6Kb2OOZhP7gffW+kKojB/TbVKo="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-2.1.2.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-13T22:16:05.251Z",
+        "license_expression": "ISC"
+      },
+      "version": "2.1.2"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-e8CLsK5rgly0muU1LeKbPMpiJoLWDEfe5+hanR9wljH7NJqmQdtKIYFQkxdLENYpl59mqg5g42bYS2tX59Gu4w==",
+          "shasum": "717369f9df727e5a03cc69c9ca94d7d94579f58c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIAsp+fD/c+kidvGrfB+BAVu47PHdsXlGmP3Rb3fdomFMAiAajJpSDsmduiON+nuK10DKgLMs0bgL1qJjwnhpv9jxiw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.0.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-13T16:56:52.633Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.0.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-XZPrO9OnL1B6IOPVEgcH6Ex3pOd6KMqtGlXjUSr/VR5nSWOYujm5z5y1iVxoVt9hrusLrKiWzGyqpQFILhtGIw==",
+          "shasum": "4affa89763ea5c2aeb9e2ed98387ceada34f4c4d",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQD+cWLJdcGXmhbWhS5XQ0NpLE6Uxmjl86GRV76lq9ufpgIhAJ+F2PQzm2mUH14OIBcRuhizOo3LqRWqBWoWTkoLZNck"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.0.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-03-13T22:12:34.074Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.0.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^10.3.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-U+iKQ8rDYMRmvEpvDUIWZ3CtM9/imlAc+c1yJ7YV0vu+HNtP82sAkXzuDXPLkIPoLZohnXFSs9wf2E17xk5yZA==",
+          "shasum": "8452b4bb7e83c7c188d8041c1a837c773d6d8bb9",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIFNGjxMhXXtzoa07tErhxxrUkrYuIq0l4omD8xmOT7OIAiEA2OtStH/5XJXBacd6Rx9xPByqKGJKeDHnIqyVNFWmJAI="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.0.2.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2017-04-25T19:59:38.913Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.0.2"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^12.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-S+Zk8DEWE6oKpV+vI3qWkaK+jSbIK86pCwe2IF/xwIpQ8jEuxpw9NyaGjmp9+BoJv5FV2piqCDcoCtStppiq2A==",
+          "shasum": "b4b049e314be545e3ce802236d6cd22cd91c3de9",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIEOR/DV23WzacyszfQhg09nw3Ny9djU1dzEAvs3ZULNTAiBQclKbl9EXuu9+CRH+TKZBQlaGZDHW/1FyzfJ/5qLnHw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.0.3.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-11-21T23:22:36.619Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.0.3"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^12.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-6gpP93MR+VOOehKbCPchro3wFZNSNmek8A2kbkOAZLIZAYx1KP/zAqwO0sOHi3xJEb+UBz8NaYt/17UNit1Q9w==",
+          "shasum": "906cc2100972dc2625ae78f566a2577230a1d6f7",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIEPx4WzSbryVu0CMhLYbdkmKSsfap8EuN96AhwLjBs7QAiEArhd19awNw5mqGUcFtiUK9C9T8WuLZv6BcQJR5GtTn1E="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.1.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-09-26T17:14:01.323Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.1.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^12.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==",
+          "shasum": "dbb7daf9bfd8bac9ab45ebf602b8cbad0d5d08fd",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQD4S0jeQXl5F21QIAwOE5yjXumczmgvEYzxql0ZH3+R2wIgNuJW5JkGMAXm598C9Bi+MvGe319f3bz2D1eR6wgDDpg="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-09-30T20:07:18.343Z",
+        "license_expression": "ISC"
+      },
+      "version": "3.1.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "tap": "^12.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==",
+          "shasum": "9bb92790d9c0effec63be73519e11a35019a3a72",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCYUnufgWErBDMXe8KslrNmcyrPV1kGU2qlaK4ZeXoazwIhAKBpS5djrxLEclmS9SbzcNwhJJW8F7NXnArMOSGiGSCv"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-09-30T20:08:08.97Z",
+        "license_expression": "ISC"
+      },
+      "version": "4.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "prettier": "^3.2.5",
+        "tap": "^18.7.2",
+        "tshy": "^1.13.1",
+        "typedoc": "^0.25.13"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==",
+          "shasum": "00e2de443639ed0d78fd87de0d27469fbcffb533",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQD6e4G4ytvhoms+0w0K9/h69xTaFaNhKrrQtsadvn51egIgFDoo7A3fA8NgnwexxWK9dLURqTrJhW0gluarpuWEJhI="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/yallist/-/yallist-5.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=18"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2024-04-09T19:21:44.844Z",
+        "license_expression": "BlueOak-1.0.0"
+      },
+      "version": "5.0.0"
+    }
+  ]
+}

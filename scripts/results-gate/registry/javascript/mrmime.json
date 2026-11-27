@@ -1,0 +1,266 @@
+{
+  "description": "A tiny (2.8kB) and fast utility for getting a MIME type from an extension or filename",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "2.0.1"
+    },
+    "Maintainers": [
+      {
+        "email": "luke@lukeed.com",
+        "name": "lukeed"
+      }
+    ]
+  },
+  "homepage": "https://github.com/lukeed/mrmime#readme",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "2.0.1",
+  "license": "MIT",
+  "licenses": null,
+  "name": "mrmime",
+  "source": {
+    "Type": "git",
+    "Url": "git+https://github.com/lukeed/mrmime.git"
+  },
+  "versions": [
+    {
+      "dependencies": {
+        "express": "^4.6.1",
+        "js-yaml": "^3.1.0",
+        "promise": "^5.0.0",
+        "promisify-node": "^0.1.2",
+        "request": "^2.37.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-Y93tBF/t3rKXGSwe5HV8N5qfKZ17LtP5O9z/JN79/SrjTCbYcduT0Hnk7u23nuZqbFY5fFbkt1gk9iwSDbO0eg==",
+          "shasum": "93442f57437476e6f38adb323f9feefb4878ba91",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIFRYWciPDQsfCH6YnKrMqXii8DEzwaI2NvWJFCdRO20pAiEA8D0zIObG+5+MePim28GXb8mt1oexXduUNpeBfRF50I4="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-0.1.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-07-22T20:33:12.655Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": {
+        "body-parser": "~0.1.0",
+        "express": "~4.6.1",
+        "js-yaml": "~3.1.0",
+        "promise": "~5.0.0",
+        "promisify-node": "~0.1.2",
+        "request": "~2.37.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-2IwJxQvd+r3psFEiAY6+w42UBGuxFTi4wBd5FiK1xYNRBbmGmA5PazHcc8LlFPz72AUjPVsGtN1oxCjHOeVmlA==",
+          "shasum": "415ea9b0bebd97d63a7c97100cb2535ec132fb11",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIGJRznGN2BzpBVOHa+i2xO7nTGz/FtQBIveiHdf7YJC/AiADZROiYKOOykl74KpYNc9VE2XCd/w0hujVKMjEV+IIog=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-0.1.1.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-07-22T20:35:16.843Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.1"
+    },
+    {
+      "dependencies": {
+        "body-parser": "~1.5.0",
+        "express": "~4.6.1",
+        "js-yaml": "~3.1.0",
+        "promise": "~5.0.0",
+        "promisify-node": "~0.1.2",
+        "request": "~2.37.0"
+      },
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-KxdiQ9o4xTZv6zLyJ1FWABKq/+w9YI3cgl32xeUGbD4tdITzOgXkvCNnsbqq8ETLIOqGxBtkk0BGQkE4YsiVPA==",
+          "shasum": "330445be92218ea613be9515d978102e37fc721f",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDZWxJY/+jXDca0+v+EUYc6HE7oP3fWOazllr8Inwku6wIgO1KWFU7A5jFHmYnwDVTH9U88ehfz1YXwKmWhKCuX02Q="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-0.1.2.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-07-22T20:36:34.929Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.2"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.1.1",
+        "esm": "3.2.25",
+        "uvu": "0.5.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-a70zx7zFfVO7XpnQ2IX1Myh9yY4UYvfld/dikWRnsXxbyvMcfz+u6UfgNAtH+k2QqtJuzVpv6eLTx1G2+WKZbQ==",
+          "shasum": "14d387f0585a5233d291baba339b063752a2398b",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCID/vy2khpqgmY4jmeuz6VKZryXGHR+zByep0X5EmA/M8AiAwDsPegNFHQ3LgIpB6KD9knheS5M7BTB/wxS5sgC0nqg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-1.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2021-10-12T06:58:37.395Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "bundt": "1.1.1",
+        "esm": "3.2.25",
+        "uvu": "0.5.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-hzzEagAgDyoU1Q6yg5uI+AorQgdvMCur3FcKf7NhMKWsaYg+RnbTyHRa/9IlLF9rf455MOCtcqqrQQ83pPP7Uw==",
+          "shasum": "5f90c825fad4bdd41dc914eff5d1a8cfdaf24f27",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIDo3vDV21Qp0nL1D5OV0rVJbbE3MSaebAIoKo+vpyVgrAiBUKbKbQdKuRzt5S0ucRZgHmFNALZALNkqdGxVpJo3/CQ=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-1.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">=10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2022-06-08T16:08:30.797Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.1"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "tsm": "2.3.0",
+        "uvu": "0.5.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-eu38+hdgojoyq63s+yTpN4XMBdt5l8HhMhc4VKLO9KM5caLIBvUm4thi7fFaxyTmCKeNnXZ5pAlBwCUnhA09uw==",
+          "shasum": "151082a6e06e59a9a39b46b3e14d5cfe92b3abb4",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIGt6qHEC5yqIYLx+AUPuqDzO7eFIdnyRqVPauNeSAyGgAiAJjszUUWRQ9p/iP6QeXBPCw5lvfwPI9Vxtxn1x1Hj4Tg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-2.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">=10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2023-12-20T15:24:42.745Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "tsm": "2.3.0",
+        "uvu": "0.5.2"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==",
+          "shasum": "bc3e87f7987853a54c9850eeb1f1078cd44adddc",
+          "signatures": [
+            {
+              "Keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "Sig": "MEQCICDRrPyK816R1ZljZE0eenrwfzk8E7HPtREkQkE53d8XAiBde1otP0Ef2bbZ2gKor1T2+fp9U4fTW3/6qE1AdPwtvw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/mrmime/-/mrmime-2.0.1.tgz"
+        },
+        "Engines": {
+          "node": ">=10"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2025-02-17T18:17:05.137Z",
+        "license_expression": "MIT"
+      },
+      "version": "2.0.1"
+    }
+  ]
+}

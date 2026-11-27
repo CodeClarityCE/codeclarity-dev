@@ -1,0 +1,1009 @@
+{
+  "description": "HTTP content negotiation",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "1.1.0",
+      "legacy": "0.6.4"
+    },
+    "Maintainers": [
+      {
+        "email": "ulisesgascondev@gmail.com",
+        "name": "ulisesgascon"
+      },
+      {
+        "email": "hello@blakeembrey.com",
+        "name": "blakeembrey"
+      },
+      {
+        "email": "wes@wesleytodd.com",
+        "name": "wesleytodd"
+      },
+      {
+        "email": "doug@somethingdoug.com",
+        "name": "dougwilson"
+      },
+      {
+        "email": "jonathanrichardong@gmail.com",
+        "name": "jongleberry"
+      }
+    ]
+  },
+  "homepage": "https://github.com/jshttp/negotiator#readme",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "1.1.0",
+  "license": "MIT",
+  "licenses": null,
+  "name": "negotiator",
+  "source": {
+    "Type": "git",
+    "Url": "git+https://github.com/jshttp/negotiator.git"
+  },
+  "versions": [
+    {
+      "dependencies": {
+        "coffee-script": "1.2.x",
+        "underscore": "1.2.x"
+      },
+      "dev_dependencies": {
+        "gzip-buffer": "x.x.x",
+        "iconv": "1.1.x",
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-dMHTIPWnLacGEuxm/hk7jruRX5PD9q49opdL/wb+V2EGkj3c/SMinW89SwY2f+goGuJE94iNasyBpYSU8MDSHw==",
+          "shasum": "eceb71a868cb56ae156cc563a1a881669d4e9650",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCPJ9ylUtRt/qkdHYh6sEJCcYvvbyDu02tB0dq8EUpHRgIge7a7q3FenfP0xvbTCBlrQoGBmXz9uO9rtRN8P3X8grI="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.1.0.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2012-01-26T17:25:19.965Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-PxyOBzTyv8ViJdyDIGLc6qhHyVhEYCP78Wj2yfHY5rYD97/Fr7bZM9uVoGY17ZNvy0YEOnipRh4EDWwGBN2Lkw==",
+          "shasum": "e93dd1d816112185f752cbb4c4c1df8cfca4f399",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCldjgF4lb55IK0mQ/gmkKKJunU2l5pWd+p92G52BD7hwIgLrcL6+jWZjnXJoxX/BQ+WfJgKUEu4GzTVXKWahGwxms="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.3.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2012-04-24T21:37:45.03Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.3"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-NPfe7Xi/X2sXQ1tuQwBKBu8WE8HoBq07vNrMxSHbv5uZ34YWIZRQaZ48voOBEFZ/YH0WdyFdroHHfWGJp1dJaQ==",
+          "shasum": "8c82cc553bbfc8ada49a969ead7bcfac3fb190f7",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIC3wIXfN/oFRi3VGQAgw++ObKnr3hR6TTuC7RlRxmBzGAiBu9UdHr8zI3pntLhrPbogqO6ubGp9gnjk6rPVjq3xu3Q=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.4.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2012-06-02T21:48:39.123Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.4"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-ZLdLI6fefwD/F6u9Le2yw+4q5dEtdj+BB+VzpHg4qj+MGucUCwaEcwTQuj+gLwB/CvugRBBWdrUXZuGGkWprSw==",
+          "shasum": "12ec7b4a9f3b4c894c31d8c4ec015925ba547eec",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDCJqEiTZ1/bl6QnkvobLOIVTCPq3LT75/Tbbmib6cW1gIgGMRn/8WAoRR27FIPcnoEdRNjhCP1+qptWHvCmCAT0Ek="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.5.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2012-08-11T18:16:30.819Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.5"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-NTIHb5m91kaOZY15H851S4S2DsvNLDUZhOW2oPUPpf+DPrgk4bShnJhczH/l7nVZ7F6+H7AkKzW6+k2zoG9s8w==",
+          "shasum": "28db6bc2e442c8655325d156ff74055dc0db289c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIAm2EqVwR6omR+Nv2DytZ1bvCbCVaQWkpwo5hqY5nrfXAiBrxbcKHaRSoGN7OLzPDGll0Co7XvG99jvy0E+E/IW82w=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.6.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2013-06-05T14:20:08.959Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.6"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-XUGV9AE7RwC89Fno1dta/y60su8yRim52OH5pIIQQd2mnX3UkyOPv5rv6ENjuRMD0By9hqIv2HIomaFnKkOePA==",
+          "shasum": "f31240c6a4aed34c1c2f22f2ce325a5414a00a9e",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDpMtR5gBwGgS0xb2lJuZh2514mnEZdUfhuIGlhmsEKxwIhAJSk/w5GXwOLJ4wWcqBJREc59BAS4a24KBOLc/oaIHwN"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.7.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2013-08-11T04:12:25.408Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.7"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-2iv1EafEsegrlyCHYPn4bMKM0g5wVTNqkdp8AqOggvSLV5znbQfTASWh4eKBqwEcw1awuY8l3U7wX95JSQWFEg==",
+          "shasum": "adfd207a3875c4d37095729c2e7c283c5ba2ee72",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIEo8FLd6FSbzvzMkleSGhifyYDJrKkaozRUPrmS5RmUVAiEA2dwps3XwAujzPVusbZZ0ic+Skp+MqiThjPUX2XgoD4w="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.2.8.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2013-09-19T18:33:09.169Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.2.8"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-q9wF64uB31BDZQ44DWf+8gE7y8xSpBdREAsJfnBO2WX9ecsutfUO6S9uWEdixlDLOlWaqnlnFXXwZxUUmyLfgg==",
+          "shasum": "706d692efeddf574d57ea9fb1ab89a4fa7ee8f60",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIETRftURCjceI6HSD+ZsKM8u4DWS5pMRopy4ZpD1IZxJAiEAlpCEtuEdrynOC1ohrVXbRobHKZgMHTSWTl8bQWu4b+I="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.3.0.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2013-10-18T20:12:14.807Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.3.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-aWg0RC/gBF1Isyp2Sr4mLBcxLO7KNmfZtWz47uiO30Bs5DtYj4vtO/kIGm9jzm219QrErkOv4cbkGG9lLZmRhw==",
+          "shasum": "06992a7c3d6014cace59f6368a5803452a6ae5c1",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQDANBojmfouSV9NJxmzwM4Xf+JAcCBGpUd6ybtUkEgTjwIhAJL/wuwZy8wtiFuvAYRwYxzOCyKCwal5DhenBdbpv/10"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.0.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-01-09T15:23:11.532Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.0"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.6.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-HyJge4an7ic67TGjtxT0tW0chbv7A2yTRlXkWy3NpilRFpW3aUi4Y8CmrZU8Vv2jZL9z/n5cVF7wSQjxVNZuVA==",
+          "shasum": "7806f0041eca5b05bb00758d8ad7611ff18f357c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQCg4cVrHI5FASagLRuu7AoBOYY9AUqy58PfO2qPPwroCgIgcOVXEkfoD3eb52+AmFBaMqY8Dp+IlEQW4yY13uN7OYo="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.1.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-01-16T17:02:25.226Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.1"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-pJQhDYP0X6G8E8+BvYHyBd0K1qLE09MPWc5wm5+zeX9mx7vJ+VoQcE65VN1C0+RXnnmneTwGCcUxqhSWvyShow==",
+          "shasum": "8c43ea7e4c40ddfe40c3c0234c4ef77500b8fd37",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQC5hHtxvZp1k36EfaaH+yYSLrSyGQgUjYp6T92y0SQjhgIhALTZmaFoT5TwArjIy+2iU8zTDP8hSQyX8KTVfKC24GGh"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.2.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-03-01T03:06:59.978Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.2"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-eKqOkgSx2j4zftzisCNIPg2pKy0FzZT3tii/W1YNjPUZWqR8P7n/9Hn756Unj3OUUFhGka/9UNqMk9Q9qfNazQ==",
+          "shasum": "9d6b5cf549547ca06a3971a81f80d25f3cf9db02",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIANOd1JXBccqtUVo5s9XIMxeR5XYNjGBgjvoMN+alhgfAiAhKQ2zNIRe1qHdzUahhsUfMTtDEpSZJ0K1VCvG8qCjeg=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.3.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-04-16T14:12:01.576Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.3"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-JrM/4l85GK3r4h/FOzinKWm95eaTD8rEMvTPURBShhcLFPU0OzwHWr36MhGYaGdVKaBeT0o2BWNhicBxeNkphg==",
+          "shasum": "321ec00f2d3a9f597c62581082030b49c39fd199",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCVX8Rn+AcPnTPz0A5yARSRTJAFXighOX+XSzSUrF3I4gIhAOWyAKwbPHmPGceGvM/K1vYQbzuweQw7Ac858nYgDV8I"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.4.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-05-29T15:19:30.693Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.4"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-yk2Y8USphD7Z1/hiP/96RhpwOW37gMDrhHoo9mAHnVhfJqnlu5vUvNX/7FyJwj6kV6MxfLFnhNZGl0XKgL6zNA==",
+          "shasum": "0e738eb225e3a166ee7d69ebcfdc702ba236a77b",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIE7ObIDYqzTRy0BInu4NA6+h00ShbR9gI4sGqGiH0wGcAiAG4E6O+H7vMlCIt0RfdUHvfkuuBawO2Zh41Auvg42DJA=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.5.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-05-29T15:53:13.591Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.5"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-nkhZDoiMZOCbMRPfDAilhyb8sETDhHP+zDCUv+JD26OSPOrYG+/76uooeqz3WTVh7BvQE41VV0YMTGKUgn9GQg==",
+          "shasum": "f45faf9fa833ed3ca51250ea9a7ddfc4267a44b3",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCICPbODba4/YSPO3Q0eZ1x8kMxcikVwuI7w6W1Tk/tGL2AiArB06pyA34LNcihtBRKo9fcFla2TmNgT5XbYSNXeRm3A=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.6.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-06-11T19:36:14.258Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.6"
+    },
+    {
+      "dependencies": {},
+      "dev_dependencies": {
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-ujxWwyRfZ6udAgHGECQC3JDO9e6UAsuItfUMcqA0Xf2OLNQTveFVFx+fHGIJ5p0MJaJrZyGQqPwzuN0NxJzEKA==",
+          "shasum": "a4160f7177ec806738631d0d3052325da42abdc8",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIQDMPRaEVRvdKkkfSxKO1erp6QowY3C0o2OyCPGopVaUvQIgVrxFarW8QHYZRUZA/XbpfpxPX17qRxndx3HHf3DzS4k="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.7.tgz"
+        },
+        "Engines": {
+          "node": "*"
+        },
+        "OptionalDependencies": {},
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-06-24T22:32:21.627Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.7"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "~0.3.2",
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-I6nRG6y/4B4LAiYcPTcws+CUjC50IC6JwDEO+aUwvyZ7M+MnWibJrqhqenQYdL/vvoybF1qAxN+PO+HYcJjpWQ==",
+          "shasum": "96010b23b63c387f47a4bed96762a831cda39eab",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQC2UGjBobkmKI/y/SsSyG3f6hPmrQzThPJAmvdvuMf1gAIhAP0ngj15z5mlNSGqYmLjAwJg4m36NC8d54LX5V8RSRfc"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.8.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-09-28T21:46:31.73Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.8"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "~0.3.2",
+        "nodeunit": "0.8.x"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-fvi5GQce2TGDzanaTxNY3bboxjdce18sqwNylY439wkEkiJIyTMhGFMdlPCvDsIPa9IKIfhKwCMWEQ9YpZgb1Q==",
+          "shasum": "92e46b6db53c7e421ed64a2bc94f08be7630df3f",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIEEqPIM3j2W+uI9fgth0DUzLx+bZUM7H1Wf/pZ07jgCGAiEAwsHB9hrY+DcAy/j5ttmaB26xsbLJ9+mnXIwhN/fCAbg="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.4.9.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-10-15T04:39:00.364Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.4.9"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.3.5",
+        "nodeunit": "0.9.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-RL4h5E+d0CKh/+JJkBlXdqxVFfmz49JCYgNa8kfy8Z/I0n36zZIbD8Renw3tvmZxYpNwTp2/MyUg6dMBwMg4pQ==",
+          "shasum": "bb77b3139d80d9b1ee8c913520a18b0d475b1b90",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIDpbC5cyXjuVXOpKJuSSyjDbGqYOteMDsCvgWH2+skvbAiEA61Q2gMfZ6PXFrKTu9enk20miz+z6lgYRA/K2xFubhoM="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.5.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2014-12-19T04:05:15.02Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.5.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.3.5",
+        "nodeunit": "0.9.0",
+        "tap": "0.5.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-4xMpMpngdU1K1EXKQZh7fm1hNQR1vpHcZBJb9th+cd1ERRtiN0tduxJZrHJkHHVr9KV+BN+WEUVFpQLkBK3J8A==",
+          "shasum": "498f661c522470153c6086ac83019cb3eb66f61c",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIBlRhLfj4+X0vUx/J1AoUTjxKFG2sKjktndTfw4EubzzAiEAtRauSYp0v1MbdtaAGzjoI8ltz3CNx3HeGEeKkwiEmFQ="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.5.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-02-15T01:54:09.606Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.5.1"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.3.9",
+        "mocha": "~1.21.5"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-kwyztEA9NxSQaAdNcRhaeGkRIdlGuoqIeA16H+by2xQfhfy3ULAQj/YoXH+Az8p7ybqccFV2t9dwp0wPeK7Z+Q==",
+          "shasum": "17bf5c8322f6c8284a8f3c7dfec356106438a41a",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIDjkcQ0BRKEUQK5BqeRdD1S+ZUS83OiT4N4RjtqnVbvTAiEAseNFWp1aeXjCrLua8PYCeDAeXABiIHN9KDqQd0dMg40="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.5.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-05-07T05:18:55.668Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.5.2"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.3.9",
+        "mocha": "~1.21.5"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-oXmnazqehLNFohqgLxRyUdOQU9/UX0NpCpsnbjWUjM62ZM8oSOXYZpHc68XR130ftPNano0oQXGdREAplZRhaQ==",
+          "shasum": "269d5c476810ec92edbe7b6c2f28316384f9a7e8",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCJoWYRGDm7TIz/JZ6T+94tQlc0oCdXfG7fdJwRTt4JLwIhAOV+7y14UE7nTd3RIRXZ45wpMbHZZQ3F9DYN98RdA8Gs"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.5.3.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-05-11T02:19:32.641Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.5.3"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.3.21",
+        "mocha": "~1.21.5"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-/CPjkQFZO1cKrpLMcr7QjBaxLn110ZvFWsBV0uqbb8gfkAlU9QIFVOXwZhxLcaLzDC+eZEWpUvTSFX7ZUtnGdA==",
+          "shasum": "33593a5a2b0ce30c985840c6f56b6fb1ea9e3a55",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCIG1Ccbmq3NcLZ/iAusiNjL1Y4OAq8/ffK+GZu5zsaQbtAiBfJ4Z43Lf9KWMhEZrXigoEy5o0w27ey2lP1IdqMRQnSw=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2015-09-30T01:21:40.97Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.6.0"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "istanbul": "0.4.3",
+        "mocha": "~1.21.5"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-qTxkr1RoLw5Pz+1+PTJ/66hWuyi2LEOeOuIDJDlx6JF8x75bmD5C7qXTg2UlX5W9rLfkqKP+r8q6Vy6NWdWrbw==",
+          "shasum": "2b327184e8992101177b28563fb5e7102acd0ca9",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEQCID+lhXkaNA+AJGgsLujtsF0CyR0Vq2aHRy4nETJ0g48iAiA7tA6J4sc8Op4R9Z2jNqeg5f4Lkk/PSEQ2zSsTrbe+GQ=="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.1.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2016-05-03T04:47:29.814Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.6.1"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "eslint": "5.16.0",
+        "eslint-plugin-markdown": "1.0.0",
+        "mocha": "6.1.4",
+        "nyc": "14.0.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-hZXc7K2e+PgeI1eDBe/10Ard4ekbfrrqG8Ep+8Jmf4JID2bNg7NvCPOZN+kfF574pFQI7mum2AUqDidoKqcTOw==",
+          "shasum": "feacf7ccf525a77ae9634436a64883ffeca346fb",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCEn6pIqEPZoWJro9Gzw68rWPuY85N+4Gc7pvkkjnWCXwIhANk1pMmmdcSgOm86fubVJG1WksNiqEql5u/a6y8z4ipS"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.2.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2019-04-30T00:30:30.629Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.6.2"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "eslint": "7.32.0",
+        "eslint-plugin-markdown": "2.2.1",
+        "mocha": "9.1.3",
+        "nyc": "15.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==",
+          "shasum": "58e323a72fedc0d6f9cd4d31fe49f51479590ccd",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEYCIQCwWK0qSZqF/rTSc9yQVnO06hqkMpn44qT6AjizctXUeQIhAJ6VHibmzze9aOy2LJSVenGWZcWx8zUFvmENe9uhlhZr"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.3.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2022-01-23T01:50:13.164Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.6.3"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "eslint": "7.32.0",
+        "eslint-plugin-markdown": "2.2.1",
+        "mocha": "9.1.3",
+        "nyc": "15.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-myRT3DiWPHqho5PrJaIRyaMv2kgYf0mUVgBNOYMuCH5Ki1yEiQaf/ZJuQ62nvpc44wL5WDbTX7yGJi1Neevw8w==",
+          "shasum": "777948e2452651c570b712dd01c23e262713fff7",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIFBUdGaZndf+NFoueRiqiXX6rvBmVL2kJt5KdsA8aMFfAiEA5pv6v1w+zV3RUDEh4sWYlDOsuIlV4zjTVQmuV+2ZBrQ="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.4.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2024-10-19T03:20:43.081Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.6.4"
+    },
+    {
+      "dependencies": null,
+      "dev_dependencies": {
+        "eslint": "7.32.0",
+        "eslint-plugin-markdown": "2.2.1",
+        "mocha": "9.1.3",
+        "nyc": "15.1.0"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==",
+          "shasum": "b6c91bb47172d69f93cfd7c357bbb529019b5f6a",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIB6mq4UwJSJRvN5fIsalNoOHrlIazxlV3CDGqdWkfkoCAiEAn65645wflPysWjDN7ICS/H1sVL0mCXSNdLPy9VGEb5Y="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-1.0.0.tgz"
+        },
+        "Engines": {
+          "node": ">= 0.6"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2024-08-31T15:42:18.28Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.0.0"
+    },
+    {
+      "dependencies": {
+        "content-type": "^2.1.0"
+      },
+      "dev_dependencies": {
+        "eslint": "7.32.0",
+        "eslint-plugin-markdown": "2.2.1",
+        "mocha": "^11.7.0",
+        "nyc": "^17.1.0",
+        "vitest": "3.2.4"
+      },
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==",
+          "shasum": "16e003d0db4ac24fd9df168edf871625deeae3df",
+          "signatures": [
+            {
+              "Keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "Sig": "MEUCIQDW6n2+Fx5TgLQzENiKKyAW1sEELBZtdL31eNU4hu+TTgIgVW1qMfBMwBb9O8MF2IhgeFFiQ78o74OL0PXGSKtSfXw="
+            },
+            {
+              "Keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "Sig": "MEYCIQCPYOF3dLHt5gLvnfueQDk3oRsBF+Kcfb/bYCeC+arDUQIhALAO8nraWa1OlMl3W4IXKKvHRwOjIutWVoIqQBwfqq7I"
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/negotiator/-/negotiator-1.1.0.tgz"
+        },
+        "Engines": {
+          "node": ">=18"
+        },
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2026-08-20T16:45:05.235Z",
+        "license_expression": "MIT"
+      },
+      "version": "1.1.0"
+    }
+  ]
+}
