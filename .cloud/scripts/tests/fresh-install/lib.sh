@@ -125,10 +125,16 @@ api_curl() {
 	fi
 }
 
-# Prints a token for the login account, or nothing if login fails.
+# Prints the access token the API sets as a cookie for the login account, or nothing if login fails.
 login() {
-	api_curl -fsS -X POST "$API_BASE/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"$LOGIN_EMAIL\",\"password\":\"$LOGIN_PASSWORD\"}" 2>/dev/null | jq -er '.data.token' 2>/dev/null || true
+	api_curl -fsS -o /dev/null -D - -X POST "$API_BASE/auth/authenticate" -H 'Content-Type: application/json' \
+		-d "{\"email\":\"$LOGIN_EMAIL\",\"password\":\"$LOGIN_PASSWORD\"}" 2>/dev/null | tr -d '\r' |
+		sed -n 's/^[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]: *__Host-Http-cc_access=\([A-Za-z0-9._-]*\).*/\1/p' | head -n 1
+}
+
+# Runs api_curl on the login's sign-in: its access cookie and the header the API requires with it.
+session_curl() {
+	api_curl -H "Cookie: __Host-Http-cc_access=$token" -H 'X-CodeClarity-CSRF: 1' "$@"
 }
 
 # Waits for the API to accept the login account, then sets token.
@@ -142,12 +148,12 @@ wait_for_login() {
 }
 
 get() {
-	api_curl -fsS "$API_BASE$1" -H "Authorization: Bearer $token"
+	session_curl -fsS "$API_BASE$1"
 }
 
 # POSTs the JSON $2 to path $1.
 post() {
-	api_curl -fsS -X POST "$API_BASE$1" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$2"
+	session_curl -fsS -X POST "$API_BASE$1" -H 'Content-Type: application/json' -d "$2"
 }
 
 # Writes a tiny npm project (one dependency, ms@2.1.3) as the tar.gz archive $1.
@@ -178,7 +184,7 @@ EOF
 
 # Uploads the tar.gz archive $3 as the source of project $2 in org $1.
 upload_archive() {
-	api_curl -fsS -X PATCH "$API_BASE/org/$1/file/$2/upload" -H "Authorization: Bearer $token" \
+	session_curl -fsS -X PATCH "$API_BASE/org/$1/file/$2/upload" \
 		--form-string type=source --form-string file_name=app.tar.gz --form-string chunk=true \
 		--form-string id=0 --form-string last=true --form-string "hash=$(sha256sum "$3" | cut -d' ' -f1)" \
 		-F "file=@$3;filename=app.tar.gz" >/dev/null

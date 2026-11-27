@@ -194,8 +194,8 @@ check_codeql_off() {
 
 	before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
 	result=ok
-	status=$(api_curl -sS -o "$work/refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
-		-H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+	status=$(session_curl -sS -o "$work/refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+		-H 'Content-Type: application/json' \
 		-d '{"analyzer_id":"'"$codeql"'","branch":"main","config":{}}') || result=bad
 	[ "$status" = 409 ] || result=bad
 	jq -e --arg reason "$reason" '.error_code == "AnalyzerUnavailable" and .error_message == $reason' "$work/refusal.json" >/dev/null || result=bad
@@ -252,8 +252,8 @@ check_plugin_down() {
 		before=$(sql codeclarity 'SELECT count(*) FROM analysis') || before=
 		result=ok
 		body=$(default_analysis_body "$2" "$3") || result=bad
-		status=$(api_curl -sS -o "$work/down-refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
-			-H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$body") || result=bad
+		status=$(session_curl -sS -o "$work/down-refusal.json" -w '%{http_code}' -X POST "$API_BASE/org/$2/projects/$3/analyses" \
+			-H 'Content-Type: application/json' -d "$body") || result=bad
 		[ "$status" = 409 ] || result=bad
 		jq -e --arg p "$DOWN_PLUGIN" '.error_code == "AnalyzerUnavailable" and (.error_message | contains($p))' "$work/down-refusal.json" >/dev/null || result=bad
 		after=$(sql codeclarity 'SELECT count(*) FROM analysis') || after=
