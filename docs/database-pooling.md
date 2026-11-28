@@ -12,7 +12,18 @@ onto a small server-side connection set, so replica count no longer drives `max_
   `deployment/config/pgbouncer.ini` with `auth_query` (multi-role) + TLS. The prod `generate-secrets` job
   (`deployment/scripts/generate-secrets.sh`) writes pgbouncer's `userlist.txt`, the `pgbouncer_auth` password and
   its certificate (SAN includes `pgbouncer`) into the secrets volume on first start; nothing is kept in sync by hand.
-- **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300. Prod caps
+- **Roles**: each client connects as its own least-privilege role. Prod: the API `cc_api`, the package
+  follower `cc_follower`, the other Go services `cc_service`, the plugins `cc_plugin`, the knowledge service
+  `cc_knowledge` and the exporters `cc_exporter`; dev runs everything as `postgres` except the follower,
+  which is `cc_follower` there too. `cc_follower` alone may write knowledge `package` and `version` (the
+  metadata licence and outdated results come from) and may update only an analysis's `status` and `config`.
+  The init script creates the roles; the migrate job applies `cc_follower`'s table grants on every run,
+  creates the role on an install that predates it (from `PG_FOLLOWER_PASSWORD`, sent as a SCRAM secret),
+  and fails rather than skip them. The password only applies when the role is created: changing
+  `cc_follower_password` later also needs an `ALTER ROLE cc_follower PASSWORD` by hand. pgbouncer needs no change per role: prod looks each one up with
+  `auth_query`, dev through its `postgres` `auth_user`.
+- **Budget**: dev keeps `default_pool_size(20) × (roles × databases)` under `max_connections` 300 (two roles,
+  `postgres` and `cc_follower`: 160). Prod caps
   pgbouncer at `max_db_connections(20) × 4 databases = 80` server connections, under `max_connections`
   (`PG_MAX_CONNECTIONS`, default 100), whatever the replica count.
 - **Replicas**: prod runs one replica of every service and plugin, sized for the reference machine (ADR 0012).
