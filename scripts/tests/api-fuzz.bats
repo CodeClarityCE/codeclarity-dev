@@ -25,7 +25,7 @@ setup() {
 curl_stub() {
 	[[ "$1 $2" == "POST https://localhost/api/auth/authenticate" ]] || return 1
 	[[ "$3" == *'"email":"john.doe@codeclarity.io"'* ]] || return 1
-	echo '{"data": {"token": "dev-token-123"}}'
+	printf 'HTTP/1.1 201 Created\r\nset-cookie: __Host-Http-cc_access=dev-token-123; Path=/; HttpOnly; Secure; SameSite=Strict\r\n\r\n'
 }
 EOF
 	stub_docker 0
@@ -47,13 +47,19 @@ docker_arg() {
 	grep -A1 -xF -- "$1" "$DOCKER_LOG" | sed -n 2p
 }
 
+# Every value following argument $1 in the logged docker call, one per line.
+docker_args() {
+	awk -v name="$1" 'take { print; take = 0; next } $0 == name { take = 1 }' "$DOCKER_LOG"
+}
+
 @test "run as the dev account logs in and fuzzes the API's OpenAPI description with the pinned image" {
 	run bash "$FUZZ" run --auth dev-account --out "$OUT"
 	[ "$status" -eq 0 ]
 	grep -qxF "$(cat "$BATS_TEST_DIRNAME/../api-fuzz/schemathesis-image.txt")" "$DOCKER_LOG"
 	grep -qxF "https://localhost/api/api_doc-json" "$DOCKER_LOG"
 	[ "$(docker_arg --url)" = "https://localhost/api" ]
-	[ "$(docker_arg --header)" = "Authorization: Bearer dev-token-123" ]
+	# The web sign-in rides on its access cookie, with the header the API requires on it.
+	[ "$(docker_args --header)" = $'Cookie: __Host-Http-cc_access=dev-token-123\nX-CodeClarity-CSRF: 1' ]
 	[ "$(docker_arg --checks)" = "not_a_server_error,response_schema_conformance" ]
 	[ "$(cat "$OUT/auth")" = dev-account ]
 	[ "$(cat "$OUT/exit-code")" = 0 ]
@@ -118,7 +124,7 @@ docker_arg() {
 @test "run with the token provider sends API_TOKEN and does not log in" {
 	API_TOKEN=org-token-9 run bash "$FUZZ" run --auth token --out "$OUT"
 	[ "$status" -eq 0 ]
-	[ "$(docker_arg --header)" = "Authorization: Bearer org-token-9" ]
+	[ "$(docker_args --header)" = "Authorization: Bearer org-token-9" ]
 	[ ! -s "$CURL_STUB_LOG" ]
 	[ "$(cat "$OUT/auth")" = token ]
 }
@@ -163,7 +169,7 @@ stub_token_api() {
 	cat >"$CURL_STUB_RULES" <<RULES
 curl_stub() {
 	case "\$1 \$2" in
-	"POST https://localhost/api/auth/authenticate") echo '{"data": {"token": "dev-token-123"}}' ;;
+	"POST https://localhost/api/auth/authenticate") printf 'HTTP/1.1 201 Created\r\nset-cookie: __Host-Http-cc_access=dev-token-123; Path=/; HttpOnly; Secure; SameSite=Strict\r\n\r\n' ;;
 	"GET https://localhost/api/org?page=0&entries_per_page=50")
 		echo '{"data": [{"organization": {"id": "team-1", "personal": false}}, {"organization": {"id": "org-1", "personal": true}}]}' ;;
 	"POST https://localhost/api/org/org-1/tokens")
@@ -182,7 +188,9 @@ RULES
 	[ "$status" -eq 0 ]
 	[ "$output" = ccot_secret-1 ]
 	grep -qxF 'POST https://localhost/api/org/org-1/tokens' "$CURL_STUB_LOG"
-	grep -qxF 'Authorization: Bearer dev-token-123' "$CURL_STUB_HEADERS"
+	grep -qxF 'Cookie: __Host-Http-cc_access=dev-token-123' "$CURL_STUB_HEADERS"
+	grep -qxF 'X-CodeClarity-CSRF: 1' "$CURL_STUB_HEADERS"
+	[ "$(grep -c '^Authorization' "$CURL_STUB_HEADERS")" = 0 ]
 	[ "$(jq -r .scope "$BATS_TEST_TMPDIR/token-body")" = analyze ]
 	[ "$(jq -r .name "$BATS_TEST_TMPDIR/token-body")" = api-fuzz ]
 	# It expires about a day from now.

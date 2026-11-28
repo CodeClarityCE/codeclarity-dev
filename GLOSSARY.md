@@ -35,7 +35,7 @@ A secret an organization's admin issues so a pipeline can act in that organizati
 _Avoid_: API key, personal access token (it belongs to no person), integration token (that is a credential CodeClarity holds for GitHub, GitLab or ClickUp)
 
 **Sign-in**:
-One password login of a user and the tokens it hands out: a 15-minute access token, and a refresh token that works once and is replaced on every refresh. All the refresh tokens of one sign-in form its family, which lasts 7 days from the login. Presenting a spent refresh token again ends the whole sign-in, so the web app lets only one tab refresh at a time (an exclusive Web Lock) and the other tabs take the tokens it saved. Signing out ends one sign-in, and the user's other tabs follow it. Changing the password ends all of the user's sign-ins and starts a fresh one for the caller; a password reset ends them all.
+One password login of a user and the tokens it hands out: a 15-minute access token, and a refresh token that works once and is replaced on every refresh. The browser holds both where no page script can read them, and accepts them only on requests from CodeClarity's own pages. All the refresh tokens of one sign-in form its family, which lasts 7 days from the login. Presenting a spent refresh token again ends the whole sign-in, so the web app lets only one tab refresh at a time and the other tabs use the sign-in it renewed. Signing out ends one sign-in, and the user's other tabs follow it. Changing the password ends all of the user's sign-ins and starts a fresh one for the caller; a password reset ends them all.
 _Avoid_: Session (except for the web app's local state), login (the act, not what it creates)
 
 **Error report**:

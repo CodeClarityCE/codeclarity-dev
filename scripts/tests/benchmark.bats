@@ -205,7 +205,7 @@ fake_api() {
 curl_stub() {
 	local path=${2#*://*/}
 	case "$1 /${path%%\?*}" in
-	"POST /auth/authenticate") echo '{"data": {"token": "t0k"}}' ;;
+	"POST /auth/authenticate") printf 'HTTP/1.1 201 Created\r\nset-cookie: __Host-Http-cc_access=t0k; Path=/; HttpOnly; Secure; SameSite=Strict\r\n\r\n' ;;
 	"GET /org") echo '{"data": [{"organization": {"id": "org1", "personal": true}}]}' ;;
 	"POST /org/org1/projects") echo '{"id": "proj1"}' ;;
 	"PATCH /org/org1/file/proj1/upload") echo '{}' ;;

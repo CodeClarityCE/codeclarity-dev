@@ -242,7 +242,7 @@ sample_oom() {
 # Times one GET: epoch, kind, path, then the HTTP status and seconds (000 if the request failed).
 probe() {
 	# A failed or timed-out request keeps its time, so it counts against p95.
-	line=$(api_curl -sS -o /dev/null --max-time 60 -H "Authorization: Bearer $token" -w '%{http_code} %{time_total}' "$4" 2>/dev/null) || :
+	line=$(session_curl -sS -o /dev/null --max-time 60 -w '%{http_code} %{time_total}' "$4" 2>/dev/null) || :
 	[ -n "$line" ] || line="000 60"
 	echo "$1,$2,$3,$line" | tr ' ' ',' >>"$out/latency.csv"
 }
@@ -372,7 +372,7 @@ run() {
 	org=$(get '/org?page=0&entries_per_page=50' | jq -er '[.data[] | select(.organization.personal)][0].organization.id')
 	project_id=$(post "/org/$org/projects" '{"name":"reference-machine-baseline","description":"Reference-machine baseline (#162)"}' | jq -er '.id')
 	tarball "$project" "$work/app.tar.gz"
-	api_curl -fsS -X PATCH "$API_BASE/org/$org/file/$project_id/upload" -H "Authorization: Bearer $token" \
+	session_curl -fsS -X PATCH "$API_BASE/org/$org/file/$project_id/upload" \
 		--form-string type=source --form-string file_name=app.tar.gz --form-string chunk=true \
 		--form-string id=0 --form-string last=true --form-string "hash=$(sha256sum "$work/app.tar.gz" | cut -d' ' -f1)" \
 		-F "file=@$work/app.tar.gz;filename=app.tar.gz" >/dev/null
