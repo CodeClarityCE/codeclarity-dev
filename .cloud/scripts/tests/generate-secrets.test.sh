@@ -71,7 +71,7 @@ test_an_empty_volume_gets_every_secret_each_service_reads() {
 		knowledge-restore/env knowledge-restore/ca.crt \
 		migrate/.env.prod migrate/ca.crt \
 		api/.env.prod api/ca.crt api-jwt/private.pem api-jwt/public.pem \
-		service/env service/ca.crt plugin/env plugin/ca.crt knowledge/env knowledge/ca.crt \
+		service/env service/ca.crt follower/env follower/ca.crt plugin/env plugin/ca.crt knowledge/env knowledge/ca.crt \
 		grafana/admin_password grafana/cc_exporter_password grafana/ca.crt \
 		exporter/cc_exporter_password exporter/ca.crt; do
 		[ -s "$s/$f" ] || {
@@ -116,14 +116,17 @@ test_each_role_gets_its_own_password_and_services_agree_on_it() {
 	s="$work/fresh"
 	result=ok
 	pw() { env_value "$s/db/env" "$1"; }
-	n=$(for v in POSTGRES_PASSWORD CC_API_PASSWORD CC_SERVICE_PASSWORD CC_PLUGIN_PASSWORD \
+	n=$(for v in POSTGRES_PASSWORD CC_API_PASSWORD CC_SERVICE_PASSWORD CC_FOLLOWER_PASSWORD CC_PLUGIN_PASSWORD \
 		CC_KNOWLEDGE_PASSWORD CC_EXPORTER_PASSWORD PGBOUNCER_AUTH_PASSWORD; do pw $v; done | grep -c .)
-	distinct=$(for v in POSTGRES_PASSWORD CC_API_PASSWORD CC_SERVICE_PASSWORD CC_PLUGIN_PASSWORD \
+	distinct=$(for v in POSTGRES_PASSWORD CC_API_PASSWORD CC_SERVICE_PASSWORD CC_FOLLOWER_PASSWORD CC_PLUGIN_PASSWORD \
 		CC_KNOWLEDGE_PASSWORD CC_EXPORTER_PASSWORD PGBOUNCER_AUTH_PASSWORD; do pw $v; done | sort -u | grep -c .)
-	[ "$n" = 7 ] || result=bad
-	[ "$distinct" = 7 ] || result=bad
+	[ "$n" = 8 ] || result=bad
+	[ "$distinct" = 8 ] || result=bad
 	[ "$(env_value "$s/api/.env.prod" PG_DB_PASSWORD)" = "$(pw CC_API_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/service/env" PG_DB_PASSWORD)" = "$(pw CC_SERVICE_PASSWORD)" ] || result=bad
+	[ "$(env_value "$s/follower/env" PG_DB_PASSWORD)" = "$(pw CC_FOLLOWER_PASSWORD)" ] || result=bad
+	[ "$(env_value "$s/follower/env" AMQP_PASSWORD)" = "$(env_value "$s/service/env" AMQP_PASSWORD)" ] || result=bad
+	[ "$(env_value "$s/migrate/.env.prod" PG_FOLLOWER_PASSWORD)" = "$(pw CC_FOLLOWER_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/plugin/env" PG_DB_PASSWORD)" = "$(pw CC_PLUGIN_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/knowledge/env" PG_DB_PASSWORD)" = "$(pw CC_KNOWLEDGE_PASSWORD)" ] || result=bad
 	[ "$(env_value "$s/migrate/.env.prod" PG_DB_ADMIN_PASSWORD)" = "$(pw POSTGRES_PASSWORD)" ] || result=bad
@@ -133,6 +136,30 @@ test_each_role_gets_its_own_password_and_services_agree_on_it() {
 	grep -qx "\"pgbouncer_auth\" \"$(pw PGBOUNCER_AUTH_PASSWORD)\"" "$s/pgbouncer/userlist.txt" || result=bad
 	hash_matches "$(password_hash "$s/rabbitmq/definitions/00-users.json")" "$(env_value "$s/api/.env.prod" AMQP_PASSWORD)" || result=bad
 	check "each role gets its own password and every service agrees on it" $result
+}
+
+# An instance generated before the follower had its own role: drop that secret and its view.
+test_an_upgraded_volume_gets_the_follower_password_and_keeps_the_rest() {
+	: >"$work/out"
+	s="$work/upgraded"
+	result=ok
+	generate "$s" || result=bad
+	rm "$s/.store/cc_follower_password"
+	rm -r "$s/follower"
+	cp -R "$s/.store" "$work/store.before"
+	: >"$work/out"
+	generate "$s" || result=bad
+	grep -qx 'generate-secrets: generated cc_follower_password' "$work/out" || result=bad
+	[ "$(grep -c 'generated' "$work/out")" = 1 ] || result=bad
+	for f in "$work/store.before"/*; do
+		cmp -s "$f" "$s/.store/${f##*/}" || {
+			echo "changed ${f##*/}" >>"$work/out"
+			result=bad
+		}
+	done
+	[ "$(env_value "$s/follower/env" PG_DB_PASSWORD)" = "$(cat "$s/.store/cc_follower_password")" ] || result=bad
+	[ "$(env_value "$s/migrate/.env.prod" PG_FOLLOWER_PASSWORD)" = "$(cat "$s/.store/cc_follower_password")" ] || result=bad
+	check "an upgraded volume gets the follower's password and keeps every other secret" $result
 }
 
 test_two_instances_share_no_secret() {
@@ -250,6 +277,7 @@ test_an_empty_volume_gets_every_secret_each_service_reads
 test_a_second_run_changes_nothing
 test_an_existing_secret_is_kept_and_missing_ones_are_added
 test_each_role_gets_its_own_password_and_services_agree_on_it
+test_an_upgraded_volume_gets_the_follower_password_and_keeps_the_rest
 test_two_instances_share_no_secret
 test_the_certificates_verify_for_the_names_clients_use
 test_the_jwt_keys_are_a_pair

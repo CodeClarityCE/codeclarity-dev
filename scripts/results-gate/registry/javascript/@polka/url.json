@@ -1,0 +1,57 @@
+{
+  "description": "Super fast, memoized `req.url` parser",
+  "extra": {
+    "Author": "",
+    "Dist_tags": {
+      "latest": "0.5.0",
+      "next": "1.0.0-next.29"
+    },
+    "Maintainers": [
+      {
+        "email": "luke@lukeed.com",
+        "name": "lukeed"
+      }
+    ]
+  },
+  "homepage": "",
+  "keywords": "null",
+  "language": "javascript",
+  "latest_version": "0.5.0",
+  "license": "MIT",
+  "licenses": null,
+  "name": "@polka/url",
+  "source": {
+    "Type": "git",
+    "Url": "https://github.com/lukeed/polka.git"
+  },
+  "versions": [
+    {
+      "dependencies": null,
+      "dev_dependencies": null,
+      "extra": {
+        "Author": "",
+        "BundleDependencies": null,
+        "BundledDependencies": null,
+        "Deprecated": null,
+        "Dist": {
+          "integrity": "sha512-oZLYFEAzUKyi3SKnXvj32ZCEGH6RDnao7COuCVhDydMS9NrCSVXhM79VaKyP5+Zc33m0QXEd2DN3UkU7OsHcfw==",
+          "shasum": "b21510597fd601e5d7c95008b76bf0d254ebfd31",
+          "signatures": [
+            {
+              "Keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "Sig": "MEUCIDnWS+2kAXBM0A8ih8nrd4Euz5M+jXMjRWAgNsvHe/6XAiEAoUblumF0rgH1lx6ELW8nqFXaluXCufGUolXnQoKlqoE="
+            }
+          ],
+          "tarball": "https://registry.npmjs.org/@polka/url/-/url-0.5.0.tgz"
+        },
+        "Engines": null,
+        "OptionalDependencies": null,
+        "PeerDependencies": null,
+        "PeerDependenciesMeta": null,
+        "Time": "2018-09-18T18:17:32.381Z",
+        "license_expression": "MIT"
+      },
+      "version": "0.5.0"
+    }
+  ]
+}

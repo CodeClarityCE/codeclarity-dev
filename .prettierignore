@@ -1,3 +1,5 @@
 # Written by tools, not by hand.
 pnpm-lock.yaml
 .claude/settings.local.json
+# Written by gate.sh record, as jq prints them.
+scripts/results-gate/registry/

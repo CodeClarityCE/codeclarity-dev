@@ -18,6 +18,7 @@ API migrations (`api/src/migrations/<database>/`) are the only source of schema 
 
 Migrations run one way, in the one-shot `migrate` Compose job: `src/scripts/migrate.ts` (compiled to `dist/scripts/migrate.js` in the production image). With no arguments it migrates codeclarity, knowledge, plugins and config in that order; named databases run in that same order. It connects straight to Postgres (`db:5432`), not pgbouncer, and when `PG_DB_ADMIN_USER` is set it connects as that admin and runs `SET ROLE` to each database's owning role.
 
+- After the migrations, on every run and with or without the admin, it creates the package follower's `cc_follower` role when missing and applies its grants (`docs/database-pooling.md`); a migrate that cannot do that fails.
 - `make up` runs the job, and the API and services wait for it to succeed. The API image's start command only serves requests.
 - `make migrate` / `make migrate-<db>` run the same job (through the broker in the devcontainer). Nothing runs on the host.
 - Dev does not use `synchronize` unless `DB_FORCE_SYNC=true`.

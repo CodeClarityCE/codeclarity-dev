@@ -39,24 +39,32 @@ api_curl() {
 	fi
 }
 
-# Auth providers: auth_<name> prints the header Schemathesis sends on every request.
+# Auth providers: auth_<name> prints the headers Schemathesis sends on every request, one per line.
 auth_providers() {
 	declare -F | awk '$3 ~ /^auth_/ && $3 != "auth_providers" { sub("^auth_", "", $3); gsub("_", "-", $3); print $3 }'
 }
 
-# Prints a JWT of the dev account, logged in through the API.
+# Prints the access token the API sets as a cookie when the dev account logs in.
 dev_login() {
-	local email=${LOGIN_EMAIL:-john.doe@codeclarity.io} password=${LOGIN_PASSWORD:-'ThisIs4Str0ngP4ssW0rd?'}
-	api_curl -fsS -X POST "$API_URL/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "$(jq -cn --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" 2>/dev/null |
-		jq -er '.data.token' 2>/dev/null || die "$email could not log in through $API_URL"
+	local email=${LOGIN_EMAIL:-john.doe@codeclarity.io} password=${LOGIN_PASSWORD:-'ThisIs4Str0ngP4ssW0rd?'} token
+	token=$(api_curl -fsS -o /dev/null -D - -X POST "$API_URL/auth/authenticate" -H 'Content-Type: application/json' \
+		-d "$(jq -cn --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" 2>/dev/null | tr -d '\r' |
+		sed -n 's/^[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]: *__Host-Http-cc_access=\([A-Za-z0-9._-]*\).*/\1/p' | head -n 1) || true
+	[[ -n "$token" ]] || die "$email could not log in through $API_URL"
+	echo "$token"
+}
+
+# Prints the headers of a web sign-in: its access cookie and the header the API requires with it.
+session_headers() {
+	echo "Cookie: __Host-Http-cc_access=$1"
+	echo "X-CodeClarity-CSRF: 1"
 }
 
 # The dev account, logged in through the API.
 auth_dev_account() {
 	local token
 	token=$(dev_login) || exit 1
-	echo "Authorization: Bearer $token"
+	session_headers "$token"
 }
 
 # A bearer token given in API_TOKEN, such as an Organization token.
@@ -68,12 +76,13 @@ auth_token() {
 # Issues an analyze Organization token, valid for a day, in the dev account's personal
 # organization and prints its secret, for the token provider's API_TOKEN.
 cmd_issue_token() {
-	local jwt org secret
-	jwt=$(dev_login) || exit 1
-	org=$(api_curl -fsS "$API_URL/org?page=0&entries_per_page=50" -H "Authorization: Bearer $jwt" 2>/dev/null |
+	local access org secret line session=()
+	access=$(dev_login) || exit 1
+	while IFS= read -r line; do session+=(-H "$line"); done < <(session_headers "$access")
+	org=$(api_curl -fsS "$API_URL/org?page=0&entries_per_page=50" "${session[@]}" 2>/dev/null |
 		jq -er '[.data[].organization | select(.personal)][0].id' 2>/dev/null) ||
 		die "found no personal organization of the dev account"
-	secret=$(api_curl -fsS -X POST "$API_URL/org/$org/tokens" -H "Authorization: Bearer $jwt" \
+	secret=$(api_curl -fsS -X POST "$API_URL/org/$org/tokens" "${session[@]}" \
 		-H 'Content-Type: application/json' \
 		-d "$(jq -cn '{name: "api-fuzz", scope: "analyze", expires_on: (now + 86400 | todate)}')" 2>/dev/null |
 		jq -er '.data.secret | select(. != "")' 2>/dev/null) ||
@@ -82,7 +91,7 @@ cmd_issue_token() {
 }
 
 cmd_run() {
-	local auth='' out='' seed='' extra=() header excluded=() op status
+	local auth='' out='' seed='' extra=() lines line headers=() excluded=() op status
 	while (($#)); do
 		case "$1" in
 		--auth)
@@ -112,7 +121,8 @@ cmd_run() {
 		echo "api fuzz: unknown auth provider '$auth'; known: $(auth_providers | paste -sd' ')" >&2
 		exit 2
 	fi
-	header=$("auth_${auth//-/_}") || exit 1
+	lines=$("auth_${auth//-/_}") || exit 1
+	while IFS= read -r line; do headers+=(--header "$line"); done <<<"$lines"
 	if [[ "$auth" == dev-account ]] && ((MAX_TIME > DEV_ACCOUNT_MAX_TIME)); then
 		MAX_TIME=$DEV_ACCOUNT_MAX_TIME
 	fi
@@ -137,7 +147,7 @@ cmd_run() {
 	set +e
 	"${docker[@]}" "$SCHEMATHESIS_IMAGE" run "$API_URL/api_doc-json" \
 		--url "$API_URL" \
-		--header "$header" \
+		"${headers[@]}" \
 		--checks "$CHECKS" \
 		"${excluded[@]}" \
 		"${tls[@]}" \

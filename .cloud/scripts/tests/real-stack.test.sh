@@ -82,5 +82,58 @@ grep -q " run --rm --no-deps -T -v $root/.cloud/scripts/tests/real-stack/advisor
 check "knowledge-update runs one update-asof from the fixture in service-knowledge, starting nothing else" $result
 [ "$result" = ok ] || cat "$work/out" "$work/docker.log" 2>/dev/null
 
+# stack.sh psql, with STACK_OVERRIDE merged last.
+: >"$work/docker.log"
+result=ok
+echo 'SELECT 1;' | STACK_OVERRIDE=/gate.yaml PATH="$work/bin:$PATH" DEPLOYMENT_DIR="$work" \
+	sh "$root/.cloud/scripts/tests/real-stack/stack.sh" psql knowledge >"$work/out" 2>&1 || result=bad
+grep -q "^compose --project-directory $work -f $work/docker-compose.yaml -f $root/.cloud/scripts/tests/real-stack/docker-compose.yaml -f /gate.yaml exec -T db sh -c " \
+	"$work/docker.log" 2>/dev/null || result=bad
+# The script's last line ends with psql's -d "$1", then the database as $1.
+# shellcheck disable=SC2016 # a literal "$1" and end of line
+grep -q '\-d "\$1" psql knowledge$' "$work/docker.log" 2>/dev/null || result=bad
+check "psql runs psql in the db container on the database named, with STACK_OVERRIDE merged last" $result
+[ "$result" = ok ] || cat "$work/out" "$work/docker.log" 2>/dev/null
+
+# stack.sh offline, with a docker that answers for a container on networks $NETWORKS, internal ones in $INTERNAL.
+cat >"$work/bin/docker" <<'EOF'
+#!/bin/sh
+case "$*" in
+"compose "*" ps -q service-follower") echo c1 ;;
+"inspect "*) printf '%s\n' $NETWORKS ;;
+"network inspect "*)
+	for n; do :; done
+	case " $INTERNAL " in *" $n "*) echo true ;; *) echo false ;; esac
+	;;
+*) exit 1 ;;
+esac
+EOF
+result=ok
+NETWORKS=gate_offline INTERNAL=gate_offline PATH="$work/bin:$PATH" DEPLOYMENT_DIR="$work" \
+	sh "$root/.cloud/scripts/tests/real-stack/stack.sh" offline service-follower >"$work/out" 2>&1 || result=bad
+check "offline passes for a service only on internal networks" $result
+[ "$result" = ok ] || cat "$work/out"
+result=ok
+NETWORKS="gate_offline gate_default" INTERNAL=gate_offline PATH="$work/bin:$PATH" DEPLOYMENT_DIR="$work" \
+	sh "$root/.cloud/scripts/tests/real-stack/stack.sh" offline service-follower >"$work/out" 2>&1 && result=bad
+grep -q "on network gate_default, which reaches outside" "$work/out" || result=bad
+check "offline fails, naming it, for a service on a network with outbound access" $result
+[ "$result" = ok ] || cat "$work/out"
+
+# The results gate's Compose file leaves the follower only on an internal network, with pgbouncer and rabbitmq.
+if docker compose version >/dev/null 2>&1 && [ -f "$root/deployment/docker-compose.yaml" ]; then
+	result=ok
+	config=$(docker compose --project-directory "$root/deployment" -f "$root/deployment/docker-compose.yaml" \
+		-f "$root/$override" -f "$root/scripts/results-gate/docker-compose.yaml" config --format json) || result=bad
+	printf '%s\n' "$config" | jq -e '(.services["service-follower"].networks | keys) == ["registry-offline"] and
+		.networks["registry-offline"].internal == true and
+		(.services.pgbouncer.networks | has("registry-offline")) and (.services.rabbitmq.networks | has("registry-offline"))' \
+		>/dev/null || result=bad
+	check "the results gate's Compose file puts the follower only on an internal network" $result
+else
+	skipped=$((skipped + 1))
+	echo "skip the results gate's network check needs docker compose and the deployment submodule"
+fi
+
 echo "$passed passed, $failed failed, $skipped skipped"
 [ "$failed" -eq 0 ]

@@ -1,0 +1,19 @@
+# The results gate's Compose file, merged last over the trimmed real stack (STACK_OVERRIDE in
+# stack.sh). It moves the package follower onto an internal network, with only the database pooler
+# and the message broker beside it, so it cannot fetch from a live registry during the gate.
+services:
+  service-follower:
+    networks: !override
+      - registry-offline
+  pgbouncer:
+    networks:
+      - default
+      - registry-offline
+  rabbitmq:
+    networks:
+      - default
+      - registry-offline
+
+networks:
+  registry-offline:
+    internal: true

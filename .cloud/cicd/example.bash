@@ -10,32 +10,26 @@ email=${EMAIL}
 password=${PASSWORD}
 domain=${DOMAIN}
 
-# AUTHENTICATE
+# AUTHENTICATE: the API sets the sign-in as cookies, which curl keeps in a cookie jar.
+jar=$(mktemp)
+trap 'rm -f "$jar"' EXIT
 curl -X 'POST' \
     'https://'$domain'/api/auth/authenticate' \
     -s \
+    -c "$jar" \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
   "email": "'$email'",
   "password": "'$password'"
-}' >./auth_tokens.json
-
-# Extract the tokens and expiration times
-token=$(jq -r '.data.token' ./auth_tokens.json)
-refresh_token=$(jq -r '.data.refresh_token' ./auth_tokens.json)
-token_expiry=$(jq -r '.data.token_expiry' ./auth_tokens.json)
-refresh_token_expiry=$(jq -r '.data.refresh_token_expiry' ./auth_tokens.json)
-
-# Clean up the temporary file
-rm ./auth_tokens.json
+}' >/dev/null
 
 # RETRIEVE USER
 curl -X 'GET' \
     'https://'$domain'/api/auth/user' \
     -s \
     -H 'accept: application/json' \
-    -H "Authorization: Bearer $token" >response.json
+    -b "$jar" -H 'X-CodeClarity-CSRF: 1' >response.json
 
 userId=$(jq -r '.data.id' ./response.json)
 userFirstName=$(jq -r '.data.first_name' ./response.json)
@@ -48,7 +42,7 @@ curl -X 'GET' \
     'https://'$domain'/api/org' \
     -s \
     -H 'accept: application/json' \
-    -H "Authorization: Bearer $token" >response.json
+    -b "$jar" -H 'X-CodeClarity-CSRF: 1' >response.json
 
 organizationID=$(jq -r '.data[0].organization.id' ./response.json)
 echo $organizationID
@@ -58,7 +52,7 @@ curl -X 'GET' \
     "https://$domain/api/org/$organizationID/projects?search_key=$projectName" \
     -s \
     -H 'accept: application/json' \
-    -H "Authorization: Bearer $token" >response.json
+    -b "$jar" -H 'X-CodeClarity-CSRF: 1' >response.json
 
 projectID=$(jq -r '.data[0].id' ./response.json)
 echo $projectID
@@ -68,7 +62,7 @@ curl -X 'GET' \
     "https://$domain/api/org/$organizationID/analyzers/name?analyzer_name=$analyzerName" \
     -s \
     -H 'accept: application/json' \
-    -H "Authorization: Bearer $token" >response.json
+    -b "$jar" -H 'X-CodeClarity-CSRF: 1' >response.json
 
 analyzerID=$(jq -r '.data.id' ./response.json)
 echo $analyzerID
@@ -79,7 +73,7 @@ curl -X 'POST' \
     -s \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $token" \
+    -b "$jar" -H 'X-CodeClarity-CSRF: 1' \
 -d '{
     "analyzer_id": "'$analyzerID'",
     "branch": "'$branchName'",

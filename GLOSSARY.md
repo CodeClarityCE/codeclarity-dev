@@ -35,7 +35,7 @@ A secret an organization's admin issues so a pipeline can act in that organizati
 _Avoid_: API key, personal access token (it belongs to no person), integration token (that is a credential CodeClarity holds for GitHub, GitLab or ClickUp)
 
 **Sign-in**:
-One password login of a user and the tokens it hands out: a 15-minute access token, and a refresh token that works once and is replaced on every refresh. All the refresh tokens of one sign-in form its family, which lasts 7 days from the login. Presenting a spent refresh token again ends the whole sign-in, so the web app lets only one tab refresh at a time (an exclusive Web Lock) and the other tabs take the tokens it saved. Signing out ends one sign-in, and the user's other tabs follow it. Changing the password ends all of the user's sign-ins and starts a fresh one for the caller; a password reset ends them all.
+One password login of a user and the tokens it hands out: a 15-minute access token, and a refresh token that works once and is replaced on every refresh. The browser holds both where no page script can read them, and accepts them only on requests from CodeClarity's own pages. All the refresh tokens of one sign-in form its family, which lasts 7 days from the login. Presenting a spent refresh token again ends the whole sign-in, so the web app lets only one tab refresh at a time and the other tabs use the sign-in it renewed. Signing out ends one sign-in, and the user's other tabs follow it. Changing the password ends all of the user's sign-ins and starts a fresh one for the caller; a password reset ends them all.
 _Avoid_: Session (except for the web app's local state), login (the act, not what it creates)
 
 **Error report**:
@@ -51,6 +51,10 @@ _Avoid_: Scan (except informally), job
 **Analyzer**:
 A named, ordered set of plugin stages that an analysis executes.
 _Avoid_: Pipeline, workflow
+
+**Package import**:
+The package follower's fetch of the packages an SBOM lists (their versions and licences) from their registry into the knowledge database, during an analysis. A plugin that depends on an SBOM starts only once that SBOM's package import is recorded as done.
+_Avoid_: Updating the DB (`updating_db` only shows an import is running), package data (that is what a knowledge source holds about a vulnerability)
 
 **Submission**:
 Handing an analysis to the platform to run. An analysis counts as submitted once it is recorded, even if the platform has not picked it up yet; it is then picked up later.
@@ -176,6 +180,10 @@ _Avoid_: CVE (when the identity may have none), vuln ID
 One knowledge source's claim that a canonical vulnerability affects a dependency version, kept whether or not that source is chosen for display.
 _Avoid_: Conflict, pair
 
+**All-versions match**:
+A source match resting on a record that says every version of the package is affected, with no version bounds, such as an OSV range from "0" that never closes or a CVE record whose default status is affected (ADR 0024).
+_Avoid_: Universal match, wildcard match
+
 **Source verdict**:
 What one knowledge source said about one vulnerability instance when it was checked: it matched, its record excludes the version, its record is retired, its record names another product, it has no package data (its record names no package, or no version range or version that can be read), it has no record, or it was stale or failed.
 _Avoid_: Reason, source comparison
@@ -193,7 +201,7 @@ A fixed set of projects pinned to commits and to one knowledge dump, with an adj
 _Avoid_: Ground truth (that is its verdicts), test suite
 
 **Results gate**:
-The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
+The CI check that analyses fixture projects on the accuracy benchmark's pinned knowledge dump and recorded registry rows, and fails when any finding the API shows appeared or disappeared against the **expected results** checked into the umbrella. It says that results changed, not whether they are right (ADR 0021).
 _Avoid_: Snapshot test, accuracy benchmark (that judges results against verdicts)
 
 **Winning source**:
