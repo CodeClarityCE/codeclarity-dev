@@ -15,7 +15,7 @@ Both are `HttpOnly; Secure; SameSite=Strict; Path=/` with no `Domain`, as RFC 10
 
 The refresh cookie is not scoped to the refresh path. `__Host-` requires `Path=/`, RFC 6265bis section 4.1.2.4 says "the Path attribute cannot be relied upon for security", and the browser-visible path depends on the proxy prefix. A narrower `__Secure-` cookie would trade the protection against subdomain cookie injection for less exposure to our own same-origin servers, which already receive the access cookie.
 
-Sign-in, refresh and password change answer with the two expiry times only. The app keeps those and a random id for the sign-in in localStorage, which hold no secret, so it knows when to refresh and other tabs can follow.
+Sign-in, refresh and password change answer with the two expiry times only. The app keeps those and the signed-in user's id in localStorage, which hold no secret, so it knows when to refresh and other tabs can follow.
 
 ## Bearers and cookies are separate
 
@@ -28,6 +28,8 @@ RFC 10017 section 6.1.3.3 says a cookie-based backend "MUST implement a proper C
 1. **SameSite=Strict**: the browser does not attach the cookies to a request a page on another site starts (RFC 10017 section 6.1.3.3.1, which calls it adequate only when no other app is same-site, hence the next two).
 2. **A required custom header**, `X-CodeClarity-CSRF: 1` (RFC 10017 section 6.1.3.3.2: "the BFF MUST ensure that every incoming request carries this static header"; OWASP CSRF Prevention Cheat Sheet, "Employing Custom Request Headers for AJAX/API"). A cross-origin page can only send it after a CORS preflight, and the API answers no preflight, so it has no CORS configuration at all.
 3. **Fetch Metadata, then Origin**: a `Sec-Fetch-Site` other than `same-origin` is refused; without that header, an `Origin` whose host is not the request's `Host` is refused (OWASP CSRF Prevention Cheat Sheet, "Fetch Metadata headers", which makes the Origin fallback "a mandatory requirement"). A client that sends neither header is not a browser, and the custom header is still required of it.
+
+`POST /auth/authenticate` carries no cookie to protect, but it sets them, so a page on another site could sign the browser into an account the attacker chose (login CSRF). It passes check 3 only: a browser that says another site sent it is refused, while a script, which sends neither header, still signs in without the custom header.
 
 A refused request gets a 403 `CrossSiteRequestRefused`, so the app tells it apart from an expired sign-in.
 
