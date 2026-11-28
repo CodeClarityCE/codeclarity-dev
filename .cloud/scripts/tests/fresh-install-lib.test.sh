@@ -69,8 +69,9 @@ chmod +x "$work/bin/curl"
 login_and_get() {
 	(
 		PATH="$work/bin:$PATH" STUB_LOGIN=$1 STUB_HEADERS="$work/headers" API_BASE=https://stub
-		export PATH STUB_LOGIN STUB_HEADERS
 		LOGIN_EMAIL=a@example.com LOGIN_PASSWORD=p
+		export PATH STUB_LOGIN STUB_HEADERS API_BASE LOGIN_EMAIL LOGIN_PASSWORD
+		# shellcheck source=/dev/null
 		. "$lib"
 		token=$(login)
 		: >"$work/headers"
