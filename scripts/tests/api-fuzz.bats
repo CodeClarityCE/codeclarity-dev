@@ -190,7 +190,7 @@ RULES
 	grep -qxF 'POST https://localhost/api/org/org-1/tokens' "$CURL_STUB_LOG"
 	grep -qxF 'Cookie: __Host-Http-cc_access=dev-token-123' "$CURL_STUB_HEADERS"
 	grep -qxF 'X-CodeClarity-CSRF: 1' "$CURL_STUB_HEADERS"
-	! grep -q '^Authorization' "$CURL_STUB_HEADERS"
+	[ "$(grep -c '^Authorization' "$CURL_STUB_HEADERS")" = 0 ]
 	[ "$(jq -r .scope "$BATS_TEST_TMPDIR/token-body")" = analyze ]
 	[ "$(jq -r .name "$BATS_TEST_TMPDIR/token-body")" = api-fuzz ]
 	# It expires about a day from now.
