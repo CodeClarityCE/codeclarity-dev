@@ -30,5 +30,13 @@ them. Recovery is therefore DB-driven, not queue-durable:
   activity), re-sends the import to `sbom_packageFollower` from the stored SBOM. An SBOM
   with no packages, or one that is missing or unreadable, is recorded as imported at once.
   If `sbom_packageFollower` has had no consumer for `STALLED_PLUGIN_GRACE`, the waiting
-  analysis fails with a reason naming the package follower. `RECOVERY_MAX_AGE` still
-  retires any wait that never ends.
+  analysis fails with a reason naming the package follower. Interval re-sends are
+  counted per analysis in its config (`package_import_resends`), so the count survives a
+  dispatcher restart; once `REAPER_IMPORT_RESENDS` (default 3) of them have gone out and
+  the import is still not recorded, the next stuck check fails the analysis with a reason
+  naming the package follower instead of sending again. Startup re-sends do not count,
+  since the queue was empty and the message was lost rather than ignored, so restarts
+  alone never fail an analysis. This covers a follower that consumes the message but
+  never writes the record, such as an older follower during a deploy or a failed record
+  UPDATE, which the follower logs at error level with `analysis_id`. `RECOVERY_MAX_AGE`
+  still retires any wait that never ends.

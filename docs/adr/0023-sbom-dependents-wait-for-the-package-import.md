@@ -13,5 +13,6 @@ Now the follower records each finished package import in the analysis config, un
 ## Consequences
 
 - A waiting analysis has to be recoverable. The reaper re-sends the import from the stored SBOM after `REAPER_STEP_TIMEOUT` or on startup, records an SBOM with nothing to import as done, and fails the analysis when the follower has had no consumer for `STALLED_PLUGIN_GRACE` (`docs/restart-recovery.md`).
-- The dispatcher has to be released no earlier than a follower that writes the record. An older follower never writes it, so every analysis would wait until `RECOVERY_MAX_AGE` retires it.
+- Re-sends are bounded. After `REAPER_IMPORT_RESENDS` (default 3) interval re-sends without the record appearing, counted in the analysis config so a restart keeps the count, the reaper fails the analysis with a reason naming the package follower. A follower that consumes the import but never writes the record, because its UPDATE failed or it predates the record, then fails the analysis after about `REAPER_IMPORT_RESENDS + 1` times `REAPER_STEP_TIMEOUT` instead of re-sending until `RECOVERY_MAX_AGE`. Startup re-sends replace a message lost with the queue, so they do not count, and restarts alone never fail an analysis.
+- The dispatcher has to be released no earlier than a follower that writes the record. An older follower never writes it, so every analysis would fail once its re-sends run out.
 - A follower import that fails is still recorded as done, as before, so the finders run on whatever rows exist. Retrying a failed import is a separate decision.
