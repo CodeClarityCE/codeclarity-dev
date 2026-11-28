@@ -180,6 +180,10 @@ _Avoid_: CVE (when the identity may have none), vuln ID
 One knowledge source's claim that a canonical vulnerability affects a dependency version, kept whether or not that source is chosen for display.
 _Avoid_: Conflict, pair
 
+**All-versions match**:
+A source match resting on a record that says every version of the package is affected, with no version bounds, such as an OSV range from "0" that never closes or a CVE record whose default status is affected (ADR 0024).
+_Avoid_: Universal match, wildcard match
+
 **Source verdict**:
 What one knowledge source said about one vulnerability instance when it was checked: it matched, its record excludes the version, its record is retired, its record names another product, it has no package data (its record names no package, or no version range or version that can be read), it has no record, or it was stale or failed.
 _Avoid_: Reason, source comparison
