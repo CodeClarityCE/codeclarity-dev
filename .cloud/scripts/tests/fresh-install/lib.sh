@@ -125,16 +125,26 @@ api_curl() {
 	fi
 }
 
-# Prints the access token the API sets as a cookie for the login account, or nothing if login fails.
+# Prints the login account's access token, as cookie:<token> when the API sets it as a cookie,
+# or bearer:<token> from a release before ADR 0025 that answers it in the body. Nothing if login fails.
 login() {
-	api_curl -fsS -o /dev/null -D - -X POST "$API_BASE/auth/authenticate" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"$LOGIN_EMAIL\",\"password\":\"$LOGIN_PASSWORD\"}" 2>/dev/null | tr -d '\r' |
-		sed -n 's/^[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]: *__Host-Http-cc_access=\([A-Za-z0-9._-]*\).*/\1/p' | head -n 1
+	login_answer=$(api_curl -fsS -D - -X POST "$API_BASE/auth/authenticate" -H 'Content-Type: application/json' \
+		-d "{\"email\":\"$LOGIN_EMAIL\",\"password\":\"$LOGIN_PASSWORD\"}" 2>/dev/null | tr -d '\r') || return 0
+	login_access=$(printf '%s\n' "$login_answer" |
+		sed -n 's/^[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]: *__Host-Http-cc_access=\([A-Za-z0-9._-]*\).*/\1/p' | head -n 1)
+	if [ -n "$login_access" ]; then
+		echo "cookie:$login_access"
+	elif login_access=$(printf '%s\n' "$login_answer" | sed '1,/^$/d' | jq -er '.data.token' 2>/dev/null); then
+		echo "bearer:$login_access"
+	fi
 }
 
-# Runs api_curl on the login's sign-in: its access cookie and the header the API requires with it.
+# Runs api_curl on the login's sign-in, sending its token back the way the API handed it out.
 session_curl() {
-	api_curl -H "Cookie: __Host-Http-cc_access=$token" -H 'X-CodeClarity-CSRF: 1' "$@"
+	case "$token" in
+	bearer:*) api_curl -H "Authorization: Bearer ${token#bearer:}" "$@" ;;
+	*) api_curl -H "Cookie: __Host-Http-cc_access=${token#cookie:}" -H 'X-CodeClarity-CSRF: 1' "$@" ;;
+	esac
 }
 
 # Waits for the API to accept the login account, then sets token.
